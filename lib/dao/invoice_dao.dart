@@ -1,17 +1,15 @@
-import '../db/database_helper.dart';
 import '../models/invoice.dart';
+import 'package:sqflite/sqflite.dart';
 
 class InvoiceDao {
-  final dynamic txn; // optional transaction
-  final dbHelper = DatabaseHelper.instance;
-
-  InvoiceDao([this.txn]);
+  final DatabaseExecutor db;
+InvoiceDao(this.db);
 
   // =========================
   // INSERT
   // =========================
   Future<int> insert(Invoice invoice, String customerName) async {
-  final db = await dbHelper.db;
+  
 
   return await db.insert(
     "invoices",
@@ -27,6 +25,7 @@ class InvoiceDao {
       "created_at": invoice.createdAt,
       "updated_at": invoice.updatedAt,
     },
+    conflictAlgorithm: ConflictAlgorithm.replace
   );
   }
 
@@ -34,7 +33,7 @@ class InvoiceDao {
   // GET ALL (simple)
   // =========================
   Future<List<Invoice>> getAll() async {
-    final db = txn ?? await dbHelper.db;
+    
     final res = await db.query('invoices');
     return res.map((e) => Invoice.fromMap(e)).toList();
   }
@@ -44,7 +43,7 @@ class InvoiceDao {
 // GET ALL WITH CUSTOMER NAME (for list screen)
 // =========================
   Future<List<Invoice>> getAllInvoices() async {
-    final db = txn ?? await dbHelper.db; // use txn if provided
+     // use txn if provided
 
     final data = await db.rawQuery('''
       SELECT i.*, c.name as customer_name
@@ -56,7 +55,7 @@ class InvoiceDao {
     // ✅ Explicitly map to List<Invoice>
     final invoices = data.map<Invoice>((e) {
       final invoice = Invoice.fromMap(e);
-      invoice.customerName = e['customer_name'];
+      invoice.customerName = e['customer_name'] as String?;
       return invoice;
     }).toList();
 
@@ -68,7 +67,7 @@ class InvoiceDao {
   // GET BY ID
   // =========================
   Future<Invoice?> getById(String id) async {
-    final db = txn ?? await dbHelper.db;
+    
     final res = await db.rawQuery('''
       SELECT i.*, c.name as customer_name
       FROM invoices i
@@ -78,7 +77,7 @@ class InvoiceDao {
 
     if (res.isNotEmpty) {
       final invoice = Invoice.fromMap(res.first);
-      invoice.customerName = res.first['customer_name'];
+      invoice.customerName = res.first['customer_name'] as String?;
       return invoice;
     }
     return null;
@@ -88,7 +87,7 @@ class InvoiceDao {
   // UPDATE
   // =========================
   Future<int> update(Invoice invoice) async {
-    final db = txn ?? await dbHelper.db;
+   
     return await db.update(
       'invoices',
       invoice.toMap(),
@@ -101,7 +100,7 @@ class InvoiceDao {
   // DELETE
   // =========================
   Future<int> delete(String id) async {
-    final db = txn ?? await dbHelper.db;
+    
     return await db.delete('invoices', where: 'id = ?', whereArgs: [id]);
   }
 }

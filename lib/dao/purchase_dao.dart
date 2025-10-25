@@ -2,8 +2,9 @@ import 'package:sqflite/sqflite.dart';
 import '../models/purchase.dart';
 
 class PurchaseDao {
-  final dynamic db; // can be Database or Transaction
-  PurchaseDao(this.db);
+    final DatabaseExecutor db;
+    PurchaseDao(this.db);
+
 
   Future<void> insertPurchase(Purchase purchase) async {
     await db.insert(

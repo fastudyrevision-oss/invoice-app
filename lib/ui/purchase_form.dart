@@ -103,39 +103,11 @@ class _PurchaseFormState extends State<PurchaseForm> {
       );
       await widget.repo.updateSupplier(updatedSupplier);
     }
+  // ✅ Recalculate each product’s average price & stock directly from batches
+  for (var item in items) {
+    await widget.productRepo.recalculateProductFromBatches(item.productId);
+  }
 
-    // 🔹 Update products with moving average pricing
-    for (var item in items) {
-      final product = await widget.repo.getProductById(item.productId);
-      if (product != null) {
-        final oldQty = product.quantity;
-        final oldPurchasePrice = product.costPrice;
-        final oldSellPrice = product.sellPrice;
-        final newQty = item.qty;
-        final newPurchasePrice = item.purchasePrice;
-        final newSellPrice = item.sellPrice;
-
-
-        final totalQty = oldQty + newQty;
-        final avgSellPrice = totalQty > 0
-            ? ((oldQty * oldSellPrice) + (newQty * newSellPrice)) / totalQty
-            : newSellPrice;
-        final avgPurchasePrice = totalQty > 0
-            ? ((oldQty * oldPurchasePrice) + (newQty * newPurchasePrice)) / totalQty
-            : newPurchasePrice;
-
-        final updatedProduct = product.copyWith(
-          costPrice: avgPurchasePrice,
-          sellPrice: avgSellPrice  // optional markup
-        );
-
-        await widget.repo.updateProduct(updatedProduct);
-        print("Updated product ${product.name}: Qty $totalQty, CostPrice $avgPurchasePrice, SellPrice $avgSellPrice");
-        print("Old values: Qty $oldQty, CostPrice $oldPurchasePrice, SellPrice $oldSellPrice");
-        print("New values: Qty $newQty, CostPrice $newPurchasePrice, SellPrice $newSellPrice");
-        print("Debug print from the purchase form from the update product repo method");
-      }
-    }
 
     if (!mounted) return;
     Navigator.pop(context, true);

@@ -12,7 +12,8 @@ class OrderRepository {
 
   /// ✅ Fetch all orders (invoices)
   Future<List<Invoice>> getAllOrders() async {
-    final invoiceDao = InvoiceDao();
+    final db = await dbHelper.db;
+    final invoiceDao = InvoiceDao(db);
     return await invoiceDao.getAll();
   }
 

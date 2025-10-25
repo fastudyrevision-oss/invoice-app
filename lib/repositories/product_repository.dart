@@ -3,6 +3,7 @@ import '../models/product.dart';
 import '../db/database_helper.dart';
 
 class ProductRepository {
+   final dbHelper = DatabaseHelper.instance;
   /// Helper to always get a fresh DAO with the active database
   Future<ProductDao> _dao() async {
     final db = await DatabaseHelper.instance.db;
@@ -46,6 +47,12 @@ class ProductRepository {
   Future<void> refreshProductQuantity(String productId) async {
     final dao = await _dao();
     await dao.refreshProductQuantityFromBatches(productId);
+  }
+  
+  Future<void> recalculateProductFromBatches(String productId) async {
+    final db = await dbHelper.db;
+    final productDao = ProductDao(db);
+    await productDao.recalculateProductFromBatches(productId);
   }
 
 }

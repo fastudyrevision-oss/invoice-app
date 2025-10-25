@@ -153,7 +153,4 @@ class ProductBatchDao {
     final productDao = ProductDao(db);
     await productDao.refreshProductQuantityFromBatches(batch.productId);
   }
-
-
-
 }

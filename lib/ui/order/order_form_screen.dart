@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import 'package:sqflite/sqflite.dart';
 
 import '../../models/invoice_item.dart';
 import '../../models/customer.dart';
@@ -36,7 +35,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   final List<InvoiceItem> _items = [];
 
   bool _loading = true;
-  int _availableStock = 0; // ✅ track available stock for selected product
+  int _availableStock = 0;
 
   double get _total => _items.fold(0, (sum, i) => sum + (i.price * i.qty));
 
@@ -44,6 +43,14 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   void initState() {
     super.initState();
     _loadDropdownData();
+  }
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    _discountController.dispose();
+    _paidController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDropdownData() async {
@@ -61,7 +68,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     });
   }
 
-  // ✅ Load available stock for selected product
   Future<void> _loadAvailableStock() async {
     if (_selectedProduct == null) {
       setState(() => _availableStock = 0);
@@ -71,7 +77,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
     final batches = await batchDao.getBatchesByProduct(_selectedProduct!.id);
-
     final totalStock = batches.fold<int>(0, (sum, b) => sum + b.qty);
 
     setState(() => _availableStock = totalStock);
@@ -80,7 +85,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   Future<void> _addItem() async {
     if (_selectedProduct == null || _qtyController.text.isEmpty) return;
 
-    // ✅ Validation: invalid product
+    // ✅ Validate valid product
     if (!_products.any((p) => p.id == _selectedProduct?.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Invalid product selected")),
@@ -88,7 +93,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       return;
     }
 
-    // ✅ Validation: no stock
+    // ✅ Validate stock
     if (_availableStock <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("This product is out of stock!")),
@@ -96,7 +101,8 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       return;
     }
 
-    final qty = int.tryParse(_qtyController.text) ?? 1;
+    final qty = (num.tryParse(_qtyController.text) ?? 1).toInt();
+
     if (qty <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Quantity must be greater than zero")),
@@ -104,77 +110,78 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       return;
     }
 
+    if (qty > _availableStock) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Only $_availableStock items available!")),
+      );
+      return;
+    }
+
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
 
-    // Get all batches for the selected product, oldest first (FIFO)
     final batches = await batchDao.getBatchesByProduct(_selectedProduct!.id);
     batches.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    // Snapshot original quantities
+    final originalQtys = {for (var b in batches) b.id: b.qty};
 
     int remainingQty = qty;
     final List<ProductBatch> updatedBatches = [];
 
     for (final batch in batches) {
-      if (batch.qty >= remainingQty) {
-        batch.qty -= remainingQty;
-        updatedBatches.add(batch);
-        remainingQty = 0;
-        break;
-      } else if (batch.qty > 0) {
-        remainingQty -= batch.qty;
-        batch.qty = 0;
-        updatedBatches.add(batch);
-      }
+      if (remainingQty <= 0) break;
+      final deduction = batch.qty >= remainingQty ? remainingQty : batch.qty;
+      batch.qty -= deduction;
+      remainingQty -= deduction;
+      updatedBatches.add(batch);
     }
 
-    if (remainingQty > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Not enough stock for this product")),
-      );
-      return;
-    }
+    // ✅ Sequential batch update
+    await Future.wait(updatedBatches.map(batchDao.updateBatch));
 
-    // Commit stock deduction
-    for (final batch in updatedBatches) {
-      await batchDao.updateBatch(batch);
-    }
+    // Build reserved batch list
+    final reservedBatches = updatedBatches.map((b) {
+      final deducted = (originalQtys[b.id] ?? 0) - b.qty;
+      return {'batchId': b.id, 'qty': deducted};
+    }).where((b) => ((b['qty'] ?? 0) as num) > 0).toList();
 
-    // Add product to order
+    // ✅ Add product to order
     final item = InvoiceItem(
       id: _uuid.v4(),
       invoiceId: "",
       productId: _selectedProduct!.id,
       qty: qty,
       price: _selectedProduct!.sellPrice,
-      reservedBatches: updatedBatches
-          .map((b) => {'batchId': b.id, 'qty': b.qty})
-          .toList(),
+      reservedBatches: reservedBatches,
+      createdAt: DateTime.now().toIso8601String(),
+      updatedAt: DateTime.now().toIso8601String(),
     );
 
     setState(() {
       _items.add(item);
       _selectedProduct = null;
       _qtyController.clear();
-      _availableStock = 0;
     });
+
+    await _loadAvailableStock(); // ✅ refresh stock
   }
 
-    Future<void> _removeItem(InvoiceItem item) async {
+  Future<void> _removeItem(InvoiceItem item) async {
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
 
     if (item.reservedBatches != null) {
-      for (final batchInfo in item.reservedBatches!) {
+      await Future.wait(item.reservedBatches!.map((batchInfo) async {
         final batchId = batchInfo['batchId'] as String;
-        final qty = batchInfo['qty'] as int;
-
+        final qty = (batchInfo['qty'] as num).toInt();
         await batchDao.addBackToBatch(batchId, qty);
-      }
+      }));
     }
 
     setState(() => _items.remove(item));
+    await _loadAvailableStock(); // ✅ refresh stock after removal
   }
-
 
   Future<void> _saveOrder() async {
     if (_selectedCustomer == null || _items.isEmpty) {
@@ -187,6 +194,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final discount = double.tryParse(_discountController.text) ?? 0;
     final paid = double.tryParse(_paidController.text) ?? 0;
     final total = _total;
+    final pending = (total - discount - paid).clamp(0, double.infinity);
 
     final db = await DatabaseHelper.instance.db;
     final invoiceId = _uuid.v4();
@@ -196,7 +204,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       final itemDao = InvoiceItemDao(txn);
       final productDao = ProductDao(txn);
       final customerDao = CustomerDao(txn);
-      final batchDao = ProductBatchDao(txn);
 
       final invoice = Invoice(
         id: invoiceId,
@@ -204,25 +211,21 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         total: total,
         discount: discount,
         paid: paid,
-        pending: total - discount - paid,
+        pending: pending.toDouble(),
         date: DateTime.now().toIso8601String(),
         createdAt: DateTime.now().toIso8601String(),
         updatedAt: DateTime.now().toIso8601String(),
       );
 
-      // ✅ Insert invoice
       await invoiceDao.insert(invoice, _selectedCustomer!.name);
 
-      // ✅ Insert each order item
+      // ✅ Sequential item + product refresh
       for (final item in _items) {
         item.invoiceId = invoiceId;
         await itemDao.insert(item);
-
-        // ✅ Recalculate product quantity from batches
         await productDao.refreshProductQuantityFromBatches(item.productId);
       }
 
-      // ✅ Update customer pending amount
       await customerDao.updatePendingAmount(_selectedCustomer!.id, invoice.pending);
     });
 
@@ -233,10 +236,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     Navigator.pop(context);
   }
 
-
   Future<void> _showAddCustomerDialog() async {
-    final _nameController = TextEditingController();
-    final _phoneController = TextEditingController();
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
 
     final result = await showDialog<Customer>(
       context: context,
@@ -246,11 +248,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: _nameController,
+              controller: nameController,
               decoration: const InputDecoration(labelText: "Customer Name"),
             ),
             TextField(
-              controller: _phoneController,
+              controller: phoneController,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: "Phone Number"),
             ),
@@ -263,14 +265,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final name = _nameController.text.trim();
-              final phone = _phoneController.text.trim();
-
+              final name = nameController.text.trim();
+              final phone = phoneController.text.trim();
               if (name.isEmpty) return;
 
               final db = await DatabaseHelper.instance.db;
               final customerDao = CustomerDao(db);
-
               final now = DateTime.now().toIso8601String();
               final newCustomer = Customer(
                 id: const Uuid().v4(),
@@ -280,7 +280,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                 createdAt: now,
                 updatedAt: now,
               );
-
               await customerDao.insertCustomer(newCustomer);
               Navigator.pop(context, newCustomer);
             },
@@ -322,8 +321,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       value: _selectedCustomer,
                       items: [
                         ..._customers.map(
-                          (c) =>
-                              DropdownMenuItem(value: c, child: Text(c.name)),
+                          (c) => DropdownMenuItem(value: c, child: Text(c.name)),
                         ),
                         const DropdownMenuItem<Customer>(
                           value: null,
@@ -337,8 +335,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                           setState(() => _selectedCustomer = val);
                         }
                       },
-                      decoration: const InputDecoration(
-                          border: OutlineInputBorder()),
+                      decoration: const InputDecoration(border: OutlineInputBorder()),
                     ),
                   ),
                 ],
@@ -371,8 +368,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     child: TextField(
                       controller: _qtyController,
                       keyboardType: TextInputType.number,
-                      decoration:
-                          const InputDecoration(labelText: "Qty"),
+                      decoration: const InputDecoration(labelText: "Qty"),
                     ),
                   ),
                   IconButton(
@@ -382,28 +378,22 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                 ],
               ),
 
-              // ✅ Show available stock info
               if (_selectedProduct != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6.0, bottom: 12.0),
                   child: Text(
                     "Available Stock: $_availableStock",
                     style: TextStyle(
-                      color:
-                          _availableStock > 0 ? Colors.green : Colors.red,
+                      color: _availableStock > 0 ? Colors.green : Colors.red,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
 
-              const SizedBox(height: 10),
-
               if (_items.isNotEmpty)
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: _items.map((item) {
-                    final product =
-                        _products.firstWhere((p) => p.id == item.productId);
+                    final product = _products.firstWhere((p) => p.id == item.productId);
                     return ListTile(
                       title: Text(product.name),
                       subtitle: Column(
@@ -427,22 +417,17 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
               const Divider(),
               Text("Total: $_total"),
-
-              const SizedBox(height: 10),
               TextFormField(
                 controller: _discountController,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: "Discount"),
+                decoration: const InputDecoration(labelText: "Discount"),
               ),
               TextFormField(
                 controller: _paidController,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: "Paid"),
+                decoration: const InputDecoration(labelText: "Paid"),
               ),
               const SizedBox(height: 20),
-
               ElevatedButton.icon(
                 onPressed: _saveOrder,
                 icon: const Icon(Icons.save),
