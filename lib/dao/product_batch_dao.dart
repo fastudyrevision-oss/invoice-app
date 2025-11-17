@@ -3,7 +3,7 @@ import '../models/product_batch.dart';
 import '../dao/product_dao.dart';
 
 class ProductBatchDao {
-  final DatabaseExecutor db; // Works with Database OR Transaction
+  final DatabaseExecutor db;
   ProductBatchDao(this.db);
 
   /// Insert a batch
@@ -13,12 +13,13 @@ class ProductBatchDao {
       batch.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-     // ✅ Sync main product stock after update
+
+    // ✅ Sync main product stock after batch insert
     final productDao = ProductDao(db);
     await productDao.refreshProductQuantityFromBatches(batch.productId);
   }
 
-  /// Get batches by product ID
+  /// Get all batches by product ID
   Future<List<ProductBatch>> getBatchesByProduct(String productId) async {
     final result = await db.query(
       "product_batches",
@@ -29,12 +30,23 @@ class ProductBatchDao {
     return result.map((row) => ProductBatch.fromMap(row)).toList();
   }
 
-  /// Get batches by purchase ID
+  /// Get all batches by purchase ID
   Future<List<ProductBatch>> getBatchesByPurchaseId(String purchaseId) async {
     final result = await db.query(
       "product_batches",
       where: "purchase_id = ?",
       whereArgs: [purchaseId],
+      orderBy: "created_at DESC",
+    );
+    return result.map((row) => ProductBatch.fromMap(row)).toList();
+  }
+
+  /// Get batches by supplier ID (✅ new helper)
+  Future<List<ProductBatch>> getBatchesBySupplier(String supplierId) async {
+    final result = await db.query(
+      "product_batches",
+      where: "supplier_id = ?",
+      whereArgs: [supplierId],
       orderBy: "created_at DESC",
     );
     return result.map((row) => ProductBatch.fromMap(row)).toList();
@@ -48,7 +60,8 @@ class ProductBatchDao {
       where: "id = ?",
       whereArgs: [batch.id],
     );
-      // ✅ Sync main product stock after update
+
+    // ✅ Sync product quantity after batch update
     final productDao = ProductDao(db);
     await productDao.refreshProductQuantityFromBatches(batch.productId);
 
@@ -72,7 +85,8 @@ class ProductBatchDao {
       whereArgs: [purchaseId],
     );
   }
-  // ✅ New: Get expiring soon
+
+  /// ✅ Get expiring soon
   Future<List<ProductBatch>> getExpiringBatches(int days) async {
     final now = DateTime.now();
     final cutoff = now.add(Duration(days: days));
@@ -86,51 +100,57 @@ class ProductBatchDao {
 
     return result.map((e) => ProductBatch.fromMap(e)).toList();
   }
-      /// ✅ Deduct stock FIFO and optionally return which batches were used
-    Future<List<Map<String, dynamic>>> deductFromBatches(
-      String productId,
-      int qtyToDeduct, {
-      bool trackUsage = false,
-    }) async {
-      if (qtyToDeduct <= 0) return [];
 
-      final batches = await db.query(
+  /// ✅ FIFO stock deduction (supports supplier & expiry-based order)
+  Future<List<Map<String, dynamic>>> deductFromBatches(
+    String productId,
+    int qtyToDeduct, {
+    bool trackUsage = false,
+  }) async {
+    if (qtyToDeduct <= 0) return [];
+
+    final batches = await db.query(
+      "product_batches",
+      where: "product_id = ? AND qty > 0",
+      whereArgs: [productId],
+      orderBy: "expiry_date ASC, created_at ASC",
+    );
+
+    int remaining = qtyToDeduct;
+    final reserved = <Map<String, dynamic>>[];
+
+    for (final batchMap in batches) {
+      if (remaining <= 0) break;
+
+      final batch = ProductBatch.fromMap(batchMap);
+      final deductQty = remaining > batch.qty ? batch.qty : remaining;
+      final newQty = batch.qty - deductQty;
+
+      await db.update(
         "product_batches",
-        where: "product_id = ? AND qty > 0",
-        whereArgs: [productId],
-        orderBy: "expiry_date ASC, created_at ASC",
+        {"qty": newQty, "updated_at": DateTime.now().toIso8601String()},
+        where: "id = ?",
+        whereArgs: [batch.id],
       );
 
-      int remaining = qtyToDeduct;
-      final reserved = <Map<String, dynamic>>[];
-
-      for (final batchMap in batches) {
-        if (remaining <= 0) break;
-
-        final batch = ProductBatch.fromMap(batchMap);
-        final deductQty = remaining > batch.qty ? batch.qty : remaining;
-        final newQty = batch.qty - deductQty;
-
-        await db.update(
-          "product_batches",
-          {"qty": newQty},
-          where: "id = ?",
-          whereArgs: [batch.id],
-        );
-
-        if (trackUsage) {
-          reserved.add({"batchId": batch.id, "qty": deductQty});
-        }
-
-        remaining -= deductQty;
+      if (trackUsage) {
+        reserved.add({
+          "batchId": batch.id,
+          "supplierId": batch.supplierId,
+          "qty": deductQty,
+        });
       }
 
-      final productDao = ProductDao(db);
-      await productDao.refreshProductQuantityFromBatches(productId);
-
-      return reserved;
+      remaining -= deductQty;
     }
-      /// ✅ Add back quantity to a specific batch
+
+    final productDao = ProductDao(db);
+    await productDao.refreshProductQuantityFromBatches(productId);
+
+    return reserved;
+  }
+
+  /// ✅ Add back quantity to a batch (e.g., cancel sale)
   Future<void> addBackToBatch(String batchId, int qty) async {
     final result = await db.query(
       "product_batches",
@@ -145,7 +165,7 @@ class ProductBatchDao {
 
     await db.update(
       "product_batches",
-      {"qty": newQty},
+      {"qty": newQty, "updated_at": DateTime.now().toIso8601String()},
       where: "id = ?",
       whereArgs: [batchId],
     );

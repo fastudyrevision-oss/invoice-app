@@ -36,40 +36,50 @@ class _StockFilterDialogState extends State<StockFilterDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("Stock Report Filters"),
+      title: const Text(
+        "Stock Report Filters",
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
       content: SingleChildScrollView(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             SwitchListTile(
               title: const Text("Include Prices"),
+              subtitle: const Text("Show cost, sell, and total value columns"),
               value: _includePrice,
               onChanged: (v) => setState(() => _includePrice = v),
             ),
             SwitchListTile(
               title: const Text("Show Low Stock Only"),
+              subtitle: const Text("Display only items below reorder level"),
               value: _onlyLowStock,
               onChanged: (v) => setState(() => _onlyLowStock = v),
             ),
             SwitchListTile(
-              title: const Text("Show Expiry Date / Supplier"),
+              title: const Text("Show Expiry & Supplier"),
+              subtitle: const Text("Add supplier name and expiry date columns"),
               value: _showExpiry,
               onChanged: (v) => setState(() => _showExpiry = v),
             ),
             SwitchListTile(
               title: const Text("Detailed View"),
-              subtitle: const Text("Show more columns and calculations"),
+              subtitle: const Text("Show profit, reorder level, and calculations"),
               value: _detailedView,
               onChanged: (v) => setState(() => _detailedView = v),
             ),
           ],
         ),
       ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, null),
           child: const Text("Cancel"),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
+          icon: const Icon(Icons.check, size: 18),
+          label: const Text("Apply"),
           onPressed: () {
             Navigator.pop(context, {
               'includePrice': _includePrice,
@@ -78,9 +88,11 @@ class _StockFilterDialogState extends State<StockFilterDialog> {
               'detailedView': _detailedView,
             });
           },
-          child: const Text("Apply"),
         ),
       ],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
     );
   }
 }

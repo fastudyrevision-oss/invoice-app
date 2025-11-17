@@ -80,7 +80,7 @@ void initState() {
                 return DropdownMenuItem(
                   value: purchase.id, // ✅ UUID
                   child: Text(
-                    "Purchase ${purchase.id.substring(0, 6)} - ${purchase.total}",
+                    "Purchase ${purchase.id.substring(0, 6)} - ${purchase.total} - ${purchase.date} - ${purchase.pending} -${purchase.paid}",
                   ),
                 );
               }).toList(),
@@ -113,13 +113,27 @@ void initState() {
 
     if (result != null) {
       if (payment == null) {
-        await widget.repo.addPayment(
-          widget.supplier.id,
-          result["amount"],
-          note: result["note"],
-          purchaseId: result["purchaseId"],
-        );
-      } else {
+  final amount = result["amount"] as double;
+  final purchaseId = result["purchaseId"] as String;
+
+  // 1️⃣ Insert supplier payment record
+  await widget.repo.addPayment(
+    widget.supplier.id,
+    amount,
+    note: result["note"],
+    purchaseId: purchaseId,
+  );
+
+  // -------------------------------------------------------------------
+  // 2️⃣ Update Purchase (paid, pending)
+ 
+
+  // -------------------------------------------------------------------
+  // 3️⃣ Update Supplier pending amount
+  // -------------------------------------------------------------------
+  
+}
+else {
         final updated = payment.copyWith(
           amount: result["amount"],
           note: result["note"],

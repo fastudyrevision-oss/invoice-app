@@ -38,12 +38,20 @@ class _PurchaseFormState extends State<PurchaseForm> {
   double _total = 0.0;
 
   void _addItem() async {
+     if (_selectedSupplierId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Select a supplier first")),
+    );
+    return;
+  }
     final newItemData = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => _PurchaseItemDialog(
         repo: widget.repo,
         productRepo: widget.productRepo,
         supplierRepo: widget.supplierRepo,
+        supplierId: _selectedSupplierId!, // ✅ pass from parent
+        
       ),
     );
 
@@ -188,11 +196,13 @@ class _PurchaseItemDialog extends StatefulWidget {
   final PurchaseRepository repo;
   final ProductRepository productRepo;
   final SupplierRepository supplierRepo;
+  final String supplierId; // ✅ add this
 
   const _PurchaseItemDialog({
     required this.repo,
     required this.productRepo,
     required this.supplierRepo,
+    required this.supplierId, // ✅ required param
   });
 
   @override
@@ -226,6 +236,7 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
       id: const Uuid().v4(),
       productId: _selectedProductId!,
       batchNo: _batchNoCtrl.text,
+      supplierId: widget.supplierId, // ✅ assign supplierId here
       expiryDate: _expiryCtrl.text.isEmpty ? null : _expiryCtrl.text,
       qty: int.parse(_qtyCtrl.text),
       purchasePrice: double.parse(_purchasePriceCtrl.text),

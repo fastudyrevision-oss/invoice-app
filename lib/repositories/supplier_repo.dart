@@ -26,6 +26,23 @@ class SupplierRepository {
   Future<List<Supplier>> getAllSuppliers({bool showDeleted = false}) async {
     return _supplierDao.getAllSuppliers(showDeleted: showDeleted);
   }
+  /// Fetch suppliers with pagination (lazy loading)
+Future<List<Supplier>> getSuppliersPaged({
+  int page = 0,
+  int pageSize = 50,
+  String? keyword,
+  bool showDeleted = false,
+}) async { // async added
+  final offset = page * pageSize;
+  final suppliers = await _supplierDao.getSuppliersPaged(
+    offset: offset,
+    limit: pageSize,
+    keyword: keyword,
+    showDeleted: showDeleted,
+  );
+  return suppliers;
+}
+
 
   Future<Supplier?> getSupplierById(String id) async {
     return _supplierDao.getSupplierById(id);
@@ -95,10 +112,6 @@ class SupplierRepository {
     }
   }
 
-  /// ===========================
-  /// COMPANIES
-  /// ===========================
-  /// ===========================
 /// COMPANIES
 /// ===========================
   Future<List<SupplierCompany>> getAllCompanies({bool showDeleted = false}) {
@@ -133,8 +146,6 @@ class SupplierRepository {
     );
     await _companyDao.updateCompany(updated);
   }
-
-  
 
   /// 🔍 Search companies by name / notes / phone
   Future<List<SupplierCompany>> searchCompanies(String keyword) async {

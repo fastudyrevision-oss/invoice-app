@@ -43,6 +43,32 @@ class DatabaseHelper {
     "audit_logs",
     "attachments"
   ];
+   /// ✅ Factory for tests — In-memory SQLite instance
+  factory DatabaseHelper.testInstance() {
+    final helper = DatabaseHelper._internal();
+    sqflite_ffi.sqfliteFfiInit();
+    sqflite.databaseFactory = sqflite_ffi.databaseFactoryFfi;
+    helper._db = null; // Reset
+    return helper;
+  }
+
+  /// ✅ For tests: open an in-memory database
+  Future<sqflite.Database> openInMemoryDb() async {
+    sqflite_ffi.sqfliteFfiInit();
+    sqflite.databaseFactory = sqflite_ffi.databaseFactoryFfi;
+    _db = await sqflite.openDatabase(sqflite.inMemoryDatabasePath, version: 1);
+    return _db!;
+  }
+
+  /// ✅ For tests: delete the current DB
+  Future<void> deleteDatabase() async {
+    if (!kIsWeb && _db != null) {
+      final dbPath = _db!.path;
+      await sqflite.deleteDatabase(dbPath);
+    }
+    _db = null;
+  }
+  
 
   /// Initialize database
   Future<void> init() async {
@@ -148,6 +174,36 @@ class DatabaseHelper {
         FOREIGN KEY(company_id) REFERENCES supplier_companies(id) ON DELETE SET NULL
       )
     ''');
+    // CATEGORIES
+await db.execute('''
+  CREATE TABLE categories (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    slug TEXT UNIQUE,
+    description TEXT,
+    parent_id TEXT,
+    icon TEXT,
+    color TEXT,
+    sort_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT,
+    updated_at TEXT,
+    is_deleted INTEGER DEFAULT 0,
+    FOREIGN KEY(parent_id) REFERENCES categories(id) ON DELETE SET NULL
+  )
+''');
+await db.insert('categories', {
+  'id': 'cat-001',
+  'name': 'Uncategorized',
+  'slug': 'uncategorized',
+  'description': 'Default category for products without category',
+  'created_at': DateTime.now().toIso8601String(),
+  'updated_at': DateTime.now().toIso8601String(),
+  'is_active': 1,
+  'is_deleted': 0,
+});
+
+
 
     // PRODUCTS
     await db.execute('''
@@ -163,10 +219,12 @@ class DatabaseHelper {
         min_stock INTEGER DEFAULT 0,
         track_expiry INTEGER DEFAULT 0,
         supplier_id TEXT,
+         category_id TEXT DEFAULT 'cat-001', -- NEW default
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0,
-        FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
+        FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
+        FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE SET NULL
       )
     ''');
 
@@ -175,6 +233,7 @@ class DatabaseHelper {
       CREATE TABLE product_batches (
         id TEXT PRIMARY KEY,
         product_id TEXT NOT NULL,
+        supplier_id TEXT,
         batch_no TEXT,
         expiry_date TEXT,
         qty INTEGER NOT NULL DEFAULT 0,
@@ -185,6 +244,7 @@ class DatabaseHelper {
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0,
         FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
         FOREIGN KEY(purchase_id) REFERENCES purchases(id) ON DELETE SET NULL
       )
     ''');
@@ -368,10 +428,26 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id)');
-    await db.execute('ALTER TABLE products ADD COLUMN is_deleted INTEGER DEFAULT 0');
-    await db.execute('ALTER TABLE purchase_items ADD COLUMN product_name TEXT');
-    await db.execute('ALTER TABLE purchase_items ADD COLUMN cost_price REAL DEFAULT 0');
+    await db.execute('CREATE INDEX idx_batches_product_id ON product_batches(product_id);');
+await db.execute('CREATE INDEX idx_batches_supplier_id ON product_batches(supplier_id);');
+
+    // Products extra column
+await addColumnIfNotExists(db, "products", "is_deleted", "INTEGER DEFAULT 0");
+
+// Purchase items extra columns
+await addColumnIfNotExists(db, "purchase_items", "product_name", "TEXT");
+await addColumnIfNotExists(db, "purchase_items", "cost_price", "REAL DEFAULT 0");
+
   }
+  /// Safely adds a column if it doesn't exist
+Future<void> addColumnIfNotExists(
+    sqflite.Database db, String table, String column, String columnType) async {
+  final result = await db.rawQuery("PRAGMA table_info($table);");
+  final exists = result.any((row) => row['name'] == column);
+  if (!exists) {
+    await db.execute("ALTER TABLE $table ADD COLUMN $column $columnType;");
+  }
+}
 
   // ================== GENERIC CRUD ==================
   Future<int> insert(String table, Map<String, dynamic> row) async {

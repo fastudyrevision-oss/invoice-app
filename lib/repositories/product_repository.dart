@@ -19,6 +19,22 @@ class ProductRepository {
     final dao = await _dao();
     return dao.getById(id);
   }
+  
+  /// 🔹 Lazy load products (paged) for ListView.builder
+  Future<List<Product>> getProductsPage({
+    required int page,
+    required int pageSize,
+    String? searchQuery,
+    String? categoryId,
+  }) async {
+    final dao = await _dao();
+    return dao.getProductsPage(
+      page: page,
+      pageSize: pageSize,
+      searchQuery: searchQuery,
+      categoryId: categoryId,
+    );
+  }
 
   Future<int> addProduct(Product product) async {
     final dao = await _dao();

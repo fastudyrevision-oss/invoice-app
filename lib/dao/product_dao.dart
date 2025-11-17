@@ -14,6 +14,10 @@ class ProductDao {
 
   /// Insert or replace a product
   Future<int> insert(Product p) async {
+     // Assign "Uncategorized" if categoryId is null
+  if (p.categoryId == null) {
+    p = p.copyWith(categoryId: 'cat-001');
+  }
     return await db.insert(
       "products",
       p.toMap(),
@@ -29,6 +33,47 @@ class ProductDao {
     );
     return result.map((e) => Product.fromMap(e)).toList();
   }
+  /// Get products by page for lazy loading
+Future<List<Product>> getProductsPage({
+  required int page,
+  required int pageSize,
+  bool includeDeleted = false,
+  String? searchQuery, // optional search
+  String? categoryId,  // optional category filter
+}) async {
+  final offset = page * pageSize;
+
+  final whereClauses = <String>[];
+  final whereArgs = <dynamic>[];
+
+  if (!includeDeleted) {
+    whereClauses.add("is_deleted = 0");
+  }
+
+  if (searchQuery != null && searchQuery.isNotEmpty) {
+    whereClauses.add("(name LIKE ? OR sku LIKE ?)");
+    whereArgs.addAll(["%$searchQuery%", "%$searchQuery%"]);
+  }
+
+  if (categoryId != null) {
+    whereClauses.add("category_id = ?");
+    whereArgs.add(categoryId);
+  }
+
+  final whereString = whereClauses.isNotEmpty ? whereClauses.join(" AND ") : null;
+
+  final result = await db.query(
+    "products",
+    where: whereString,
+    whereArgs: whereArgs,
+    orderBy: "name ASC",
+    limit: pageSize,
+    offset: offset,
+  );
+
+  return result.map((e) => Product.fromMap(e)).toList();
+}
+
 
   /// Get product by ID
   Future<Product?> getById(String id, {bool includeDeleted = false}) async {
@@ -103,7 +148,7 @@ class ProductDao {
       WHERE product_id = ?
     ''', [productId]);
 
-    final totalQty = (result.first['totalQty'] ?? 0) as int;
+    final totalQty = ((result.first['totalQty'] ?? 0) as num).toInt();
 
     await db.rawUpdate(
       '''
@@ -114,12 +159,14 @@ class ProductDao {
       [totalQty, DateTime.now().toIso8601String(), productId],
     );
   }
-    Future<void> recalculateProductFromBatches(String productId) async {
-    // Step 1: get total qty
+
+  /// Recalculate product from batches (avg price logic)
+  Future<void> recalculateProductFromBatches(String productId) async {
     final qtyResult = await db.rawQuery('''
-      SELECT IFNULL(SUM(qty), 0) AS totalQty,
-            IFNULL(SUM(qty * purchase_price), 0) AS totalCost,
-            IFNULL(SUM(qty * sell_price), 0) AS totalSell
+      SELECT 
+        IFNULL(SUM(qty), 0) AS totalQty,
+        IFNULL(SUM(qty * purchase_price), 0) AS totalCost,
+        IFNULL(SUM(qty * sell_price), 0) AS totalSell
       FROM product_batches
       WHERE product_id = ?
     ''', [productId]);
@@ -132,19 +179,24 @@ class ProductDao {
     final avgCost = totalQty > 0 ? totalCost / totalQty : 0;
     final avgSell = totalQty > 0 ? totalSell / totalQty : 0;
 
-    // Step 2: update product master table
     await db.rawUpdate('''
       UPDATE products
       SET quantity = ?, cost_price = ?, sell_price = ?, updated_at = ?
       WHERE id = ?
-    ''', [totalQty, avgCost, avgSell, DateTime.now().toIso8601String(), productId]);
+    ''', [
+      totalQty.toInt(),
+      avgCost,
+      avgSell,
+      DateTime.now().toIso8601String(),
+      productId,
+    ]);
   }
+
+  /// Recalculate all products from batches (bulk resync)
   Future<void> resyncAllProducts() async {
     final allProducts = await db.query("products", columns: ["id"]);
     for (final row in allProducts) {
       await recalculateProductFromBatches(row["id"] as String);
     }
   }
-
-
 }

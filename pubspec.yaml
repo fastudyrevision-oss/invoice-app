@@ -30,6 +30,8 @@ dependencies:
   win32: ^5.15.0
   file_picker: ^10.3.3
   shimmer: ^3.0.0
+  open_file: ^3.5.10
+  dropdown_search: ^6.0.2
 
   
 dev_dependencies:
@@ -42,3 +44,4 @@ flutter:
   assets:
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
+    - assets/logo.png

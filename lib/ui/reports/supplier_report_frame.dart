@@ -44,13 +44,21 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
           return const Center(child: Text("No supplier reports found."));
         }
 
+        // --- Safe interval calculation ---
+       final maxPurchase = reports
+    .map((e) => e.totalPurchases)
+    .fold<double>(0, (prev, elem) => elem > prev ? elem : elem);
+
+final interval = maxPurchase > 0 ? (maxPurchase / 5).ceilToDouble() : 1.0;
         return SingleChildScrollView(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Supplier Report",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                "Supplier Report",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 16),
 
               // --- Data List ---
@@ -64,8 +72,8 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ListTile(
                       title: Text(r.supplierName),
-                      subtitle: Text(
-                          "Purchases: ${r.totalPurchases}, Paid: ${r.totalPaid}"),
+                      subtitle:
+                          Text("Purchases: ${r.totalPurchases}, Paid: ${r.totalPaid}"),
                       trailing: Text("Balance: ${r.balance}"),
                     ),
                   );
@@ -96,11 +104,7 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
                               ),
                             );
                           },
-                          interval: (reports
-                                      .map((e) => e.totalPurchases)
-                                      .reduce((a, b) => a > b ? a : b) /
-                                  5)
-                              .ceilToDouble(), // dynamic interval
+                          interval: interval, // use safe interval
                         ),
                       ),
                       bottomTitles: AxisTitles(

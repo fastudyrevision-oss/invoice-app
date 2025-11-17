@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/invoice_item.dart';
@@ -39,10 +40,22 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
   double get _total => _items.fold(0, (sum, i) => sum + (i.price * i.qty));
 
+  double get _pending {
+    final discount = double.tryParse(_discountController.text) ?? 0;
+    final paid = double.tryParse(_paidController.text) ?? 0;
+    return (_total - discount - paid).clamp(0, double.infinity);
+  }
+
   @override
   void initState() {
     super.initState();
     _loadDropdownData();
+    _discountController.addListener(() => setState(() {}));
+    _paidController.addListener(() => setState(() {}));
+
+    _qtyController.addListener(() {
+    setState(() {}); // rebuild to refresh button state
+  });
   }
 
   @override
@@ -85,7 +98,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   Future<void> _addItem() async {
     if (_selectedProduct == null || _qtyController.text.isEmpty) return;
 
-    // ✅ Validate valid product
     if (!_products.any((p) => p.id == _selectedProduct?.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Invalid product selected")),
@@ -93,7 +105,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       return;
     }
 
-    // ✅ Validate stock
     if (_availableStock <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("This product is out of stock!")),
@@ -123,7 +134,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final batches = await batchDao.getBatchesByProduct(_selectedProduct!.id);
     batches.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-    // Snapshot original quantities
     final originalQtys = {for (var b in batches) b.id: b.qty};
 
     int remainingQty = qty;
@@ -137,16 +147,16 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       updatedBatches.add(batch);
     }
 
-    // ✅ Sequential batch update
     await Future.wait(updatedBatches.map(batchDao.updateBatch));
 
-    // Build reserved batch list
-    final reservedBatches = updatedBatches.map((b) {
-      final deducted = (originalQtys[b.id] ?? 0) - b.qty;
-      return {'batchId': b.id, 'qty': deducted};
-    }).where((b) => ((b['qty'] ?? 0) as num) > 0).toList();
+    final reservedBatches = updatedBatches
+        .map((b) {
+          final deducted = (originalQtys[b.id] ?? 0) - b.qty;
+          return {'batchId': b.id, 'qty': deducted};
+        })
+        .where((b) => ((b['qty'] ?? 0) as num) > 0)
+        .toList();
 
-    // ✅ Add product to order
     final item = InvoiceItem(
       id: _uuid.v4(),
       invoiceId: "",
@@ -164,10 +174,24 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       _qtyController.clear();
     });
 
-    await _loadAvailableStock(); // ✅ refresh stock
+    await _loadAvailableStock();
   }
 
   Future<void> _removeItem(InvoiceItem item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Remove Item?"),
+        content: const Text("Do you want to remove this item from the order?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Remove")),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
 
@@ -180,7 +204,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     }
 
     setState(() => _items.remove(item));
-    await _loadAvailableStock(); // ✅ refresh stock after removal
+    await _loadAvailableStock();
   }
 
   Future<void> _saveOrder() async {
@@ -190,6 +214,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       );
       return;
     }
+
+    showDialog(
+      barrierDismissible: false,
+      context: context,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
 
     final discount = double.tryParse(_discountController.text) ?? 0;
     final paid = double.tryParse(_paidController.text) ?? 0;
@@ -219,7 +249,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
       await invoiceDao.insert(invoice, _selectedCustomer!.name);
 
-      // ✅ Sequential item + product refresh
       for (final item in _items) {
         item.invoiceId = invoiceId;
         await itemDao.insert(item);
@@ -229,6 +258,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       await customerDao.updatePendingAmount(_selectedCustomer!.id, invoice.pending);
     });
 
+    Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Order created successfully!")),
     );
@@ -247,22 +277,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Customer Name"),
-            ),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: "Phone Number"),
-            ),
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: "Customer Name")),
+            TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Phone Number")),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
@@ -300,140 +320,201 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
       appBar: AppBar(title: const Text("Create Order")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const Text("Select Customer"),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<Customer>(
-                      value: _selectedCustomer,
-                      items: [
-                        ..._customers.map(
-                          (c) => DropdownMenuItem(value: c, child: Text(c.name)),
-                        ),
-                        const DropdownMenuItem<Customer>(
-                          value: null,
-                          child: Text("➕ Add New Customer"),
-                        ),
-                      ],
-                      onChanged: (val) {
-                        if (val == null) {
-                          _showAddCustomerDialog();
-                        } else {
-                          setState(() => _selectedCustomer = val);
-                        }
-                      },
-                      decoration: const InputDecoration(border: OutlineInputBorder()),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              const Text("Add Product"),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: DropdownButtonFormField<Product>(
-                      value: _selectedProduct,
-                      items: _products
-                          .map((p) => DropdownMenuItem(
-                                value: p,
-                                child: Text(p.name),
-                              ))
-                          .toList(),
-                      onChanged: (val) async {
-                        setState(() => _selectedProduct = val);
-                        await _loadAvailableStock();
-                      },
-                      decoration: const InputDecoration(labelText: "Product"),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 1,
-                    child: TextField(
-                      controller: _qtyController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "Qty"),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle, color: Colors.green),
-                    onPressed: _addItem,
-                  ),
-                ],
-              ),
-
-              if (_selectedProduct != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6.0, bottom: 12.0),
-                  child: Text(
-                    "Available Stock: $_availableStock",
-                    style: TextStyle(
-                      color: _availableStock > 0 ? Colors.green : Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-
-              if (_items.isNotEmpty)
-                Column(
-                  children: _items.map((item) {
-                    final product = _products.firstWhere((p) => p.id == item.productId);
-                    return ListTile(
-                      title: Text(product.name),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Qty: ${item.qty} × ${item.price}"),
-                          if (item.reservedBatches != null && item.reservedBatches!.isNotEmpty)
-                            Text(
-                              "Batches: ${item.reservedBatches!.map((b) => '${b['batchId'].substring(0, 6)}(${b['qty']})').join(', ')}",
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // 🧍 Customer Section
+                Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Select Customer", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<Customer>(
+                                initialValue: _selectedCustomer,
+                                items: _customers.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
+                                onChanged: (val) => setState(() => _selectedCustomer = val),
+                                decoration: const InputDecoration(labelText: "Customer", border: OutlineInputBorder()),
+                              ),
                             ),
-                        ],
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _removeItem(item),
-                      ),
-                    );
-                  }).toList(),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle, color: Colors.blue),
+                              onPressed: _showAddCustomerDialog,
+                            ),
+                          ],
+                        ),
+                        if (_selectedCustomer != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              "Pending: ${_selectedCustomer!.pendingAmount.toStringAsFixed(2)}",
+                              style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
 
-              const Divider(),
-              Text("Total: $_total"),
-              TextFormField(
-                controller: _discountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Discount"),
-              ),
-              TextFormField(
-                controller: _paidController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Paid"),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _saveOrder,
-                icon: const Icon(Icons.save),
-                label: const Text("Save Order"),
-              ),
-            ],
+                // 📦 Product Section
+                Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Add Product", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: DropdownButtonFormField<Product>(
+                                initialValue: _selectedProduct,
+                                items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                                onChanged: (val) async {
+                                  setState(() => _selectedProduct = val);
+                                  await _loadAvailableStock();
+                                },
+                                decoration: const InputDecoration(labelText: "Product"),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 1,
+                              child: TextFormField(
+                                controller: _qtyController,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                decoration: const InputDecoration(labelText: "Qty"),
+                                validator: (val) {
+                                  if (val == null || val.isEmpty) return "Enter quantity";
+                                  final q = int.tryParse(val);
+                                  if (q == null || q <= 0) return "Invalid qty";
+                                  return null;
+                                },
+                              ),
+                            ),
+                            IconButton(
+                                    icon: const Icon(Icons.add_circle, color: Colors.green),
+                                    onPressed: (_selectedProduct != null && _qtyController.text.isNotEmpty)
+                                        ? _addItem
+                                        : null,
+                                  ),
+                          ],
+                        ),
+                        if (_selectedProduct != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6.0),
+                            child: Text(
+                              "Available Stock: $_availableStock | Price: ${_selectedProduct!.sellPrice}",
+                              style: TextStyle(
+                                color: _availableStock > 0 ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 🧾 Order Items List
+                if (_items.isNotEmpty)
+                  Card(
+                    elevation: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: _items.map((item) {
+                          final product = _products.firstWhere((p) => p.id == item.productId);
+                          return ListTile(
+                            title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("Qty: ${item.qty} × ${item.price}"),
+                                if (item.reservedBatches != null && item.reservedBatches!.isNotEmpty)
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: item.reservedBatches!
+                                        .map((b) => Chip(
+                                              label: Text("${b['batchId'].substring(0, 6)}(${b['qty']})"),
+                                            ))
+                                        .toList(),
+                                  ),
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _removeItem(item),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                // 💰 Summary Section
+                Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Total: $_total", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _discountController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: const InputDecoration(labelText: "Discount"),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _paidController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: const InputDecoration(labelText: "Paid"),
+                        ),
+                        const SizedBox(height: 8),
+                        Text("Pending: $_pending", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  onPressed: _saveOrder,
+                  icon: const Icon(Icons.save),
+                  label: const Text("Save Order"),
+                ),
+              ],
+            ),
           ),
         ),
       ),

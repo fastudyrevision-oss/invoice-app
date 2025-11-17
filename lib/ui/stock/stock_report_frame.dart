@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../repositories/stock_repo.dart' as repo;
+import '../../repositories/stock_repo.dart';
 import '../../models/stock_report_model.dart';
-import '../../services/stock_export_service.dart' as svc;
+import '../../services/stock_export_service.dart';
 import '../../services/chart_service.dart';
+import '../../services/file_print_service.dart'; // 🆕 Add this helper (handles file_picker + print)
 import 'stock_filter_dialog.dart';
 
 class StockReportFrame extends StatefulWidget {
@@ -14,9 +15,10 @@ class StockReportFrame extends StatefulWidget {
 }
 
 class _StockReportFrameState extends State<StockReportFrame> {
-  final repo.StockRepository _repo = repo.StockRepository();
-  final svc.StockExportService _exportService = svc.StockExportService();
+  final StockRepository _repo = StockRepository();
+  final StockExportService _exportService = StockExportService();
   final ChartService _chartService = ChartService();
+  final FilePrintService _printService = FilePrintService(); // 🆕
 
   List<StockReport> _report = [];
   bool _loading = true;
@@ -24,6 +26,11 @@ class _StockReportFrameState extends State<StockReportFrame> {
   bool _onlyLowStock = false;
   bool _showExpiry = false;
   bool _detailedView = false;
+
+  // 🆕 Summary values
+  double _totalCost = 0;
+  double _totalSell = 0;
+  double _totalProfit = 0;
 
   @override
   void initState() {
@@ -33,12 +40,21 @@ class _StockReportFrameState extends State<StockReportFrame> {
 
   Future<void> _loadReport() async {
     setState(() => _loading = true);
-    final data = await _repo.fetchStockReport(
-      includePrice: _includePrice,
-      onlyLowStock: _onlyLowStock,
-    );
+
+    List<StockReport> data;
+    if (_onlyLowStock) {
+      data = await _repo.getLowStockReport();
+    } else {
+      data = await _repo.getStockReport();
+    }
+
+    final summary = await _repo.getStockSummary();
+
     setState(() {
       _report = data;
+      _totalCost = summary['totalCostValue'] ?? 0;
+      _totalSell = summary['totalSellValue'] ?? 0;
+      _totalProfit = summary['totalProfit'] ?? 0;
       _loading = false;
     });
   }
@@ -65,53 +81,135 @@ class _StockReportFrameState extends State<StockReportFrame> {
     }
   }
 
+  // 🆕 Summary widget
+  Widget _buildSummaryCard() {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Colors.grey.shade100,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _summaryTile("Total Cost", _totalCost),
+            _summaryTile("Total Sell", _totalSell),
+            _summaryTile("Profit", _totalProfit, isProfit: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryTile(String label, double value, {bool isProfit = false}) {
+    return Column(
+      children: [
+        Text(label,
+            style: const TextStyle(fontSize: 14, color: Colors.black54)),
+        Text(
+          value.toStringAsFixed(2),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: isProfit ? Colors.green.shade700 : Colors.blueGrey.shade800,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDataTable() {
     if (_report.isEmpty) {
       return const Center(child: Text("No data available"));
     }
 
-    final columns = [
+    final columns = <String>[
       'Product',
+      'Batch', // ✅ NEW COLUMN
       'Purchased',
+      
       'Sold',
       'Remaining',
+      if (_showExpiry) 'Supplier',
+      if (_showExpiry) 'Company',
+      if (_showExpiry) 'Expiry',
       if (_includePrice) 'Cost',
       if (_includePrice) 'Sell',
+      if (_detailedView) 'Profit/Unit',
+      if (_detailedView) 'Total Profit',
       if (_includePrice) 'Total Value',
+      if (_detailedView) 'Reorder Level',
     ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
         headingRowColor: WidgetStateProperty.all(Colors.grey.shade300),
+        columnSpacing: 24,
         columns: columns
-            .map((col) => DataColumn(
-                  label: Text(
-                    col,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ))
+            .map(
+              (col) => DataColumn(
+                label: Text(
+                  col,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            )
             .toList(),
         rows: _report.map((r) {
-          return DataRow(cells: [
-            DataCell(Text(r.productName)),
-            DataCell(Text(r.purchasedQty.toString())),
-            DataCell(Text(r.soldQty.toString())),
-            DataCell(Text(r.remainingQty.toString())),
-            if (_includePrice)
-              DataCell(Text(r.costPrice.toStringAsFixed(2))),
-            if (_includePrice)
-              DataCell(Text(r.sellPrice.toStringAsFixed(2))),
-            if (_includePrice)
-              DataCell(Text(r.totalValue.toStringAsFixed(2))),
-          ]);
+          final isLow = r.reorderLevel != null &&
+              r.reorderLevel! > 0 &&
+              r.remainingQty <= r.reorderLevel!;
+          final rowColor = isLow ? Colors.red.shade50 : Colors.white;
+
+          return DataRow(
+            color: WidgetStateProperty.all(rowColor),
+            cells: [
+              DataCell(Text(
+                r.productName,
+                style: TextStyle(
+                  color: isLow ? Colors.red : Colors.black,
+                  fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
+                ),
+              )),
+              DataCell(Text(r.batchNo ?? '-')), // ✅ NEW DATA CELL for Batch No
+              DataCell(Text(r.purchasedQty.toString())),
+              DataCell(Text(r.soldQty.toString())),
+              DataCell(Text(r.remainingQty.toString())),
+              if (_showExpiry)
+                DataCell(Text(r.supplierName ?? "-")),
+              if (_showExpiry)
+                DataCell(Text(r.companyName ?? "-")),  // NEW
+              if (_showExpiry)
+                DataCell(Text(r.expiryDate != null
+                    ? "${r.expiryDate!.toLocal()}".split(' ')[0]
+                    : "-")),
+              if (_includePrice)
+                DataCell(Text(r.costPrice.toStringAsFixed(2))),
+              if (_includePrice)
+                DataCell(Text(r.sellPrice.toStringAsFixed(2))),
+              if (_detailedView)
+                DataCell(Text(r.profitPerUnit.toStringAsFixed(2))),
+              if (_detailedView)
+                DataCell(Text(r.profitValue.toStringAsFixed(2))),
+              if (_includePrice)
+                DataCell(Text(r.totalSellValue.toStringAsFixed(2))),
+              if (_detailedView)
+                DataCell(Text(r.reorderLevel?.toString() ?? "-")),
+            ],
+          );
         }).toList(),
       ),
     );
   }
 
   Widget _buildChart() {
-    final chartData = _chartService.getBarChartData(_report);
+    final chartData = _chartService.getBarChartData(
+      _report,
+      detailedView: _detailedView,
+      onlyLowStock: _onlyLowStock,
+    );
+
     if (chartData.isEmpty) return const SizedBox();
 
     return Card(
@@ -134,8 +232,9 @@ class _StockReportFrameState extends State<StockReportFrame> {
                   borderData: FlBorderData(show: false),
                   gridData: const FlGridData(show: false),
                   titlesData: FlTitlesData(
-                    leftTitles:
-                        const AxisTitles(sideTitles: SideTitles(showTitles: true)),
+                    leftTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: true),
+                    ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
@@ -186,23 +285,29 @@ class _StockReportFrameState extends State<StockReportFrame> {
         ),
         const SizedBox(width: 10),
         ElevatedButton.icon(
-          onPressed: () => _exportService.exportToPDF(_report),
+          onPressed: () => _exportService.exportToPDF(
+            _report,
+            includePrice: _includePrice,
+            showExpiry: _showExpiry,
+            detailedView: _detailedView,
+          ),
           icon: const Icon(Icons.picture_as_pdf),
           label: const Text("Export PDF"),
         ),
         const SizedBox(width: 10),
         ElevatedButton.icon(
-          onPressed: () {
-            // TODO: Implement Excel export
-          },
+          onPressed: () => _exportService.exportToExcel(
+            _report,
+            includePrice: _includePrice,
+            showExpiry: _showExpiry,
+            detailedView: _detailedView,
+          ),
           icon: const Icon(Icons.table_chart),
           label: const Text("Export Excel"),
         ),
         const SizedBox(width: 10),
         ElevatedButton.icon(
-          onPressed: () {
-            // TODO: Implement POS printing
-          },
+          onPressed: () => _printService.printStockReport(_report),
           icon: const Icon(Icons.print),
           label: const Text("Print"),
         ),
@@ -227,7 +332,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
                 children: [
                   _buildTopButtons(),
                   const SizedBox(height: 16),
-                  // ✅ Entire table + chart scroll both ways
+                  _buildSummaryCard(),
                   Expanded(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.vertical,

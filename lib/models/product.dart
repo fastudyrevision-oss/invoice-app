@@ -10,9 +10,11 @@ class Product {
   final int minStock;
   final bool trackExpiry;
   final String? supplierId;
+  
   final String createdAt;
   final String updatedAt;
   final bool isDeleted; // ✅ NEW field
+  String? categoryId; // NEW
 
   Product({
     required this.id,
@@ -29,6 +31,7 @@ class Product {
     required this.createdAt,
     required this.updatedAt,
     this.isDeleted = false, // default is false
+    this.categoryId, // NEW
   });
 
   Product copyWith({
@@ -46,6 +49,7 @@ class Product {
     String? createdAt,
     String? updatedAt,
     bool? isDeleted,
+    String? categoryId, // NEW
   }) {
     return Product(
       id: id ?? this.id,
@@ -62,6 +66,7 @@ class Product {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isDeleted: isDeleted ?? this.isDeleted,
+       categoryId: categoryId ?? this.categoryId, // NEW
     );
   }
 
@@ -81,6 +86,7 @@ class Product {
       "created_at": createdAt,
       "updated_at": updatedAt,
       "is_deleted": isDeleted ? 1 : 0, // ✅ store as integer
+      'category_id':categoryId, // NEW
     };
   }
 
@@ -100,6 +106,7 @@ class Product {
       createdAt: map["created_at"] ?? DateTime.now().toIso8601String(),
       updatedAt: map["updated_at"] ?? DateTime.now().toIso8601String(),
       isDeleted: (map["is_deleted"] ?? 0) == 1, // ✅ default false
+      categoryId: map['category_id'], // NEW
     );
   }
 }
