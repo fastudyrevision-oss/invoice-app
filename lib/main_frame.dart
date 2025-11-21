@@ -7,6 +7,9 @@ import 'ui/purchase_frame.dart';
 import 'ui/expiring_products_frame.dart';
 import 'ui/reports/reports_dashboard.dart';
 import 'ui/order/order_list_screen.dart'; // ✅ Added this import
+import 'ui/category/category_list_frame.dart';
+import 'ui/backup/backup_frame.dart';
+
 
 import '../repositories/purchase_repo.dart';
 import '../repositories/supplier_repo.dart';
@@ -56,6 +59,8 @@ class _MainFrameState extends State<MainFrame>
       const Tab(text: "Suppliers"),
       const Tab(text: "Purchases"),
       const Tab(text: "Orders"), // ✅ New Orders Tab added here
+       const Tab(text: "Categories"), // <-- NEW TAB
+       const Tab(text: "BackUp/Restore"), // <-- NEW TAB
       Tab(
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -150,6 +155,8 @@ class _MainFrameState extends State<MainFrame>
                   supplierRepo: _supplierRepo!,
                 ),
           const OrderListScreen(), // ✅ Inserted here as the new tab view
+           const CategoryListFrame(), // <-- NEW TAB VIEW
+           const BackupRestoreScreen(), // <-- NEW TAB VIEW
           _purchaseRepo == null || _db == null
               ? const Center(child: CircularProgressIndicator())
               : ExpiringProductsFrame(

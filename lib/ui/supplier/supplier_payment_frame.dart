@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import '../../repositories/supplier_payment_repo.dart';
 import '../../repositories/purchase_repo.dart'; // 👈 make sure you have this
 import '../../models/supplier.dart';
@@ -74,20 +75,36 @@ void initState() {
               controller: noteCtrl,
               decoration: const InputDecoration(labelText: "Note / Details"),
             ),
-            DropdownButtonFormField<String>(
-              initialValue: selectedPurchaseId,
-              items: purchases.map((purchase) {
-                return DropdownMenuItem(
-                  value: purchase.id, // ✅ UUID
-                  child: Text(
-                    "Purchase ${purchase.id.substring(0, 6)} - ${purchase.total} - ${purchase.date} - ${purchase.pending} -${purchase.paid}",
-                  ),
-                );
-              }).toList(),
-              onChanged: (val) => selectedPurchaseId = val,
-              decoration:
-                  const InputDecoration(labelText: "Select Purchase (UUID)"),
-            ),
+            const SizedBox(height: 10),
+            DropdownSearch<String>(
+              items:(items, props)=> purchases.map((p) => p.id).toList(),
+  selectedItem: selectedPurchaseId,
+  itemAsString: (id) {
+    final p = purchases.firstWhere((p) => p.id == id);
+    return "Invoice: ${p.invoiceNo} | ${p.id.substring(0, 6)} | Total: ${p.total} | Pending: ${p.pending}";
+  },
+  popupProps: PopupProps.menu(
+    showSearchBox: true,
+    
+    searchFieldProps: TextFieldProps(
+      decoration: const InputDecoration(
+        labelText: "Search Purchase",
+        border: OutlineInputBorder(),
+      ),
+    ),
+  ),
+  decoratorProps: const DropDownDecoratorProps(
+    decoration: InputDecoration(
+      labelText: "Select Purchase",
+      border: OutlineInputBorder(),
+    ),
+  ),
+  onChanged: (val) {
+    selectedPurchaseId = val;
+  },
+  validator: (v) => v == null ? "Required" : null,
+),
+
           ],
         ),
         actions: [

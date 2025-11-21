@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 import '../../models/invoice_item.dart';
 import '../../models/customer.dart';
@@ -346,12 +347,31 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: DropdownButtonFormField<Customer>(
-                                initialValue: _selectedCustomer,
-                                items: _customers.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
-                                onChanged: (val) => setState(() => _selectedCustomer = val),
-                                decoration: const InputDecoration(labelText: "Customer", border: OutlineInputBorder()),
-                              ),
+                              child: DropdownSearch<Customer>(
+  items:(items, props)=> _customers,
+  selectedItem: _selectedCustomer,
+  compareFn: (a, b) => a.id == b.id,
+  itemAsString: (c) => c.name,
+  popupProps: PopupProps.modalBottomSheet(
+    showSearchBox: true,
+    searchFieldProps: TextFieldProps(
+      decoration: const InputDecoration(
+        labelText: "Search Customer",
+        border: OutlineInputBorder(),
+      ),
+    ),
+  ),
+  decoratorProps: const DropDownDecoratorProps(
+    decoration: InputDecoration(
+      labelText: "Customer",
+      border: OutlineInputBorder(),
+    ),
+  ),
+  onChanged: (val) {
+    setState(() => _selectedCustomer = val);
+  },
+),
+
                             ),
                             IconButton(
                               icon: const Icon(Icons.add_circle, color: Colors.blue),
@@ -387,15 +407,32 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                           children: [
                             Expanded(
                               flex: 2,
-                              child: DropdownButtonFormField<Product>(
-                                initialValue: _selectedProduct,
-                                items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
-                                onChanged: (val) async {
-                                  setState(() => _selectedProduct = val);
-                                  await _loadAvailableStock();
-                                },
-                                decoration: const InputDecoration(labelText: "Product"),
-                              ),
+                              child: DropdownSearch<Product>(
+  items:(items, props)=> _products,
+  selectedItem: _selectedProduct,
+  compareFn: (a, b) => a.id == b.id,
+  itemAsString: (p) => p.name,
+  popupProps: PopupProps.modalBottomSheet(
+    showSearchBox: true,
+    searchFieldProps: TextFieldProps(
+      decoration: const InputDecoration(
+        labelText: "Search Product",
+        border: OutlineInputBorder(),
+      ),
+    ),
+  ),
+  decoratorProps: const DropDownDecoratorProps(
+    decoration: InputDecoration(
+      labelText: "Product",
+      border: OutlineInputBorder(),
+    ),
+  ),
+  onChanged: (val) async {
+    setState(() => _selectedProduct = val);
+    await _loadAvailableStock();
+  },
+)
+,
                             ),
                             const SizedBox(width: 8),
                             Expanded(

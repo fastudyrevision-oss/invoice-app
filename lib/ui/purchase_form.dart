@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import '../repositories/purchase_repo.dart';
 import '../models/purchase.dart';
 import '../models/purchase_item.dart';
@@ -136,21 +137,39 @@ class _PurchaseFormState extends State<PurchaseForm> {
                 decoration: const InputDecoration(labelText: "Invoice No"),
                 validator: (v) => v == null || v.isEmpty ? "Required" : null,
               ),
+              const SizedBox(height: 10),
               FutureBuilder<List<Supplier>>(
                 future: widget.repo.getAllSuppliers(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const SizedBox();
-                  return DropdownButtonFormField<String>(
-                    initialValue: _selectedSupplierId,
-                    items: snapshot.data!
-                        .map((s) => DropdownMenuItem(
-                              value: s.id,
-                              child: Text(s.name),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedSupplierId = val),
-                    decoration: const InputDecoration(labelText: "Supplier"),
-                  );
+                  final suppliers = snapshot.data!;
+
+                  return DropdownSearch<String>(
+      items: (items, props) => suppliers.map((s) => s.id).toList(),
+      selectedItem: _selectedSupplierId,
+      itemAsString: (id) {
+        final supplier = suppliers.firstWhere((s) => s.id == id);
+        return supplier.name;
+      },
+      popupProps: PopupProps.modalBottomSheet(
+        showSearchBox: true,
+        searchFieldProps: TextFieldProps(
+          decoration: const InputDecoration(
+            labelText: "Search Supplier",
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ),
+      decoratorProps: const DropDownDecoratorProps(
+        decoration: InputDecoration(
+          labelText: "Supplier",
+          border: OutlineInputBorder(),
+        ),
+      ),
+      onChanged: (val) {
+        setState(() => _selectedSupplierId = val);
+      },
+    );
                 },
               ),
               const SizedBox(height: 10),
@@ -264,40 +283,56 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
             return SingleChildScrollView(
               child: Column(
                 children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedProductId,
-                    items: [
-                      ...products.map((p) => DropdownMenuItem(
-                            value: p.id,
-                            child: Text("${p.name} (${p.sku})"),
-                          )),
-                      const DropdownMenuItem(
-                        value: "__new__",
-                        child: Text("+ Add New Product"),
-                      ),
-                    ],
-                    onChanged: (val) async {
-                      if (val == "__new__") {
-                        final newProduct = await showDialog<Product>(
-                          context: context,
-                          builder: (_) => ProductDialog(
-                            productRepo: widget.productRepo,
-                            supplierRepo: widget.supplierRepo,
-                          ),
-                        );
-                        if (newProduct != null) {
-                          setState(() {
-                            products.add(newProduct);
-                            _selectedProductId = newProduct.id;
-                          });
-                        }
-                      } else {
-                        setState(() => _selectedProductId = val);
-                      }
-                    },
-                    decoration: const InputDecoration(labelText: "Product"),
-                    validator: (v) => v == null ? "Required" : null,
-                  ),
+                  DropdownSearch<String>(
+  items: 
+    (items ,props)=>products.map((p) => p.id).toList() + [
+    "__new__"] // option for adding a new product
+  ,
+  selectedItem: _selectedProductId,
+  itemAsString: (id) {
+    if (id == "__new__") return "+ Add New Product";
+    final product = products.firstWhere((p) => p.id == id);
+    return "${product.name} (${product.sku})";
+  },
+  popupProps: PopupProps.modalBottomSheet(
+    showSearchBox: true,
+    searchFieldProps: TextFieldProps(
+      decoration: const InputDecoration(
+        labelText: "Search Product",
+        border: OutlineInputBorder(),
+      ),
+    ),
+  ),
+  decoratorProps: const DropDownDecoratorProps(
+    decoration: InputDecoration(
+      labelText: "Product",
+      border: OutlineInputBorder(),
+    ),
+  ),
+  onChanged: (val) async {
+    if (val == "__new__") {
+      final newProduct = await showDialog<Product>(
+        context: context,
+        builder: (_) => ProductDialog(
+          productRepo: widget.productRepo,
+          supplierRepo: widget.supplierRepo,
+        ),
+      );
+
+      if (newProduct != null) {
+        setState(() {
+          products.add(newProduct);
+          _selectedProductId = newProduct.id;
+        });
+      }
+      return;
+    }
+
+    setState(() => _selectedProductId = val);
+  },
+  validator: (v) => v == null ? "Required" : null,
+),
+
                   TextFormField(
                     controller: _qtyCtrl,
                     decoration: const InputDecoration(labelText: "Quantity"),

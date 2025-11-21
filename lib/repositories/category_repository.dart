@@ -12,6 +12,7 @@ class CategoryRepository {
   }
 
   Future<List<Category>> getAllCategories() => _dao.getAll();
+  Future<List<Category>> getAllCategoriesPaged(int offset, int limit) => _dao.getAllPaged(offset, limit);
 
   Future<Category?> getCategoryById(String id) => _dao.getById(id);
 

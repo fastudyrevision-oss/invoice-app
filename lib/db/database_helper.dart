@@ -30,6 +30,7 @@ class DatabaseHelper {
     "customers",
     "supplier_companies",
     "suppliers",
+    "categories",
     "products",
     "product_batches",
     "invoices",
@@ -99,6 +100,7 @@ class DatabaseHelper {
     }
   }
 
+
   Future<dynamic> get db async {
     if (kIsWeb) {
       if (_webDb == null) throw Exception("Web database not initialized");
@@ -108,6 +110,23 @@ class DatabaseHelper {
       return _db!;
     }
   }
+
+  /// Returns the file path for SQLite databases (mobile/desktop)
+  Future<String?> get dbPath async {
+    if (kIsWeb) return null; // Web does not have a physical file
+    if (_db == null) throw Exception("Database not initialized");
+    return _db!.path; // sqflite database path
+  }
+
+  /// Close the database safely (does nothing for web)
+  Future<void> close() async {
+    if (kIsWeb) return; // nothing to close for web
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+    }
+  }
+
 
 
   // ================== CREATE TABLES FOR SQLite ==================
@@ -420,6 +439,14 @@ await db.insert('categories', {
         uploaded_at TEXT
       )
     ''');
+      // SYNC META TABLE
+  await db.execute('''
+    CREATE TABLE sync_meta (
+      table_name TEXT PRIMARY KEY,
+      last_synced_at TEXT
+    )
+  ''');
+
 
     // Indexes
     await db.execute('CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)');

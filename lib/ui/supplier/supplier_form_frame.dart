@@ -3,6 +3,7 @@ import '../../repositories/supplier_repo.dart';
 import '../../models/supplier.dart';
 import '../../models/supplier_company.dart';
 import 'package:uuid/uuid.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 class SupplierFormFrame extends StatefulWidget {
   final SupplierRepository repo;
@@ -24,6 +25,16 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
   String? _companyId;
 
   List<SupplierCompany> _companies = [];
+  final SupplierCompany allCompaniesOption = SupplierCompany(
+  id: '-1',
+  name: 'Select Company', // or any default
+  createdAt: DateTime.now().toIso8601String(),
+  updatedAt: DateTime.now().toIso8601String(),
+  // fill other fields if needed
+);
+
+
+
 
   @override
   void initState() {
@@ -118,14 +129,35 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _companyId,
-                decoration: const InputDecoration(labelText: "Company"),
-                items: _companies
-                    .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                    .toList(),
-                onChanged: (v) => setState(() => _companyId = v),
+              DropdownSearch<SupplierCompany>( // or Mode.BOTTOM_SHEET / Mode.DIALOG
+                    items:(items, props)=> _companies,
+                    itemAsString: (SupplierCompany c) => c.name,
+                   onChanged: (c) {
+                        if (c != null) {
+                          setState(() => _companyId = c.id);
+                        } else {
+                          setState(() => _companyId = null);
+                        }
+                      }
+                      ,
+                      compareFn:(SupplierCompany a, SupplierCompany b) => a.id == b.id,
+                                selectedItem: _companies.firstWhere(
+                (c) => c.id == _companyId,
+                orElse: () => allCompaniesOption, // return null if not found
               ),
+
+                   popupProps: PopupProps.menu(
+                    showSearchBox: true,
+                    fit: FlexFit.loose,
+                  ),// lets user type to search
+                    decoratorProps: DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Company",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+            ),
+
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _save,

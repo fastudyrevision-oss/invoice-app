@@ -65,6 +65,9 @@ class _ProductFrameState extends State<ProductFrame> {
   }
 
   Future<void> _loadInitialData() async {
+    if (!mounted) return;
+
+
     setState(() => _isLoading = true);
 
     final categoryRepo = await CategoryRepository.create();
@@ -89,6 +92,9 @@ class _ProductFrameState extends State<ProductFrame> {
 
   Future<void> _loadNextPage() async {
     if (!_hasMore) return;
+    if (!mounted) return;
+
+
 
     setState(() => _isLoadingPage = true);
 
@@ -280,7 +286,7 @@ class _ProductFrameState extends State<ProductFrame> {
                   quantity: int.tryParse(quantityController.text) ?? 0,
                   minStock: int.tryParse(minStockController.text) ?? 0,
                   trackExpiry: trackExpiry,
-                  supplierId: selectedSupplierId,
+                 supplierId: (selectedSupplierId == "all") ? null : selectedSupplierId,
                   categoryId: selectedCategory?.id ?? 'cat-001',
                   createdAt: product?.createdAt ?? DateTime.now().toIso8601String(),
                   updatedAt: DateTime.now().toIso8601String(),
