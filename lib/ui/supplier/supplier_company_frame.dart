@@ -41,24 +41,47 @@ class _SupplierCompanyFrameState extends State<SupplierCompanyFrame> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "Name")),
-              TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: "Address")),
-              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: "Phone")),
-              TextField(controller: notesCtrl, decoration: const InputDecoration(labelText: "Notes"), maxLines: 2),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: "Name"),
+              ),
+              TextField(
+                controller: addressCtrl,
+                decoration: const InputDecoration(labelText: "Address"),
+              ),
+              TextField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(labelText: "Phone"),
+              ),
+              TextField(
+                controller: notesCtrl,
+                decoration: const InputDecoration(labelText: "Notes"),
+                maxLines: 2,
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
           TextButton(
             onPressed: () {
               final newCompany = SupplierCompany(
                 id: company?.id ?? const Uuid().v4(),
                 name: nameCtrl.text.trim(),
-                address: addressCtrl.text.trim().isEmpty ? null : addressCtrl.text.trim(),
-                phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
-                notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-                createdAt: company?.createdAt ?? DateTime.now().toIso8601String(),
+                address: addressCtrl.text.trim().isEmpty
+                    ? null
+                    : addressCtrl.text.trim(),
+                phone: phoneCtrl.text.trim().isEmpty
+                    ? null
+                    : phoneCtrl.text.trim(),
+                notes: notesCtrl.text.trim().isEmpty
+                    ? null
+                    : notesCtrl.text.trim(),
+                createdAt:
+                    company?.createdAt ?? DateTime.now().toIso8601String(),
                 updatedAt: DateTime.now().toIso8601String(),
                 deleted: company?.deleted ?? 0,
               );
@@ -87,8 +110,14 @@ class _SupplierCompanyFrameState extends State<SupplierCompanyFrame> {
         title: const Text("Delete Company"),
         content: Text("Are you sure you want to delete '${company.name}'?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
         ],
       ),
     );
@@ -155,9 +184,14 @@ class _SupplierCompanyFrameState extends State<SupplierCompanyFrame> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (c.phone?.isNotEmpty ?? false) Text("📞 ${c.phone}"),
-                      if (c.address?.isNotEmpty ?? false) Text("📍 ${c.address}"),
+                      if (c.address?.isNotEmpty ?? false)
+                        Text("📍 ${c.address}"),
                       if (c.notes?.isNotEmpty ?? false) Text("📝 ${c.notes}"),
-                      if (isDeleted) const Text("Deleted", style: TextStyle(color: Colors.red)),
+                      if (isDeleted)
+                        const Text(
+                          "Deleted",
+                          style: TextStyle(color: Colors.red),
+                        ),
                     ],
                   ),
                   trailing: PopupMenuButton<String>(
@@ -171,9 +205,18 @@ class _SupplierCompanyFrameState extends State<SupplierCompanyFrame> {
                       }
                     },
                     itemBuilder: (ctx) => [
-                      if (!isDeleted) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      if (!isDeleted) const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                      if (isDeleted) const PopupMenuItem(value: 'restore', child: Text('Restore')),
+                      if (!isDeleted)
+                        const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      if (!isDeleted)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      if (isDeleted)
+                        const PopupMenuItem(
+                          value: 'restore',
+                          child: Text('Restore'),
+                        ),
                     ],
                   ),
                 ),

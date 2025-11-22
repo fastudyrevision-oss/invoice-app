@@ -91,9 +91,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Invoice #${_purchase.invoiceNo}"),
-      ),
+      appBar: AppBar(title: Text("Invoice #${_purchase.invoiceNo}")),
       body: FutureBuilder<List<PurchaseItem>>(
         future: _itemsFuture,
         builder: (context, snapshot) {
@@ -105,7 +103,9 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
           }
           final items = snapshot.data ?? [];
           if (items.isEmpty) {
-            return const Center(child: Text("No items recorded for this purchase"));
+            return const Center(
+              child: Text("No items recorded for this purchase"),
+            );
           }
 
           return ListView.separated(
@@ -138,9 +138,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                         ),
                         children: [
                           if (batches.isEmpty)
-                            const ListTile(
-                              title: Text("No batches recorded"),
-                            )
+                            const ListTile(title: Text("No batches recorded"))
                           else
                             ...batches.map(
                               (b) => ListTile(

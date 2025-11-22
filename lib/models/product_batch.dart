@@ -58,32 +58,32 @@ class ProductBatch {
   }
 
   Map<String, dynamic> toMap() => {
-        "id": id,
-        "product_id": productId,
-        "supplier_id": supplierId,
-        "batch_no": batchNo,
-        "expiry_date": expiryDate,
-        "qty": qty,
-        "purchase_price": purchasePrice,
-        "sell_price": sellPrice,
-        "purchase_id": purchaseId,
-        "created_at": createdAt,
-        "updated_at": updatedAt,
-        "is_synced": isSynced,
-      };
+    "id": id,
+    "product_id": productId,
+    "supplier_id": supplierId,
+    "batch_no": batchNo,
+    "expiry_date": expiryDate,
+    "qty": qty,
+    "purchase_price": purchasePrice,
+    "sell_price": sellPrice,
+    "purchase_id": purchaseId,
+    "created_at": createdAt,
+    "updated_at": updatedAt,
+    "is_synced": isSynced,
+  };
 
   factory ProductBatch.fromMap(Map<String, dynamic> map) => ProductBatch(
-        id: map["id"],
-        productId: map["product_id"],
-        supplierId: map["supplier_id"],
-        batchNo: map["batch_no"],
-        expiryDate: map["expiry_date"],
-        qty: map["qty"] ?? 0,
-        purchasePrice: (map["purchase_price"] ?? 0).toDouble(),
-        sellPrice: (map["sell_price"] ?? 0).toDouble(),
-        purchaseId: map["purchase_id"],
-        createdAt: map["created_at"],
-        updatedAt: map["updated_at"],
-        isSynced: map["is_synced"] ?? 0,
-      );
+    id: map["id"],
+    productId: map["product_id"],
+    supplierId: map["supplier_id"],
+    batchNo: map["batch_no"],
+    expiryDate: map["expiry_date"],
+    qty: map["qty"] ?? 0,
+    purchasePrice: (map["purchase_price"] ?? 0).toDouble(),
+    sellPrice: (map["sell_price"] ?? 0).toDouble(),
+    purchaseId: map["purchase_id"],
+    createdAt: map["created_at"],
+    updatedAt: map["updated_at"],
+    isSynced: map["is_synced"] ?? 0,
+  );
 }

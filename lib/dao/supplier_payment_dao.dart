@@ -58,20 +58,12 @@ class SupplierPaymentDao {
 
   /// Soft delete a payment (mark deleted = 1)
   Future<int> softDeletePayment(String id) async {
-    return await dbHelper.update(
-      "supplier_payments",
-      {"deleted": 1},
-      id,
-    );
+    return await dbHelper.update("supplier_payments", {"deleted": 1}, id);
   }
 
   /// Restore a soft-deleted payment (mark deleted = 0)
   Future<int> restorePayment(String id) async {
-    return await dbHelper.update(
-      "supplier_payments",
-      {"deleted": 0},
-      id,
-    );
+    return await dbHelper.update("supplier_payments", {"deleted": 0}, id);
   }
 
   /// Permanently delete a payment
@@ -80,7 +72,9 @@ class SupplierPaymentDao {
   }
 
   /// Get all payments (optionally include deleted)
-  Future<List<SupplierPayment>> getAllPayments({bool includeDeleted = false}) async {
+  Future<List<SupplierPayment>> getAllPayments({
+    bool includeDeleted = false,
+  }) async {
     final data = await dbHelper.queryAll("supplier_payments");
 
     final filtered = includeDeleted

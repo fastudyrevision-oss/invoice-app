@@ -98,9 +98,7 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
 
   Future<void> _openForm({Category? category}) async {
     final result = await Navigator.of(context).push<Category?>(
-      MaterialPageRoute(
-        builder: (_) => CategoryFormScreen(category: category),
-      ),
+      MaterialPageRoute(builder: (_) => CategoryFormScreen(category: category)),
     );
     if (result != null) {
       await _refreshCategories();
@@ -114,8 +112,14 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
         title: const Text('Delete Category'),
         content: Text('Mark "${c.name}" as deleted?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -126,7 +130,10 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   }
 
   Future<void> _restoreCategory(Category c) async {
-    final restored = c.copyWith(isDeleted: false, updatedAt: DateTime.now().toIso8601String());
+    final restored = c.copyWith(
+      isDeleted: false,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
     await _repo.updateCategory(restored);
     await _refreshCategories();
   }
@@ -138,18 +145,20 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   }
 
   Widget _buildList() {
-    if (_loading && _categories.isEmpty) return const Center(child: CircularProgressIndicator());
-    if (_filteredCategories.isEmpty) return const Center(child: Text('No categories found'));
+    if (_loading && _categories.isEmpty)
+      return const Center(child: CircularProgressIndicator());
+    if (_filteredCategories.isEmpty)
+      return const Center(child: Text('No categories found'));
 
     return ListView.builder(
       itemCount: _filteredCategories.length + (_hasMoreData ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= _filteredCategories.length) {
           // Trigger next page load
-           // Schedule lazy load after the current frame
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _loadNextPage();
-        });
+          // Schedule lazy load after the current frame
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _loadNextPage();
+          });
           return const Padding(
             padding: EdgeInsets.all(16.0),
             child: Center(child: CircularProgressIndicator()),
@@ -158,10 +167,13 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
 
         final c = _filteredCategories[index];
         return ListTile(
-          leading: c.icon != null ? CircleAvatar(child: Text(c.name.substring(0, 1))) : null,
+          leading: c.icon != null
+              ? CircleAvatar(child: Text(c.name.substring(0, 1)))
+              : null,
           title: Text(c.name),
           subtitle: Text(
-              'Order: ${c.sortOrder} • ${c.isActive ? "Active" : "Inactive"}${c.isDeleted ? " • Deleted" : ""}'),
+            'Order: ${c.sortOrder} • ${c.isActive ? "Active" : "Inactive"}${c.isDeleted ? " • Deleted" : ""}',
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: c.isDeleted
@@ -173,8 +185,14 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                     ),
                   ]
                 : [
-                    IconButton(icon: const Icon(Icons.edit), onPressed: () => _openForm(category: c)),
-                    IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _confirmDelete(c)),
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _openForm(category: c),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _confirmDelete(c),
+                    ),
                   ],
           ),
           onTap: () => _openForm(category: c),
@@ -202,11 +220,26 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
               });
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: SortMode.nameAsc, child: Text('Name ↑')),
-              const PopupMenuItem(value: SortMode.nameDesc, child: Text('Name ↓')),
-              const PopupMenuItem(value: SortMode.orderAsc, child: Text('Sort Order ↑')),
-              const PopupMenuItem(value: SortMode.orderDesc, child: Text('Sort Order ↓')),
-              const PopupMenuItem(value: SortMode.newest, child: Text('Newest')),
+              const PopupMenuItem(
+                value: SortMode.nameAsc,
+                child: Text('Name ↑'),
+              ),
+              const PopupMenuItem(
+                value: SortMode.nameDesc,
+                child: Text('Name ↓'),
+              ),
+              const PopupMenuItem(
+                value: SortMode.orderAsc,
+                child: Text('Sort Order ↑'),
+              ),
+              const PopupMenuItem(
+                value: SortMode.orderDesc,
+                child: Text('Sort Order ↓'),
+              ),
+              const PopupMenuItem(
+                value: SortMode.newest,
+                child: Text('Newest'),
+              ),
             ],
             icon: const Icon(Icons.sort),
           ),
@@ -232,7 +265,10 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
             padding: const EdgeInsets.all(8.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search categories...'),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Search categories...',
+              ),
             ),
           ),
           Expanded(child: _buildList()),

@@ -60,9 +60,9 @@ class StockBatch {
       batchNo: map['batch_no']?.toString() ?? '',
       productId: toInt(map['product_id']),
       productName: map['product_name']?.toString() ?? '',
-      purchasedQty: toInt(map['purchased_qty'] ??
-          map['original_purchased_qty'] ??
-          map['qty']),
+      purchasedQty: toInt(
+        map['purchased_qty'] ?? map['original_purchased_qty'] ?? map['qty'],
+      ),
       costPrice: toDouble(map['cost_price']),
       sellPrice: toDouble(map['sell_price']),
       expiryDate: toDate(map['expiry_date']),

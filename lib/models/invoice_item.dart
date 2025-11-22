@@ -34,45 +34,45 @@ class InvoiceItem {
   // ✅ Convert to Map for DB operations
   // =====================================
   Map<String, dynamic> toMap() => {
-        "id": id,
-        "invoice_id": invoiceId,
-        "product_id": productId,
-        "qty": qty,
-        "price": price,
-        "discount": discount ?? 0.0,
-        "tax": tax ?? 0.0,
-        "batch_no": batchNo,
-        "created_at": createdAt,
-        "updated_at": updatedAt,
+    "id": id,
+    "invoice_id": invoiceId,
+    "product_id": productId,
+    "qty": qty,
+    "price": price,
+    "discount": discount ?? 0.0,
+    "tax": tax ?? 0.0,
+    "batch_no": batchNo,
+    "created_at": createdAt,
+    "updated_at": updatedAt,
 
-        // 👇 Convert reservedBatches (List<Map>) to JSON string
-        "reserved_batches": reservedBatches != null
-            ? jsonEncode(reservedBatches)
-            : null,
-      };
+    // 👇 Convert reservedBatches (List<Map>) to JSON string
+    "reserved_batches": reservedBatches != null
+        ? jsonEncode(reservedBatches)
+        : null,
+  };
 
   // =====================================
   // ✅ Create from DB map
   // =====================================
   factory InvoiceItem.fromMap(Map<String, dynamic> map) => InvoiceItem(
-        id: map["id"],
-        invoiceId: map["invoice_id"],
-        productId: map["product_id"],
-        qty: map["qty"] is int ? map["qty"] : int.tryParse(map["qty"].toString()) ?? 0,
-        price: (map["price"] ?? 0).toDouble(),
-        discount: (map["discount"] ?? 0).toDouble(),
-        tax: (map["tax"] ?? 0).toDouble(),
-        batchNo: map["batch_no"],
-        createdAt: map["created_at"],
-        updatedAt: map["updated_at"],
+    id: map["id"],
+    invoiceId: map["invoice_id"],
+    productId: map["product_id"],
+    qty: map["qty"] is int
+        ? map["qty"]
+        : int.tryParse(map["qty"].toString()) ?? 0,
+    price: (map["price"] ?? 0).toDouble(),
+    discount: (map["discount"] ?? 0).toDouble(),
+    tax: (map["tax"] ?? 0).toDouble(),
+    batchNo: map["batch_no"],
+    createdAt: map["created_at"],
+    updatedAt: map["updated_at"],
 
-        // 👇 Decode JSON to List<Map<String, dynamic>>
-        reservedBatches: map["reserved_batches"] != null
-            ? List<Map<String, dynamic>>.from(
-                jsonDecode(map["reserved_batches"]),
-              )
-            : null,
-      );
+    // 👇 Decode JSON to List<Map<String, dynamic>>
+    reservedBatches: map["reserved_batches"] != null
+        ? List<Map<String, dynamic>>.from(jsonDecode(map["reserved_batches"]))
+        : null,
+  );
 
   // =====================================
   // ✅ CopyWith for updates

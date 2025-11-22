@@ -97,12 +97,16 @@ class StockReport {
       companyName: map['company_name']?.toString(),
       supplierId: map['supplier_id']?.toString(),
       supplierName: map['supplier_name']?.toString(),
-      purchasedQty: toInt(map['purchased_qty'] ?? map['original_purchased_qty']),
+      purchasedQty: toInt(
+        map['purchased_qty'] ?? map['original_purchased_qty'],
+      ),
       soldQty: toInt(map['sold_qty'] ?? map['sold_by_batch']),
       remainingQty: remaining,
       costPrice: cost,
       sellPrice: sell,
-      lastPurchaseDate: toDate(map['last_purchase_date'] ?? map['purchase_date']),
+      lastPurchaseDate: toDate(
+        map['last_purchase_date'] ?? map['purchase_date'],
+      ),
       lastSoldDate: toDate(map['last_sold_date']),
       reorderLevel: toInt(map['reorder_level']),
       expiryDate: toDate(map['latest_expiry'] ?? map['expiry_date']),

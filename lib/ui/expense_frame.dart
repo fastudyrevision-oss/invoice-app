@@ -3,6 +3,7 @@ import '../models/expense.dart';
 import '../repositories/expense_repository.dart';
 
 enum ExpenseSortMode { date, amount }
+enum ExpenseFilterType { daily, weekly, monthly, yearly, all }
 
 class ExpenseFrame extends StatefulWidget {
   const ExpenseFrame({super.key});
@@ -19,6 +20,10 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
   String _searchQuery = '';
   bool _sortAscending = true;
   ExpenseSortMode _sortMode = ExpenseSortMode.date;
+  ExpenseFilterType _filterType = ExpenseFilterType.all;
+  double _filteredTotal = 0.0;
+
+
 
   @override
   void initState() {
@@ -44,13 +49,17 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
     }).toList();
 
     if (_sortMode == ExpenseSortMode.date) {
-      _filteredExpenses.sort((a, b) => _sortAscending
-          ? a.date.compareTo(b.date)
-          : b.date.compareTo(a.date));
+      _filteredExpenses.sort(
+        (a, b) => _sortAscending
+            ? a.date.compareTo(b.date)
+            : b.date.compareTo(a.date),
+      );
     } else if (_sortMode == ExpenseSortMode.amount) {
-      _filteredExpenses.sort((a, b) => _sortAscending
-          ? a.amount.compareTo(b.amount)
-          : b.amount.compareTo(a.amount));
+      _filteredExpenses.sort(
+        (a, b) => _sortAscending
+            ? a.amount.compareTo(b.amount)
+            : b.amount.compareTo(a.amount),
+      );
     }
   }
 
@@ -69,10 +78,16 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
   }
 
   void _showAddEditExpenseDialog([Expense? expense]) {
-    final descController = TextEditingController(text: expense?.description ?? "");
-    final amountController = TextEditingController(text: expense?.amount.toString() ?? "");
+    final descController = TextEditingController(
+      text: expense?.description ?? "",
+    );
+    final amountController = TextEditingController(
+      text: expense?.amount.toString() ?? "",
+    );
     final dateController = TextEditingController(text: expense?.date ?? "");
-    final categoryController = TextEditingController(text: expense?.category ?? "General");
+    final categoryController = TextEditingController(
+      text: expense?.category ?? "General",
+    );
 
     showDialog(
       context: context,
@@ -81,17 +96,32 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: descController, decoration: const InputDecoration(labelText: "Description")),
-            TextField(controller: amountController, decoration: const InputDecoration(labelText: "Amount"), keyboardType: TextInputType.number),
-            TextField(controller: dateController, decoration: const InputDecoration(labelText: "Date (YYYY-MM-DD)")),
-            TextField(controller: categoryController, decoration: const InputDecoration(labelText: "Category")),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: "Description"),
+            ),
+            TextField(
+              controller: amountController,
+              decoration: const InputDecoration(labelText: "Amount"),
+              keyboardType: TextInputType.number,
+            ),
+            TextField(
+              controller: dateController,
+              decoration: const InputDecoration(labelText: "Date (YYYY-MM-DD)"),
+            ),
+            TextField(
+              controller: categoryController,
+              decoration: const InputDecoration(labelText: "Category"),
+            ),
           ],
         ),
         actions: [
           ElevatedButton(
             onPressed: () async {
               final newExpense = Expense(
-                id: expense?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                id:
+                    expense?.id ??
+                    DateTime.now().millisecondsSinceEpoch.toString(),
                 description: descController.text,
                 amount: double.tryParse(amountController.text) ?? 0.0,
                 date: dateController.text,
@@ -109,11 +139,97 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
             },
             child: Text(expense == null ? "Add" : "Update"),
           ),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
         ],
       ),
     );
   }
+  Widget _buildFilterChips() {
+  return Wrap(
+    spacing: 8,
+    children: [
+      _chip("All", ExpenseFilterType.all),
+      _chip("Daily", ExpenseFilterType.daily),
+      _chip("Weekly", ExpenseFilterType.weekly),
+      _chip("Monthly", ExpenseFilterType.monthly),
+      _chip("Yearly", ExpenseFilterType.yearly),
+      
+
+    ],
+    
+  );
+}
+void _applyFilters() {
+  DateTime now = DateTime.now();
+
+  List<Expense> filtered = _expenses;
+
+  switch (_filterType) {
+    case ExpenseFilterType.daily:
+      filtered = filtered.where((e) {
+        DateTime d = DateTime.parse(e.date);
+        return d.year == now.year &&
+               d.month == now.month &&
+               d.day == now.day;
+      }).toList();
+      break;
+
+    case ExpenseFilterType.weekly:
+      final beginningOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      filtered = filtered.where((e) {
+        DateTime d = DateTime.parse(e.date);
+        return d.isAfter(beginningOfWeek) && d.isBefore(now.add(const Duration(days: 1)));
+      }).toList();
+      break;
+
+    case ExpenseFilterType.monthly:
+      filtered = filtered.where((e) {
+        DateTime d = DateTime.parse(e.date);
+        return d.year == now.year && d.month == now.month;
+      }).toList();
+      break;
+
+    case ExpenseFilterType.yearly:
+      filtered = filtered.where((e) {
+        DateTime d = DateTime.parse(e.date);
+        return d.year == now.year;
+      }).toList();
+      break;
+
+    case ExpenseFilterType.all:
+      // Do nothing
+      break;
+  }
+    // 🔥 calculate total
+  final total = filtered.fold<double>(
+    0.0,
+    (sum, item) => sum + item.amount,
+  );
+
+  setState(() {
+    _filteredExpenses = filtered;
+    _filteredTotal=total;
+  });
+}
+
+
+Widget _chip(String label, ExpenseFilterType type) {
+  final isSelected = _filterType == type;
+  return ChoiceChip(
+    label: Text(label),
+    selected: isSelected,
+    onSelected: (selected) {
+      setState(() {
+        _filterType = type;
+      });
+      _applyFilters();
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +237,10 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
       appBar: AppBar(
         title: const Text("Expenses"),
         actions: [
-          IconButton(onPressed: () => _showAddEditExpenseDialog(), icon: const Icon(Icons.add)),
+          IconButton(
+            onPressed: () => _showAddEditExpenseDialog(),
+            icon: const Icon(Icons.add),
+          ),
         ],
       ),
       body: _isLoading
@@ -146,7 +265,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                             )
                           : null,
                       hintText: "Search by description, category, date...",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onChanged: _onSearchChanged,
                   ),
@@ -157,7 +278,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: Card(
                     elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
@@ -187,7 +310,11 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(_sortAscending ? Icons.arrow_downward : Icons.arrow_upward),
+                            icon: Icon(
+                              _sortAscending
+                                  ? Icons.arrow_downward
+                                  : Icons.arrow_upward,
+                            ),
                             onPressed: _toggleSort,
                           ),
                         ],
@@ -195,6 +322,16 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     ),
                   ),
                 ),
+                 _buildFilterChips(),
+                  const SizedBox(height: 8),
+                  const SizedBox( width: 8),
+      Text(
+  "Total: $_filteredTotal",
+  style: const TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+  ),
+),
 
                 // Expense list
                 Expanded(
@@ -203,8 +340,13 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     itemBuilder: (context, index) {
                       final expense = _filteredExpenses[index];
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         elevation: 2,
                         child: Padding(
                           padding: const EdgeInsets.all(12.0),
@@ -215,19 +357,33 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(expense.description, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text(
+                                      expense.description,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
-                                    Text("${expense.category} • ${expense.date}", style: const TextStyle(fontSize: 14)),
+                                    Text(
+                                      "${expense.category} • ${expense.date}",
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
                                   ],
                                 ),
                               ),
                               Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text("\$${expense.amount.toStringAsFixed(2)}",
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: expense.amount > 0 ? Colors.red.shade700 : Colors.green.shade700)),
+                                  Text(
+                                    "\$${expense.amount.toStringAsFixed(2)}",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: expense.amount > 0
+                                          ? Colors.red.shade700
+                                          : Colors.green.shade700,
+                                    ),
+                                  ),
                                   const SizedBox(height: 4),
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -235,7 +391,8 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                       IconButton(
                                         icon: const Icon(Icons.edit),
                                         tooltip: "Edit",
-                                        onPressed: () => _showAddEditExpenseDialog(expense),
+                                        onPressed: () =>
+                                            _showAddEditExpenseDialog(expense),
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
                                       ),
@@ -250,9 +407,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                         constraints: const BoxConstraints(),
                                       ),
                                     ],
-                                  )
+                                  ),
                                 ],
-                              )
+                              ),
                             ],
                           ),
                         ),

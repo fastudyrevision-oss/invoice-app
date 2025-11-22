@@ -104,7 +104,9 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
                     margin: const EdgeInsets.all(8),
                     child: ListTile(
                       title: Text(r.supplierName),
-                      subtitle: Text("Ref: ${r.reference} | Date: ${dateFmt.format(r.date)}"),
+                      subtitle: Text(
+                        "Ref: ${r.reference} | Date: ${dateFmt.format(r.date)}",
+                      ),
                       trailing: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,

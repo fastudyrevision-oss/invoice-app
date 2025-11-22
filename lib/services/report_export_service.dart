@@ -27,12 +27,16 @@ class ReportExportService {
         build: (context) {
           return pw.Table.fromTextArray(
             headers: ['Supplier', 'Total Purchases', 'Paid', 'Balance'],
-            data: reports.map((r) => [
-                  r.supplierName,
-                  r.totalPurchases.toStringAsFixed(2),
-                  r.totalPaid.toStringAsFixed(2),
-                  r.balance.toStringAsFixed(2),
-                ]).toList(),
+            data: reports
+                .map(
+                  (r) => [
+                    r.supplierName,
+                    r.totalPurchases.toStringAsFixed(2),
+                    r.totalPaid.toStringAsFixed(2),
+                    r.balance.toStringAsFixed(2),
+                  ],
+                )
+                .toList(),
           );
         },
       ),
@@ -48,11 +52,15 @@ class ReportExportService {
         build: (context) {
           return pw.Table.fromTextArray(
             headers: ['Product', 'Qty Purchased', 'Total Spent'],
-            data: reports.map((r) => [
-                  r.productName,
-                  r.totalQtyPurchased.toStringAsFixed(0),
-                  r.totalSpent.toStringAsFixed(2),
-                ]).toList(),
+            data: reports
+                .map(
+                  (r) => [
+                    r.productName,
+                    r.totalQtyPurchased.toStringAsFixed(0),
+                    r.totalSpent.toStringAsFixed(2),
+                  ],
+                )
+                .toList(),
           );
         },
       ),
@@ -67,10 +75,9 @@ class ReportExportService {
         build: (context) {
           return pw.Table.fromTextArray(
             headers: ['Category', 'Total Spent'],
-            data: reports.map((r) => [
-                  r.category,
-                  r.totalSpent.toStringAsFixed(2),
-                ]).toList(),
+            data: reports
+                .map((r) => [r.category, r.totalSpent.toStringAsFixed(2)])
+                .toList(),
           );
         },
       ),
@@ -85,12 +92,16 @@ class ReportExportService {
         build: (context) {
           return pw.Table.fromTextArray(
             headers: ['Product', 'Batch', 'Expiry Date', 'Qty'],
-            data: reports.map((r) => [
-                  r.productName,
-                  r.batchNo,
-                  _dateFmt.format(r.expiryDate),
-                  r.qty.toStringAsFixed(0),
-                ]).toList(),
+            data: reports
+                .map(
+                  (r) => [
+                    r.productName,
+                    r.batchNo,
+                    _dateFmt.format(r.expiryDate),
+                    r.qty.toStringAsFixed(0),
+                  ],
+                )
+                .toList(),
           );
         },
       ),
@@ -105,13 +116,17 @@ class ReportExportService {
         build: (context) {
           return pw.Table.fromTextArray(
             headers: ['Supplier', 'Reference', 'Debit', 'Credit', 'Date'],
-            data: reports.map((r) => [
-                  r.supplierName,
-                  r.reference,
-                  r.debit.toStringAsFixed(2),
-                  r.credit.toStringAsFixed(2),
-                  _dateFmt.format(r.date),
-                ]).toList(),
+            data: reports
+                .map(
+                  (r) => [
+                    r.supplierName,
+                    r.reference,
+                    r.debit.toStringAsFixed(2),
+                    r.credit.toStringAsFixed(2),
+                    _dateFmt.format(r.date),
+                  ],
+                )
+                .toList(),
           );
         },
       ),
@@ -124,27 +139,33 @@ class ReportExportService {
   // =====================================================
 
   Future<File> exportSupplierReportCsv(
-      List<SupplierReport> reports, String path) async {
+    List<SupplierReport> reports,
+    String path,
+  ) async {
     final rows = [
       ['Supplier', 'Total Purchases', 'Paid', 'Balance'],
-      ...reports.map((r) =>
-          [r.supplierName, r.totalPurchases, r.totalPaid, r.balance]),
+      ...reports.map(
+        (r) => [r.supplierName, r.totalPurchases, r.totalPaid, r.balance],
+      ),
     ];
     return _writeCsv(rows, path);
   }
 
   Future<File> exportProductReportCsv(
-      List<ProductReport> reports, String path) async {
+    List<ProductReport> reports,
+    String path,
+  ) async {
     final rows = [
       ['Product', 'Qty Purchased', 'Total Spent'],
-      ...reports.map(
-          (r) => [r.productName, r.totalQtyPurchased, r.totalSpent]),
+      ...reports.map((r) => [r.productName, r.totalQtyPurchased, r.totalSpent]),
     ];
     return _writeCsv(rows, path);
   }
 
   Future<File> exportExpenseReportCsv(
-      List<ExpenseReport> reports, String path) async {
+    List<ExpenseReport> reports,
+    String path,
+  ) async {
     final rows = [
       ['Category', 'Total Spent'],
       ...reports.map((r) => [r.category, r.totalSpent]),
@@ -153,30 +174,33 @@ class ReportExportService {
   }
 
   Future<File> exportExpiryReportCsv(
-      List<ExpiryReport> reports, String path) async {
+    List<ExpiryReport> reports,
+    String path,
+  ) async {
     final rows = [
       ['Product', 'Batch', 'Expiry Date', 'Qty'],
-      ...reports.map((r) => [
-            r.productName,
-            r.batchNo,
-            _dateFmt.format(r.expiryDate),
-            r.qty
-          ]),
+      ...reports.map(
+        (r) => [r.productName, r.batchNo, _dateFmt.format(r.expiryDate), r.qty],
+      ),
     ];
     return _writeCsv(rows, path);
   }
 
   Future<File> exportPaymentReportCsv(
-      List<PaymentReport> reports, String path) async {
+    List<PaymentReport> reports,
+    String path,
+  ) async {
     final rows = [
       ['Supplier', 'Reference', 'Debit', 'Credit', 'Date'],
-      ...reports.map((r) => [
-            r.supplierName,
-            r.reference,
-            r.debit,
-            r.credit,
-            _dateFmt.format(r.date),
-          ]),
+      ...reports.map(
+        (r) => [
+          r.supplierName,
+          r.reference,
+          r.debit,
+          r.credit,
+          _dateFmt.format(r.date),
+        ],
+      ),
     ];
     return _writeCsv(rows, path);
   }
@@ -186,18 +210,27 @@ class ReportExportService {
   // =====================================================
 
   Future<File> exportSupplierReportExcel(
-      List<SupplierReport> reports, String path) async {
+    List<SupplierReport> reports,
+    String path,
+  ) async {
     final excel = Excel.createExcel();
     final sheet = excel['Suppliers'];
     sheet.appendRow(['Supplier', 'Total Purchases', 'Paid', 'Balance']);
     for (final r in reports) {
-      sheet.appendRow([r.supplierName, r.totalPurchases, r.totalPaid, r.balance]);
+      sheet.appendRow([
+        r.supplierName,
+        r.totalPurchases,
+        r.totalPaid,
+        r.balance,
+      ]);
     }
     return _writeExcel(excel, path);
   }
 
   Future<File> exportProductReportExcel(
-      List<ProductReport> reports, String path) async {
+    List<ProductReport> reports,
+    String path,
+  ) async {
     final excel = Excel.createExcel();
     final sheet = excel['Products'];
     sheet.appendRow(['Product', 'Qty Purchased', 'Total Spent']);
@@ -208,7 +241,9 @@ class ReportExportService {
   }
 
   Future<File> exportExpenseReportExcel(
-      List<ExpenseReport> reports, String path) async {
+    List<ExpenseReport> reports,
+    String path,
+  ) async {
     final excel = Excel.createExcel();
     final sheet = excel['Expenses'];
     sheet.appendRow(['Category', 'Total Spent']);
@@ -218,35 +253,37 @@ class ReportExportService {
     return _writeExcel(excel, path);
   }
 
-  Future<File?> exportExpiryReportExcel(
-      List<ExpiryReport> reports) async {
-      //Asking the user where to save the file 
+  Future<File?> exportExpiryReportExcel(List<ExpiryReport> reports) async {
+    //Asking the user where to save the file
 
-      // Ask user where to save the file
-  final saveLocation = await getSaveLocation(
-    acceptedTypeGroups: [
-      const XTypeGroup(
-        label: 'Excel',
-        extensions: ['xlsx'],
-      ),
-    ],
-    suggestedName: 'expiry_report.xlsx',
-  );
+    // Ask user where to save the file
+    final saveLocation = await getSaveLocation(
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+      ],
+      suggestedName: 'expiry_report.xlsx',
+    );
 
-  // User canceled
-  if (saveLocation == null) return null;
+    // User canceled
+    if (saveLocation == null) return null;
     final excel = Excel.createExcel();
     final sheet = excel['Expiry'];
     sheet.appendRow(['Product', 'Batch', 'Expiry Date', 'Qty']);
     for (final r in reports) {
-      sheet.appendRow(
-          [r.productName, r.batchNo, _dateFmt.format(r.expiryDate), r.qty]);
+      sheet.appendRow([
+        r.productName,
+        r.batchNo,
+        _dateFmt.format(r.expiryDate),
+        r.qty,
+      ]);
     }
     return _writeExcelToLocation(excel, saveLocation);
   }
 
   Future<File> exportPaymentReportExcel(
-      List<PaymentReport> reports, String path) async {
+    List<PaymentReport> reports,
+    String path,
+  ) async {
     final excel = Excel.createExcel();
     final sheet = excel['Payments'];
     sheet.appendRow(['Supplier', 'Reference', 'Debit', 'Credit', 'Date']);
@@ -256,7 +293,7 @@ class ReportExportService {
         r.reference,
         r.debit,
         r.credit,
-        _dateFmt.format(r.date)
+        _dateFmt.format(r.date),
       ]);
     }
     return _writeExcel(excel, path);
@@ -274,17 +311,21 @@ class ReportExportService {
     return file;
   }
 
-  Future<File> _writeExcel(Excel excel,String path) async {
+  Future<File> _writeExcel(Excel excel, String path) async {
     final file = File(path)
       ..createSync(recursive: true)
       ..writeAsBytesSync(excel.encode()!);
     return file;
   }
+
   // For FileSaveLocation (file_selector dialog)
-Future<File> _writeExcelToLocation(Excel excel, FileSaveLocation location) async {
-  final file = File(location.path)
-    ..createSync(recursive: true)
-    ..writeAsBytesSync(excel.encode()!);
-  return file;
-}
+  Future<File> _writeExcelToLocation(
+    Excel excel,
+    FileSaveLocation location,
+  ) async {
+    final file = File(location.path)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(excel.encode()!);
+    return file;
+  }
 }

@@ -19,10 +19,14 @@ class StockRepository {
   Future<List<StockReport>> getLowStockReport() async {
     try {
       final allReports = await _stockDao.getStockReport();
-      return allReports.where((r) =>
-          r.reorderLevel != null &&
-          r.reorderLevel! > 0 &&
-          r.remainingQty <= r.reorderLevel!).toList();
+      return allReports
+          .where(
+            (r) =>
+                r.reorderLevel != null &&
+                r.reorderLevel! > 0 &&
+                r.remainingQty <= r.reorderLevel!,
+          )
+          .toList();
     } catch (e) {
       print('Error filtering low stock: $e');
       rethrow;
@@ -68,11 +72,7 @@ class StockRepository {
       };
     } catch (e) {
       print('Error calculating stock summary: $e');
-      return {
-        'totalCostValue': 0,
-        'totalSellValue': 0,
-        'totalProfit': 0,
-      };
+      return {'totalCostValue': 0, 'totalSellValue': 0, 'totalProfit': 0};
     }
   }
 
@@ -139,7 +139,9 @@ class StockRepository {
     try {
       final reports = await _stockDao.getStockReport();
       // filter only those with batch info (useful for per-batch analytics)
-      return reports.where((r) => r.batchNo != null && r.batchNo!.isNotEmpty).toList();
+      return reports
+          .where((r) => r.batchNo != null && r.batchNo!.isNotEmpty)
+          .toList();
     } catch (e) {
       print('Error getting batch-wise report: $e');
       rethrow;

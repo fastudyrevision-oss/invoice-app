@@ -29,16 +29,24 @@ Future<File?> generatePdfReportWithChart({
           children: [
             pw.Text(title, style: pw.TextStyle(font: boldFont, fontSize: 24)),
             pw.SizedBox(height: 16),
-            pw.Text('Revenue Report Summary',
-                style: pw.TextStyle(font: regularFont, fontSize: 16)),
+            pw.Text(
+              'Revenue Report Summary',
+              style: pw.TextStyle(font: regularFont, fontSize: 16),
+            ),
             pw.SizedBox(height: 10),
-            pw.Text('Total Revenue: \$${totalRevenue.toStringAsFixed(2)}',
-                style: pw.TextStyle(font: regularFont, fontSize: 14)),
-            pw.Text('Average Invoice: \$${avgInvoice.toStringAsFixed(2)}',
-                style: pw.TextStyle(font: regularFont, fontSize: 14)),
+            pw.Text(
+              'Total Revenue: \$${totalRevenue.toStringAsFixed(2)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 14),
+            ),
+            pw.Text(
+              'Average Invoice: \$${avgInvoice.toStringAsFixed(2)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 14),
+            ),
             pw.SizedBox(height: 20),
-            pw.Text('Revenue Trend Chart:',
-                style: pw.TextStyle(font: boldFont, fontSize: 14)),
+            pw.Text(
+              'Revenue Trend Chart:',
+              style: pw.TextStyle(font: boldFont, fontSize: 14),
+            ),
             pw.SizedBox(height: 10),
 
             // 🧩 Chart
@@ -54,7 +62,10 @@ Future<File?> generatePdfReportWithChart({
             pw.Text(
               'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
               style: pw.TextStyle(
-                  font: regularFont, fontSize: 10, color: PdfColors.grey),
+                font: regularFont,
+                fontSize: 10,
+                color: PdfColors.grey,
+              ),
             ),
           ],
         );
@@ -80,7 +91,10 @@ Future<File?> generatePdfReportWithChart({
 }
 
 /// ✅ Generate a single invoice PDF (Updated with logo + header + items)
-Future<File?> generateInvoicePdf(Invoice invoice, {List<Map<String, dynamic>>? items}) async {
+Future<File?> generateInvoicePdf(
+  Invoice invoice, {
+  List<Map<String, dynamic>>? items,
+}) async {
   final pdf = pw.Document();
 
   final regularFont = await PdfGoogleFonts.notoSansRegular();
@@ -95,8 +109,9 @@ Future<File?> generateInvoicePdf(Invoice invoice, {List<Map<String, dynamic>>? i
     print('⚠️ Logo not found, skipping: $e');
   }
 
-  final date = DateFormat('dd MMM yyyy, hh:mm a')
-      .format(DateTime.tryParse(invoice.date ?? '') ?? DateTime.now());
+  final date = DateFormat(
+    'dd MMM yyyy, hh:mm a',
+  ).format(DateTime.tryParse(invoice.date ?? '') ?? DateTime.now());
 
   pdf.addPage(
     pw.Page(
@@ -115,12 +130,18 @@ Future<File?> generateInvoicePdf(Invoice invoice, {List<Map<String, dynamic>>? i
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Mian Traders',
-                          style: pw.TextStyle(font: boldFont, fontSize: 22)),
-                      pw.Text('Kotmomi road ,Bhagtanawala, Sargodha',
-                          style: pw.TextStyle(font: regularFont, fontSize: 12)),
-                      pw.Text('Phone: +92-300-1234567 | info@company.com',
-                          style: pw.TextStyle(font: regularFont, fontSize: 12)),
+                      pw.Text(
+                        'Mian Traders',
+                        style: pw.TextStyle(font: boldFont, fontSize: 22),
+                      ),
+                      pw.Text(
+                        'Kotmomi road ,Bhagtanawala, Sargodha',
+                        style: pw.TextStyle(font: regularFont, fontSize: 12),
+                      ),
+                      pw.Text(
+                        'Phone: +92-300-1234567 | info@company.com',
+                        style: pw.TextStyle(font: regularFont, fontSize: 12),
+                      ),
                     ],
                   ),
                   if (logoImage != null)
@@ -137,36 +158,50 @@ Future<File?> generateInvoicePdf(Invoice invoice, {List<Map<String, dynamic>>? i
               pw.SizedBox(height: 12),
 
               // 🧾 Invoice Info
-              pw.Text('Invoice #${invoice.id}',
-                  style: pw.TextStyle(font: boldFont, fontSize: 18)),
+              pw.Text(
+                'Invoice #${invoice.id}',
+                style: pw.TextStyle(font: boldFont, fontSize: 18),
+              ),
               pw.SizedBox(height: 8),
-              pw.Text('Customer: ${invoice.customerName ?? "N/A"}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 14)),
-              pw.Text('Date: $date',
-                  style: pw.TextStyle(font: regularFont, fontSize: 12)),
+              pw.Text(
+                'Customer: ${invoice.customerName ?? "N/A"}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
+              pw.Text(
+                'Date: $date',
+                style: pw.TextStyle(font: regularFont, fontSize: 12),
+              ),
               pw.Divider(),
               pw.SizedBox(height: 16),
 
               // 💰 Totals
-              pw.Text('Total: ${invoice.total.toStringAsFixed(2) ?? "0.00"}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 14)),
-              pw.Text('Pending: ${invoice.pending.toStringAsFixed(2) ?? "0.00"}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 14)),
               pw.Text(
-                  'Paid: ${(invoice.total - (invoice.pending ?? 0)).toStringAsFixed(2)}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 14)),
+                'Total: ${invoice.total.toStringAsFixed(2) ?? "0.00"}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
+              pw.Text(
+                'Pending: ${invoice.pending.toStringAsFixed(2) ?? "0.00"}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
+              pw.Text(
+                'Paid: ${(invoice.total - (invoice.pending ?? 0)).toStringAsFixed(2)}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
 
               // 🧾 Items Table
               if (items != null && items.isNotEmpty) ...[
                 pw.SizedBox(height: 24),
-                pw.Text('Items',
-                    style: pw.TextStyle(font: boldFont, fontSize: 16)),
+                pw.Text(
+                  'Items',
+                  style: pw.TextStyle(font: boldFont, fontSize: 16),
+                ),
                 pw.SizedBox(height: 8),
                 pw.Table.fromTextArray(
                   border: pw.TableBorder.all(width: 0.5),
                   cellAlignment: pw.Alignment.centerLeft,
-                  headerDecoration:
-                      const pw.BoxDecoration(color: PdfColors.grey200),
+                  headerDecoration: const pw.BoxDecoration(
+                    color: PdfColors.grey200,
+                  ),
                   headerStyle: pw.TextStyle(font: boldFont, fontSize: 12),
                   cellStyle: pw.TextStyle(font: regularFont, fontSize: 10),
                   headers: ['Product', 'Qty', 'Price', 'Total'],
@@ -190,9 +225,10 @@ Future<File?> generateInvoicePdf(Invoice invoice, {List<Map<String, dynamic>>? i
                 child: pw.Text(
                   'Thank you for your business!',
                   style: pw.TextStyle(
-                      font: regularFont,
-                      fontSize: 12,
-                      color: PdfColors.grey700),
+                    font: regularFont,
+                    fontSize: 12,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ),
             ],
@@ -229,30 +265,33 @@ Future<File?> generateAllOrdersPdf(List<Invoice> orders) async {
       pageFormat: PdfPageFormat.a4,
       build: (context) {
         return [
-          pw.Text('All Orders Summary',
-              style: pw.TextStyle(font: boldFont, fontSize: 20)),
+          pw.Text(
+            'All Orders Summary',
+            style: pw.TextStyle(font: boldFont, fontSize: 20),
+          ),
           pw.SizedBox(height: 16),
           pw.Table.fromTextArray(
             headers: ['#', 'Customer', 'Date', 'Total', 'Pending'],
             headerStyle: pw.TextStyle(font: boldFont, fontSize: 12),
-            headerDecoration:
-                const pw.BoxDecoration(color: PdfColors.grey300),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
             cellStyle: pw.TextStyle(font: regularFont, fontSize: 10),
             data: orders.map((o) {
               return [
                 o.id ?? '',
                 o.customerName ?? '',
-                DateFormat('dd MMM yyyy')
-                    .format(DateTime.tryParse(o.date ) ?? DateTime.now()),
-                o.total.toStringAsFixed(2) ,
+                DateFormat(
+                  'dd MMM yyyy',
+                ).format(DateTime.tryParse(o.date) ?? DateTime.now()),
+                o.total.toStringAsFixed(2),
                 o.pending.toStringAsFixed(2) ?? '0.00',
               ];
             }).toList(),
           ),
           pw.SizedBox(height: 16),
           pw.Text(
-              'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
-              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+            'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+            style: pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+          ),
         ];
       },
     ),

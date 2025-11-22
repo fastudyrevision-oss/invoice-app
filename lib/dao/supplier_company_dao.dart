@@ -8,12 +8,15 @@ class SupplierCompanyDao {
     return await dbHelper.insert("supplier_companies", company.toMap());
   }
 
-  Future<List<SupplierCompany>> getAllCompanies({bool showDeleted = false}) async {
+  Future<List<SupplierCompany>> getAllCompanies({
+    bool showDeleted = false,
+  }) async {
     final data = await dbHelper.queryAll("supplier_companies");
-    final filtered = showDeleted ? data : data.where((e) => (e['deleted'] ?? 0) == 0).toList();
+    final filtered = showDeleted
+        ? data
+        : data.where((e) => (e['deleted'] ?? 0) == 0).toList();
     return filtered.map((e) => SupplierCompany.fromMap(e)).toList();
   }
-
 
   Future<SupplierCompany?> getCompanyById(String id) async {
     final data = await dbHelper.queryById("supplier_companies", id);
@@ -23,23 +26,19 @@ class SupplierCompanyDao {
   }
 
   Future<int> updateCompany(SupplierCompany company) async {
-    return await dbHelper.update("supplier_companies", company.toMap(), company.id);
+    return await dbHelper.update(
+      "supplier_companies",
+      company.toMap(),
+      company.id,
+    );
   }
 
   Future<int> deleteCompany(String id) async {
     // Soft delete
-    return await dbHelper.update(
-      "supplier_companies",
-      {"deleted": 1},
-      id,
-    );
+    return await dbHelper.update("supplier_companies", {"deleted": 1}, id);
   }
 
   Future<int> restoreCompany(String id) async {
-    return await dbHelper.update(
-      "supplier_companies",
-      {"deleted": 0},
-      id,
-    );
+    return await dbHelper.update("supplier_companies", {"deleted": 0}, id);
   }
 }

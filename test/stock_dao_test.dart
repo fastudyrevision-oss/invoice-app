@@ -88,7 +88,10 @@ void main() {
       expect(r.remainingQty, 70);
       expect(r.costPrice, (500 + 900) / 2);
       expect(r.sellPrice, (600 + 1000) / 2);
-      expect(r.expiryDate!.isAfter(DateTime(2025, 11, 1)), true); // latest expiry
+      expect(
+        r.expiryDate!.isAfter(DateTime(2025, 11, 1)),
+        true,
+      ); // latest expiry
     });
 
     test('handles empty list gracefully', () async {

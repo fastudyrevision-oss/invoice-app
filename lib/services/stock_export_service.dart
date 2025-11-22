@@ -35,7 +35,7 @@ class StockExportService {
     ];
 
     if (showExpiry) {
-      headers.addAll(['Supplier','Company', 'Expiry']);
+      headers.addAll(['Supplier', 'Company', 'Expiry']);
     }
 
     if (includePrice) {
@@ -43,11 +43,7 @@ class StockExportService {
     }
 
     if (detailedView) {
-      headers.addAll([
-        'Profit/Unit',
-        'Total Profit',
-        'Reorder',
-      ]);
+      headers.addAll(['Profit/Unit', 'Total Profit', 'Reorder']);
     }
 
     if (includePrice) {
@@ -69,9 +65,11 @@ class StockExportService {
       if (showExpiry) {
         row.add(r.supplierName ?? '-');
         row.add(r.companyName ?? '-');
-        row.add(r.expiryDate != null
-            ? r.expiryDate!.toLocal().toString().split(' ').first
-            : '-');
+        row.add(
+          r.expiryDate != null
+              ? r.expiryDate!.toLocal().toString().split(' ').first
+              : '-',
+        );
       }
 
       if (includePrice) {
@@ -115,7 +113,10 @@ class StockExportService {
                 ),
                 pw.Text(
                   'Generated: ${now.toLocal().toString().split(".").first}',
-                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                  style: const pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ],
             ),
@@ -134,9 +135,7 @@ class StockExportService {
             border: pw.TableBorder.all(width: 0.3, color: PdfColors.grey700),
             cellAlignment: pw.Alignment.center,
             headerAlignment: pw.Alignment.center,
-            columnWidths: {
-              0: const pw.FlexColumnWidth(3),
-            },
+            columnWidths: {0: const pw.FlexColumnWidth(3)},
           ),
 
           pw.SizedBox(height: 20),
@@ -145,7 +144,9 @@ class StockExportService {
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(vertical: 8),
             decoration: const pw.BoxDecoration(
-              border: pw.Border(top: pw.BorderSide(width: 0.3, color: PdfColors.grey700)),
+              border: pw.Border(
+                top: pw.BorderSide(width: 0.3, color: PdfColors.grey700),
+              ),
             ),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -174,16 +175,17 @@ class StockExportService {
     // ─────────────────────────────
     // 🖨️ 4. Print or Preview
     // ─────────────────────────────
-        final bytes = await pdf.save();
+    final bytes = await pdf.save();
     await Printing.sharePdf(
       bytes: bytes,
-      filename: 'Stock_Report_${DateTime.now().toIso8601String().split('T').first}.pdf',
+      filename:
+          'Stock_Report_${DateTime.now().toIso8601String().split('T').first}.pdf',
     );
 
     print('✅ Stock Report PDF exported successfully.');
   }
 
-   Future<void> exportToExcel(
+  Future<void> exportToExcel(
     List<StockReport> reports, {
     bool includePrice = true,
     bool showExpiry = false,
@@ -275,7 +277,6 @@ class StockExportService {
     print("✅ Excel exported to $filePath");
     await OpenFile.open(filePath);
   }
-
 
   /// Print directly to POS (placeholder for future)
   Future<void> printPOS(List<StockReport> reports) async {

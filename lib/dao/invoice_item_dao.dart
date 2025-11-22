@@ -17,8 +17,9 @@ class InvoiceItemDao {
 
     // Encode reservedBatches before insert
     final data = item.toMap();
-    data['reserved_batches'] =
-        item.reservedBatches != null ? jsonEncode(item.reservedBatches) : null;
+    data['reserved_batches'] = item.reservedBatches != null
+        ? jsonEncode(item.reservedBatches)
+        : null;
 
     return await db.insert(
       "invoice_items",
@@ -35,8 +36,9 @@ class InvoiceItemDao {
     final batch = db.batch();
     for (final item in items) {
       final data = item.toMap();
-      data['reserved_batches'] =
-          item.reservedBatches != null ? jsonEncode(item.reservedBatches) : null;
+      data['reserved_batches'] = item.reservedBatches != null
+          ? jsonEncode(item.reservedBatches)
+          : null;
       batch.insert(
         "invoice_items",
         data,
@@ -61,8 +63,9 @@ class InvoiceItemDao {
       // Decode reserved_batches JSON if present
       if (e['reserved_batches'] != null && e['reserved_batches'] is String) {
         try {
-          e['reserved_batches'] =
-              List<Map<String, dynamic>>.from(jsonDecode(e['reserved_batches']));
+          e['reserved_batches'] = List<Map<String, dynamic>>.from(
+            jsonDecode(e['reserved_batches']),
+          );
         } catch (_) {
           e['reserved_batches'] = [];
         }
@@ -81,8 +84,9 @@ class InvoiceItemDao {
     return res.map((e) {
       if (e['reserved_batches'] != null && e['reserved_batches'] is String) {
         try {
-          e['reserved_batches'] =
-              List<Map<String, dynamic>>.from(jsonDecode(e['reserved_batches']));
+          e['reserved_batches'] = List<Map<String, dynamic>>.from(
+            jsonDecode(e['reserved_batches']),
+          );
         } catch (_) {
           e['reserved_batches'] = [];
         }
@@ -97,8 +101,9 @@ class InvoiceItemDao {
   Future<int> update(InvoiceItem item) async {
     final db = txn ?? await dbHelper.db;
     final data = item.toMap();
-    data['reserved_batches'] =
-        item.reservedBatches != null ? jsonEncode(item.reservedBatches) : null;
+    data['reserved_batches'] = item.reservedBatches != null
+        ? jsonEncode(item.reservedBatches)
+        : null;
 
     return await db.update(
       "invoice_items",
@@ -113,11 +118,7 @@ class InvoiceItemDao {
   // =========================
   Future<int> delete(String id) async {
     final db = txn ?? await dbHelper.db;
-    return await db.delete(
-      "invoice_items",
-      where: "id = ?",
-      whereArgs: [id],
-    );
+    return await db.delete("invoice_items", where: "id = ?", whereArgs: [id]);
   }
 
   // =========================
@@ -138,10 +139,13 @@ class InvoiceItemDao {
   Future<bool> isBatchUsed(String batchId) async {
     final db = txn ?? await dbHelper.db;
 
-    final res = await db.rawQuery('''
+    final res = await db.rawQuery(
+      '''
       SELECT COUNT(*) as count FROM invoice_items
       WHERE reserved_batches LIKE ?
-    ''', ['%"batchId":"$batchId"%']); // 👈 checks JSON text for that batch ID
+    ''',
+      ['%"batchId":"$batchId"%'],
+    ); // 👈 checks JSON text for that batch ID
 
     return (Sqflite.firstIntValue(res) ?? 0) > 0;
   }
@@ -151,10 +155,13 @@ class InvoiceItemDao {
   // =========================
   Future<List<InvoiceItem>> getItemsByBatch(String batchId) async {
     final db = txn ?? await dbHelper.db;
-    final res = await db.rawQuery('''
+    final res = await db.rawQuery(
+      '''
       SELECT * FROM invoice_items
       WHERE reserved_batches LIKE ?
-    ''', ['%"batchId":"$batchId"%']);
+    ''',
+      ['%"batchId":"$batchId"%'],
+    );
 
     return res.map((e) => InvoiceItem.fromMap(e)).toList();
   }

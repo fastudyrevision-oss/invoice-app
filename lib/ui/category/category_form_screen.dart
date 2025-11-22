@@ -50,12 +50,15 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     final now = DateTime.now().toIso8601String();
     final isNew = widget.category == null;
-    final id = widget.category?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final id =
+        widget.category?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
     final category = Category(
       id: id,
       name: _name.text.trim(),
       slug: _slug.text.trim().isEmpty ? null : _slug.text.trim(),
-      description: _description.text.trim().isEmpty ? null : _description.text.trim(),
+      description: _description.text.trim().isEmpty
+          ? null
+          : _description.text.trim(),
       parentId: _parentId,
       isActive: _isActive,
       isDeleted: false,
@@ -92,7 +95,9 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     TextFormField(
                       controller: _name,
                       decoration: const InputDecoration(labelText: 'Name'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Name required' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Name required'
+                          : null,
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -102,16 +107,33 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _description,
-                      decoration: const InputDecoration(labelText: 'Description'),
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                      ),
                       maxLines: 3,
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String?>(
                       value: _parentId,
-                      items: [const DropdownMenuItem<String?>(value: null, child: Text('No parent'))] +
+                      items:
+                          [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('No parent'),
+                            ),
+                          ] +
                           _parents
-                              .where((p) => widget.category == null || p.id != widget.category!.id)
-                              .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+                              .where(
+                                (p) =>
+                                    widget.category == null ||
+                                    p.id != widget.category!.id,
+                              )
+                              .map(
+                                (p) => DropdownMenuItem(
+                                  value: p.id,
+                                  child: Text(p.name),
+                                ),
+                              )
                               .toList(),
                       onChanged: (v) => setState(() => _parentId = v),
                       decoration: const InputDecoration(labelText: 'Parent'),
@@ -119,7 +141,9 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _sortOrder,
-                      decoration: const InputDecoration(labelText: 'Sort order'),
+                      decoration: const InputDecoration(
+                        labelText: 'Sort order',
+                      ),
                       keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 8),
@@ -129,10 +153,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                       onChanged: (v) => setState(() => _isActive = v),
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _save,
-                      child: const Text('Save'),
-                    ),
+                    ElevatedButton(onPressed: _save, child: const Text('Save')),
                   ],
                 ),
               ),
@@ -140,4 +161,5 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
     );
   }
 }
+
 // ...existing code...

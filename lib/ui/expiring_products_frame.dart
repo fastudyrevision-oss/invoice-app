@@ -9,7 +9,6 @@ import 'dart:io';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:file_picker/file_picker.dart';
 
-
 class ExpiringProductsFrame extends StatefulWidget {
   final Database db;
   final VoidCallback? onDataChanged;
@@ -96,8 +95,12 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     });
 
     // Pinned expired (expired ones first)
-    final expiredList = batches.where((b) => b.expiryDate.isBefore(now)).toList();
-    final nonExpired = batches.where((b) => !b.expiryDate.isBefore(now)).toList();
+    final expiredList = batches
+        .where((b) => b.expiryDate.isBefore(now))
+        .toList();
+    final nonExpired = batches
+        .where((b) => !b.expiryDate.isBefore(now))
+        .toList();
     batches = [...expiredList, ...nonExpired];
 
     if (!mounted) return;
@@ -121,15 +124,21 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     Color color;
     if (diff < 0) {
       color = Colors.grey.shade600;
-    } else if (diff <= 7) color = Colors.red.shade300;
-    else if (diff <= 15) color = Colors.orange.shade300;
-    else if (diff <= 30) color = Colors.yellow.shade300;
-    else if (diff <= 90) color = Colors.blue.shade200;
-    else color = Colors.green.shade100;
+    } else if (diff <= 7)
+      color = Colors.red.shade300;
+    else if (diff <= 15)
+      color = Colors.orange.shade300;
+    else if (diff <= 30)
+      color = Colors.yellow.shade300;
+    else if (diff <= 90)
+      color = Colors.blue.shade200;
+    else
+      color = Colors.green.shade100;
 
     return isDark ? color.withOpacity(0.3) : color;
   }
-    Future<String?> _pickSavePath(String suggestedFileName) async {
+
+  Future<String?> _pickSavePath(String suggestedFileName) async {
     return await FilePicker.platform.saveFile(
       dialogTitle: 'Select where to save',
       fileName: suggestedFileName,
@@ -137,33 +146,33 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
       allowedExtensions: ['pdf', 'csv'],
     );
   }
+
   String _timestamp() {
-  return DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-}
+    return DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+  }
 
-
-  
   Future<void> _exportCSV() async {
     final buffer = StringBuffer();
     buffer.writeln("Product,Batch,Qty,Expiry Date");
     for (final b in _batches) {
       buffer.writeln(
-          "${b.productName},${b.batchNo},${b.qty},${DateFormat('yyyy-MM-dd').format(b.expiryDate)}");
+        "${b.productName},${b.batchNo},${b.qty},${DateFormat('yyyy-MM-dd').format(b.expiryDate)}",
+      );
     }
 
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  final suggestedFileName = 'expiring_products_$timestamp.csv';
+    final suggestedFileName = 'expiring_products_$timestamp.csv';
 
-  final path = await _pickSavePath(suggestedFileName);
-  if (path == null) return; // user cancelled
+    final path = await _pickSavePath(suggestedFileName);
+    if (path == null) return; // user cancelled
 
-  final file = File(path);
-  await file.writeAsString(buffer.toString());
+    final file = File(path);
+    await file.writeAsString(buffer.toString());
 
-  if (!mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('CSV saved successfully:\n$path')),
-  );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('CSV saved successfully:\n$path')));
   }
 
   Future<void> _exportPDF() async {
@@ -173,18 +182,22 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text("Expiring Products Report",
-                style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            pw.Text(
+              "Expiring Products Report",
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            ),
             pw.SizedBox(height: 10),
             pw.Table.fromTextArray(
               headers: ["Product", "Batch", "Qty", "Expiry"],
               data: _batches
-                  .map((b) => [
-                        b.productName,
-                        b.batchNo,
-                        b.qty.toString(),
-                        DateFormat('yyyy-MM-dd').format(b.expiryDate)
-                      ])
+                  .map(
+                    (b) => [
+                      b.productName,
+                      b.batchNo,
+                      b.qty.toString(),
+                      DateFormat('yyyy-MM-dd').format(b.expiryDate),
+                    ],
+                  )
                   .toList(),
             ),
           ],
@@ -202,9 +215,9 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     await file.writeAsBytes(await pdf.save());
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('PDF saved successfully:\n$path')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('PDF saved successfully:\n$path')));
   }
 
   Widget _buildLegend() {
@@ -223,14 +236,22 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
         spacing: 12,
         runSpacing: 4,
         children: items
-            .map((item) => Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(radius: 6, backgroundColor: item["color"] as Color),
-                    const SizedBox(width: 4),
-                    Text(item["label"] as String, style: const TextStyle(fontSize: 12)),
-                  ],
-                ))
+            .map(
+              (item) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 6,
+                    backgroundColor: item["color"] as Color,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    item["label"] as String,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            )
             .toList(),
       ),
     );
@@ -316,9 +337,18 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
                   DropdownButton<String>(
                     value: _sortBy,
                     items: const [
-                      DropdownMenuItem(value: "Expiry", child: Text("Sort: Expiry")),
-                      DropdownMenuItem(value: "Quantity", child: Text("Sort: Quantity")),
-                      DropdownMenuItem(value: "Name", child: Text("Sort: Name")),
+                      DropdownMenuItem(
+                        value: "Expiry",
+                        child: Text("Sort: Expiry"),
+                      ),
+                      DropdownMenuItem(
+                        value: "Quantity",
+                        child: Text("Sort: Quantity"),
+                      ),
+                      DropdownMenuItem(
+                        value: "Name",
+                        child: Text("Sort: Name"),
+                      ),
                     ],
                     onChanged: (val) {
                       if (val != null) {
@@ -341,13 +371,15 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
                   FilterChip(
                     label: const Text("Show expired"),
                     selected: _showExpired,
-                    onSelected: (v) => _loadExpiring(showExpired: v, showAll: false),
+                    onSelected: (v) =>
+                        _loadExpiring(showExpired: v, showAll: false),
                   ),
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text("Show all"),
                     selected: _showAll,
-                    onSelected: (v) => _loadExpiring(showAll: v, showExpired: false),
+                    onSelected: (v) =>
+                        _loadExpiring(showAll: v, showExpired: false),
                   ),
                 ],
               ),
@@ -362,54 +394,58 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _batches.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.hourglass_empty, size: 40, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text("No matching products found."),
-                        ],
+              ? const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.hourglass_empty, size: 40, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text("No matching products found."),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _batches.length,
+                  itemBuilder: (context, i) {
+                    final b = _batches[i];
+                    final exp = b.expiryDate;
+                    final diff = exp.difference(DateTime.now()).inDays;
+                    final expired = diff < 0;
+                    return Card(
+                      color: _getTileColor(exp, context),
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: _batches.length,
-                      itemBuilder: (context, i) {
-                        final b = _batches[i];
-                        final exp = b.expiryDate;
-                        final diff = exp.difference(DateTime.now()).inDays;
-                        final expired = diff < 0;
-                        return Card(
-                          color: _getTileColor(exp, context),
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            leading: expired
-                                ? const Icon(Icons.warning_amber, color: Colors.red)
-                                : const Icon(Icons.inventory_2_outlined),
-                            title: Text(
-                              b.productName,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        leading: expired
+                            ? const Icon(Icons.warning_amber, color: Colors.red)
+                            : const Icon(Icons.inventory_2_outlined),
+                        title: Text(
+                          b.productName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          "Batch: ${b.batchNo}, Qty: ${b.qty}, Expiry: ${DateFormat('yyyy-MM-dd').format(exp)}"
+                          "\n${expired ? 'Expired ${-diff} days ago' : 'Expires in $diff days'}",
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  BatchDetailFrame(batch: b, db: widget.db),
                             ),
-                            subtitle: Text(
-                              "Batch: ${b.batchNo}, Qty: ${b.qty}, Expiry: ${DateFormat('yyyy-MM-dd').format(exp)}"
-                              "\n${expired ? 'Expired ${-diff} days ago' : 'Expires in $diff days'}",
-                            ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      BatchDetailFrame(batch: b, db: widget.db),
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
         ),
       ],
     );

@@ -7,7 +7,6 @@ import 'package:dropdown_search/dropdown_search.dart';
 import '../models/category.dart';
 import '../repositories/category_repository.dart';
 
-
 class ProductDialog extends StatefulWidget {
   final ProductRepository productRepo;
   final SupplierRepository supplierRepo;
@@ -32,9 +31,8 @@ class _ProductDialogState extends State<ProductDialog> {
   late TextEditingController unitCtrl;
   late TextEditingController descCtrl;
   Category? selectedCategory;
-List<Category> categories = [];
-late CategoryRepository categoryRepo;
-
+  List<Category> categories = [];
+  late CategoryRepository categoryRepo;
 
   bool trackExpiry = false;
 
@@ -47,25 +45,24 @@ late CategoryRepository categoryRepo;
     unitCtrl = TextEditingController(text: p?.defaultUnit ?? "");
     descCtrl = TextEditingController(text: p?.description ?? "");
     trackExpiry = p?.trackExpiry ?? false;
-     // Initialize Category repository and fetch categories
- // Async init safely
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    initCategories(p?.categoryId);
-  });
-
+    // Initialize Category repository and fetch categories
+    // Async init safely
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      initCategories(p?.categoryId);
+    });
   }
-  
-void initCategories(String? currentCategoryId) async {
-  categoryRepo = await CategoryRepository.create();
-  final allCategories = await categoryRepo.getAllCategories();
-  setState(() {
-    categories = allCategories;
-    selectedCategory = categories.firstWhere(
-      (c) => c.id == (currentCategoryId ?? 'cat-001'),
-      orElse: () => categories.firstWhere((c) => c.id == 'cat-001'),
-    );
-  });
-}
+
+  void initCategories(String? currentCategoryId) async {
+    categoryRepo = await CategoryRepository.create();
+    final allCategories = await categoryRepo.getAllCategories();
+    setState(() {
+      categories = allCategories;
+      selectedCategory = categories.firstWhere(
+        (c) => c.id == (currentCategoryId ?? 'cat-001'),
+        orElse: () => categories.firstWhere((c) => c.id == 'cat-001'),
+      );
+    });
+  }
 
   void _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -98,21 +95,19 @@ void initCategories(String? currentCategoryId) async {
 
   @override
   Widget build(BuildContext context) {
-     // 🔥 1. FIRST handle loading state BEFORE returning the dialog
-  if (categories.isEmpty) {
-    return AlertDialog(
-      title: Text(widget.product == null ? "Add Product" : "Edit Product"),
-      content: const SizedBox(
-        height: 100,
-        child: Center(child: CircularProgressIndicator()),
-      ),
-    );
-  }
-  // 🔥 2. Categories loaded → show normal dialog
+    // 🔥 1. FIRST handle loading state BEFORE returning the dialog
+    if (categories.isEmpty) {
+      return AlertDialog(
+        title: Text(widget.product == null ? "Add Product" : "Edit Product"),
+        content: const SizedBox(
+          height: 100,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    // 🔥 2. Categories loaded → show normal dialog
 
-
     return AlertDialog(
-      
       title: Text(widget.product == null ? "Add Product" : "Edit Product"),
       content: Form(
         key: _formKey,
@@ -143,38 +138,42 @@ void initCategories(String? currentCategoryId) async {
                     value: trackExpiry,
                     onChanged: (v) => setState(() => trackExpiry = v ?? false),
                   ),
-                   const SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   const Text("Track Expiry"),
                 ],
               ),
-              Padding(padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: 
-              DropdownSearch<Category>(
-                items: (filter, props) => categories,
-                selectedItem: selectedCategory ?? categories.firstWhere((c) => c.id == 'cat-001'),
-                itemAsString: (c) => c.name,
-                compareFn: (a, b) => a.id == b.id,
-                popupProps: PopupProps.menu(
-                  showSearchBox: true,
-                  fit: FlexFit.loose,
-                ),
-                decoratorProps: DropDownDecoratorProps(
-                  decoration: InputDecoration(
-                    labelText: "Category",
-                    border: OutlineInputBorder(),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: DropdownSearch<Category>(
+                  items: (filter, props) => categories,
+                  selectedItem:
+                      selectedCategory ??
+                      categories.firstWhere((c) => c.id == 'cat-001'),
+                  itemAsString: (c) => c.name,
+                  compareFn: (a, b) => a.id == b.id,
+                  popupProps: PopupProps.menu(
+                    showSearchBox: true,
+                    fit: FlexFit.loose,
                   ),
+                  decoratorProps: DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Category",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (c) {
+                    setState(() {
+                      if (c != null) {
+                        selectedCategory = c;
+                      } else {
+                        // Default to 'Uncategorized' if somehow null
+                        selectedCategory = categories.firstWhere(
+                          (c) => c.id == 'cat-001',
+                        );
+                      }
+                    });
+                  },
                 ),
-                onChanged: (c) {
-                  setState(() {
-                    if (c != null) {
-                      selectedCategory = c;
-                    } else {
-                      // Default to 'Uncategorized' if somehow null
-                      selectedCategory = categories.firstWhere((c) => c.id == 'cat-001');
-                    }
-                  });
-                },
-              ),
               ),
             ],
           ),
@@ -185,10 +184,7 @@ void initCategories(String? currentCategoryId) async {
           onPressed: () => Navigator.pop(context),
           child: const Text("Cancel"),
         ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text("Save"),
-        ),
+        ElevatedButton(onPressed: _save, child: const Text("Save")),
       ],
     );
   }

@@ -70,8 +70,10 @@ ORDER BY pb.product_id ASC, pb.created_at ASC;
         // ✅ Explicitly link SQL columns to Dart field names
         return StockBatch.fromMap({
           ...row,
-          'sold_by_batch': row['sold_qty'] ?? 0,   // 🔹 Map sold_qty → soldByBatch
-          'current_qty': row['remaining_qty'] ?? 0 // 🔹 Map remaining_qty → currentQty
+          'sold_by_batch':
+              row['sold_qty'] ?? 0, // 🔹 Map sold_qty → soldByBatch
+          'current_qty':
+              row['remaining_qty'] ?? 0, // 🔹 Map remaining_qty → currentQty
         });
       } catch (e) {
         print('⚠️ StockBatch mapping failed: $e');

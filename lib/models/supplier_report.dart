@@ -16,20 +16,20 @@ class SupplierReport {
   });
 
   Map<String, dynamic> toMap() => {
-        "supplier_id": supplierId,
-        "supplier_name": supplierName,
-        "company_name": companyName,
-        "total_purchases": totalPurchases,
-        "total_paid": totalPaid,
-        "total_pending": totalPending,
-      };
+    "supplier_id": supplierId,
+    "supplier_name": supplierName,
+    "company_name": companyName,
+    "total_purchases": totalPurchases,
+    "total_paid": totalPaid,
+    "total_pending": totalPending,
+  };
 
   factory SupplierReport.fromMap(Map<String, dynamic> map) => SupplierReport(
-        supplierId: map["supplier_id"].toString(),
-        supplierName: map["supplier_name"],
-        companyName: map["company_name"],
-        totalPurchases: map["total_purchases"] ?? 0.0,
-        totalPaid: map["total_paid"] ?? 0.0,
-        totalPending: map["total_pending"] ?? 0.0,
-      );
+    supplierId: map["supplier_id"].toString(),
+    supplierName: map["supplier_name"],
+    companyName: map["company_name"],
+    totalPurchases: map["total_purchases"] ?? 0.0,
+    totalPaid: map["total_paid"] ?? 0.0,
+    totalPending: map["total_pending"] ?? 0.0,
+  );
 }

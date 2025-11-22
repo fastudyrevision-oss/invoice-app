@@ -9,6 +9,7 @@ import '../models/product_batch.dart';
 import '../models/product.dart';
 import '../models/supplier.dart';
 import '../models/expiring_batch_detail.dart';
+
 class PurchaseRepository {
   final Database db;
 
@@ -25,8 +26,10 @@ class PurchaseRepository {
   }
 
   /// ✅ Get product by ID (ignores deleted unless includeDeleted = true)
-  Future<Product?> getProductById(String productId,
-      {bool includeDeleted = false}) async {
+  Future<Product?> getProductById(
+    String productId, {
+    bool includeDeleted = false,
+  }) async {
     return await _productDao.getById(productId, includeDeleted: includeDeleted);
   }
 
@@ -55,7 +58,7 @@ class PurchaseRepository {
         //final product = await prodDao.getById(item.productId);
         //if (product != null && product.isDeleted == 0) {
         //  final updatedQty = product.quantity + item.qty;
-          //await prodDao.update(product.copyWith(quantity: updatedQty));
+        //await prodDao.update(product.copyWith(quantity: updatedQty));
         //}
       }
 
@@ -125,8 +128,10 @@ class PurchaseRepository {
 
       final items = await iDao.getItemsByPurchaseId(purchaseId);
       for (var item in items) {
-        final product =
-            await prodDao.getById(item.productId, includeDeleted: true);
+        final product = await prodDao.getById(
+          item.productId,
+          includeDeleted: true,
+        );
         if (product != null && product.isDeleted == 0) {
           final updatedQty = product.quantity - item.qty;
           await prodDao.update(product.copyWith(quantity: updatedQty));
@@ -142,16 +147,15 @@ class PurchaseRepository {
       await pDao.deletePurchase(purchaseId);
     });
   }
-  Future<List<Purchase>> getPurchasesForSupplier(String supplierId) async {
-  
-  final result = await db.query(
-    'purchases',
-    where: 'supplier_id = ?',
-    whereArgs: [supplierId],
-  );
-  return result.map((row) => Purchase.fromMap(row)).toList();
-}
 
+  Future<List<Purchase>> getPurchasesForSupplier(String supplierId) async {
+    final result = await db.query(
+      'purchases',
+      where: 'supplier_id = ?',
+      whereArgs: [supplierId],
+    );
+    return result.map((row) => Purchase.fromMap(row)).toList();
+  }
 
   /// Get items of a purchase
   Future<List<PurchaseItem>> getItemsByPurchaseId(String purchaseId) async {
@@ -167,14 +171,17 @@ class PurchaseRepository {
   Future<List<ProductBatch>> getBatchesByPurchaseId(String purchaseId) async {
     return await _batchDao.getBatchesByPurchaseId(purchaseId);
   }
-  Future<List<ProductBatch>> getExpiringBatches(int days) async {
-  return await _batchDao.getExpiringBatches(days);
- }
- Future<List<ExpiringBatchDetail>> getExpiringBatchesDetailed(int days) async {
-  final now = DateTime.now();
-  final futureDate = now.add(Duration(days: days));
 
-  final result = await db.rawQuery('''
+  Future<List<ProductBatch>> getExpiringBatches(int days) async {
+    return await _batchDao.getExpiringBatches(days);
+  }
+
+  Future<List<ExpiringBatchDetail>> getExpiringBatchesDetailed(int days) async {
+    final now = DateTime.now();
+    final futureDate = now.add(Duration(days: days));
+
+    final result = await db.rawQuery(
+      '''
     SELECT pb.id, pb.batch_no, pb.expiry_date, pb.qty,
            p.id as product_id, p.name as product_name,
            s.id as supplier_id, s.name as supplier_name,
@@ -184,12 +191,10 @@ class PurchaseRepository {
     LEFT JOIN suppliers s ON p.supplier_id = s.id
     WHERE date(pb.expiry_date) <= date(?)
     ORDER BY pb.expiry_date ASC
-  ''', [futureDate.toIso8601String()]);
+  ''',
+      [futureDate.toIso8601String()],
+    );
 
-  return result.map((map) => ExpiringBatchDetail.fromMap(map)).toList();
+    return result.map((map) => ExpiringBatchDetail.fromMap(map)).toList();
   }
-
-
- 
-
 }

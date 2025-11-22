@@ -13,7 +13,9 @@ class AuditLogDao {
   }
 
   Future<List<AuditLog>> getByTable(String tableName) async {
-    final data = await dbHelper.queryWhere("audit_logs", "table_name = ?", [tableName]);
+    final data = await dbHelper.queryWhere("audit_logs", "table_name = ?", [
+      tableName,
+    ]);
     return data.map((e) => AuditLog.fromMap(e)).toList();
   }
 }

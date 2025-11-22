@@ -70,11 +70,7 @@ class ProductBatchDao {
 
   /// Delete a batch by ID
   Future<int> deleteBatch(String id) async {
-    return await db.delete(
-      "product_batches",
-      where: "id = ?",
-      whereArgs: [id],
-    );
+    return await db.delete("product_batches", where: "id = ?", whereArgs: [id]);
   }
 
   /// Delete all batches linked to a purchase

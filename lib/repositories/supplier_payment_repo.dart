@@ -6,11 +6,11 @@ import '../models/purchase.dart';
 
 class SupplierPaymentRepository {
   //create a db instance
-  
+
   final SupplierPaymentDao _paymentDao;
   final SupplierDao _supplierDao;
   final PurchaseRepository _purchaseRepo; // ✅ Inject purchase repo
-   // your Database instance
+  // your Database instance
   SupplierPaymentRepository(
     this._paymentDao,
     this._supplierDao,
@@ -56,7 +56,9 @@ class SupplierPaymentRepository {
 
     // 2️⃣ Update purchase invoice if purchaseId is provided
     if (purchaseId != null) {
-      final Purchase? purchase = await _purchaseRepo.getPurchaseById(purchaseId);
+      final Purchase? purchase = await _purchaseRepo.getPurchaseById(
+        purchaseId,
+      );
       if (purchase != null) {
         final oldPaid = _toDouble(purchase.paid);
         final oldPending = _toDouble(purchase.pending);
@@ -89,7 +91,9 @@ class SupplierPaymentRepository {
 
     // 1️⃣ Revert purchase paid/pending if purchaseId exists
     if (payment.purchaseId != null) {
-      final Purchase? purchase = await _purchaseRepo.getPurchaseById(payment.purchaseId!);
+      final Purchase? purchase = await _purchaseRepo.getPurchaseById(
+        payment.purchaseId!,
+      );
       if (purchase != null) {
         final newPaid = _toDouble(purchase.paid) - payment.amount;
         final newPending = _toDouble(purchase.pending) + payment.amount;
@@ -112,12 +116,16 @@ class SupplierPaymentRepository {
 
     // 1️⃣ Apply payment to purchase if purchaseId exists
     if (payment.purchaseId != null) {
-      final Purchase? purchase = await _purchaseRepo.getPurchaseById(payment.purchaseId!);
+      final Purchase? purchase = await _purchaseRepo.getPurchaseById(
+        payment.purchaseId!,
+      );
       if (purchase != null) {
         final oldPaid = _toDouble(purchase.paid);
         final oldPending = _toDouble(purchase.pending);
 
-        final paymentApplied = payment.amount > oldPending ? oldPending : payment.amount;
+        final paymentApplied = payment.amount > oldPending
+            ? oldPending
+            : payment.amount;
         final newPaid = oldPaid + paymentApplied;
         final newPending = oldPending - paymentApplied;
 
@@ -139,15 +147,23 @@ class SupplierPaymentRepository {
     DateTime? end,
     bool includeDeleted = false,
   }) async {
-    final all = await _paymentDao.getPayments(supplierId, includeDeleted: includeDeleted);
+    final all = await _paymentDao.getPayments(
+      supplierId,
+      includeDeleted: includeDeleted,
+    );
 
     return all.where((p) {
       final noteText = p.note ?? "";
-      final matchNote = keyword == null || noteText.toLowerCase().contains(keyword.toLowerCase());
+      final matchNote =
+          keyword == null ||
+          noteText.toLowerCase().contains(keyword.toLowerCase());
 
       final paymentDate = DateTime.parse(p.date);
-      final matchDate = (start == null || paymentDate.isAfter(start.subtract(const Duration(days: 1)))) &&
-          (end == null || paymentDate.isBefore(end.add(const Duration(days: 1))));
+      final matchDate =
+          (start == null ||
+              paymentDate.isAfter(start.subtract(const Duration(days: 1)))) &&
+          (end == null ||
+              paymentDate.isBefore(end.add(const Duration(days: 1))));
 
       return matchNote && matchDate;
     }).toList();
@@ -158,10 +174,15 @@ class SupplierPaymentRepository {
     String supplierId, {
     bool includeDeleted = false,
   }) async {
-    final payments = await getPayments(supplierId, includeDeleted: includeDeleted);
+    final payments = await getPayments(
+      supplierId,
+      includeDeleted: includeDeleted,
+    );
 
     final buffer = StringBuffer();
-    buffer.writeln("Date,Amount,Note,Purchase ID,Method,TransactionRef,Deleted");
+    buffer.writeln(
+      "Date,Amount,Note,Purchase ID,Method,TransactionRef,Deleted",
+    );
 
     for (final p in payments) {
       buffer.writeln(
@@ -178,8 +199,12 @@ class SupplierPaymentRepository {
 
   /// Recalculate supplier.pending from all purchases
   Future<void> _recalculateSupplierPending(String supplierId) async {
-    final allPurchases = await _purchaseRepo.getPurchasesForSupplier(supplierId);
-    final totalPending = allPurchases.map((p) => _toDouble(p.pending)).fold(0.0, (a, b) => a + b);
+    final allPurchases = await _purchaseRepo.getPurchasesForSupplier(
+      supplierId,
+    );
+    final totalPending = allPurchases
+        .map((p) => _toDouble(p.pending))
+        .fold(0.0, (a, b) => a + b);
 
     final supplier = await _supplierDao.getSupplierById(supplierId);
     if (supplier != null) {

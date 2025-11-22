@@ -22,24 +22,24 @@ class SupplierPaymentFrame extends StatefulWidget {
 
 class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
   late Future<List<SupplierPayment>> _paymentsFuture;
-  
 
   // inside your state
-late PurchaseRepository purchaseRepo;
+  late PurchaseRepository purchaseRepo;
 
-@override
-void initState() {
-  super.initState();
-  _paymentsFuture = widget.repo.getPayments(widget.supplier.id); // ✅ initialize here
-  DatabaseHelper.instance.db.then((db) {
-    setState(() {
-      purchaseRepo = PurchaseRepository(db);
-       // ✅ fixed
+  @override
+  void initState() {
+    super.initState();
+    _paymentsFuture = widget.repo.getPayments(
+      widget.supplier.id,
+    ); // ✅ initialize here
+    DatabaseHelper.instance.db.then((db) {
+      setState(() {
+        purchaseRepo = PurchaseRepository(db);
+        // ✅ fixed
+      });
+      _loadPayments();
     });
-    _loadPayments();
-  });
-}
-
+  }
 
   void _loadPayments() {
     setState(() {
@@ -49,13 +49,15 @@ void initState() {
 
   /// Add or edit a payment
   void _addOrEditPayment([SupplierPayment? payment]) async {
-    final amountCtrl =
-        TextEditingController(text: payment?.amount.toString() ?? "");
+    final amountCtrl = TextEditingController(
+      text: payment?.amount.toString() ?? "",
+    );
     final noteCtrl = TextEditingController(text: payment?.note ?? "");
 
     // ✅ Load purchases for this supplier
-    final purchases =
-        await purchaseRepo.getPurchasesForSupplier(widget.supplier.id);
+    final purchases = await purchaseRepo.getPurchasesForSupplier(
+      widget.supplier.id,
+    );
 
     String? selectedPurchaseId = payment?.purchaseId;
 
@@ -77,40 +79,40 @@ void initState() {
             ),
             const SizedBox(height: 10),
             DropdownSearch<String>(
-              items:(items, props)=> purchases.map((p) => p.id).toList(),
-  selectedItem: selectedPurchaseId,
-  itemAsString: (id) {
-    final p = purchases.firstWhere((p) => p.id == id);
-    return "Invoice: ${p.invoiceNo} | ${p.id.substring(0, 6)} | Total: ${p.total} | Pending: ${p.pending}";
-  },
-  popupProps: PopupProps.menu(
-    showSearchBox: true,
-    
-    searchFieldProps: TextFieldProps(
-      decoration: const InputDecoration(
-        labelText: "Search Purchase",
-        border: OutlineInputBorder(),
-      ),
-    ),
-  ),
-  decoratorProps: const DropDownDecoratorProps(
-    decoration: InputDecoration(
-      labelText: "Select Purchase",
-      border: OutlineInputBorder(),
-    ),
-  ),
-  onChanged: (val) {
-    selectedPurchaseId = val;
-  },
-  validator: (v) => v == null ? "Required" : null,
-),
+              items: (items, props) => purchases.map((p) => p.id).toList(),
+              selectedItem: selectedPurchaseId,
+              itemAsString: (id) {
+                final p = purchases.firstWhere((p) => p.id == id);
+                return "Invoice: ${p.invoiceNo} | ${p.id.substring(0, 6)} | Total: ${p.total} | Pending: ${p.pending}";
+              },
+              popupProps: PopupProps.menu(
+                showSearchBox: true,
 
+                searchFieldProps: TextFieldProps(
+                  decoration: const InputDecoration(
+                    labelText: "Search Purchase",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              decoratorProps: const DropDownDecoratorProps(
+                decoration: InputDecoration(
+                  labelText: "Select Purchase",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              onChanged: (val) {
+                selectedPurchaseId = val;
+              },
+              validator: (v) => v == null ? "Required" : null,
+            ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
           TextButton(
             onPressed: () {
               final amt = double.tryParse(amountCtrl.text);
@@ -130,27 +132,24 @@ void initState() {
 
     if (result != null) {
       if (payment == null) {
-  final amount = result["amount"] as double;
-  final purchaseId = result["purchaseId"] as String;
+        final amount = result["amount"] as double;
+        final purchaseId = result["purchaseId"] as String;
 
-  // 1️⃣ Insert supplier payment record
-  await widget.repo.addPayment(
-    widget.supplier.id,
-    amount,
-    note: result["note"],
-    purchaseId: purchaseId,
-  );
+        // 1️⃣ Insert supplier payment record
+        await widget.repo.addPayment(
+          widget.supplier.id,
+          amount,
+          note: result["note"],
+          purchaseId: purchaseId,
+        );
 
-  // -------------------------------------------------------------------
-  // 2️⃣ Update Purchase (paid, pending)
- 
+        // -------------------------------------------------------------------
+        // 2️⃣ Update Purchase (paid, pending)
 
-  // -------------------------------------------------------------------
-  // 3️⃣ Update Supplier pending amount
-  // -------------------------------------------------------------------
-  
-}
-else {
+        // -------------------------------------------------------------------
+        // 3️⃣ Update Supplier pending amount
+        // -------------------------------------------------------------------
+      } else {
         final updated = payment.copyWith(
           amount: result["amount"],
           note: result["note"],
@@ -170,11 +169,13 @@ else {
         content: const Text("Are you sure you want to delete this payment?"),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("Delete")),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
         ],
       ),
     );
@@ -230,8 +231,10 @@ else {
                           if ((p.purchaseId ?? "").isNotEmpty)
                             Text("Purchase ID: ${p.purchaseId}"),
                           if (isDeleted)
-                            const Text("Deleted",
-                                style: TextStyle(color: Colors.red)),
+                            const Text(
+                              "Deleted",
+                              style: TextStyle(color: Colors.red),
+                            ),
                         ],
                       ),
                       trailing: PopupMenuButton<String>(
@@ -243,13 +246,19 @@ else {
                         itemBuilder: (ctx) => [
                           if (!isDeleted)
                             const PopupMenuItem(
-                                value: 'edit', child: Text('Edit')),
+                              value: 'edit',
+                              child: Text('Edit'),
+                            ),
                           if (!isDeleted)
                             const PopupMenuItem(
-                                value: 'delete', child: Text('Delete')),
+                              value: 'delete',
+                              child: Text('Delete'),
+                            ),
                           if (isDeleted)
                             const PopupMenuItem(
-                                value: 'restore', child: Text('Restore')),
+                              value: 'restore',
+                              child: Text('Restore'),
+                            ),
                         ],
                       ),
                     ),

@@ -21,7 +21,10 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
 
   void _loadReports() {
     setState(() {
-      _reportsFuture = widget.repo.getSupplierReports("2025-01-01", "2025-12-31");
+      _reportsFuture = widget.repo.getSupplierReports(
+        "2025-01-01",
+        "2025-12-31",
+      );
     });
   }
 
@@ -52,8 +55,10 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
                   children: [
                     Text("Purchases: ${r.totalPurchases.toStringAsFixed(2)}"),
                     Text("Paid: ${r.totalPaid.toStringAsFixed(2)}"),
-                    Text("Pending: ${r.totalPending.toStringAsFixed(2)}",
-                        style: const TextStyle(color: Colors.red)),
+                    Text(
+                      "Pending: ${r.totalPending.toStringAsFixed(2)}",
+                      style: const TextStyle(color: Colors.red),
+                    ),
                   ],
                 ),
               ),

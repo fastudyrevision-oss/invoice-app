@@ -33,9 +33,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     final dir = await getApplicationDocumentsDirectory();
     final backupDir = Directory(p.join(dir.path, 'backups'));
     if (!backupDir.existsSync()) backupDir.createSync();
-    final backups = backupDir.listSync()
-        .whereType<File>()
-        .toList()
+    final backups = backupDir.listSync().whereType<File>().toList()
       ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
     if (backups.isNotEmpty) {
       setState(() {
@@ -49,12 +47,14 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     try {
       final dbPath = await DatabaseHelper.instance.dbPath;
       if (dbPath == null) {
-  // Web: handle differently
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Backup/restore is not supported on Web"))
-  );
-  return;
-}
+        // Web: handle differently
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Backup/restore is not supported on Web"),
+          ),
+        );
+        return;
+      }
       final dir = await getApplicationDocumentsDirectory();
       final backupDir = Directory(p.join(dir.path, 'backups'));
       if (!backupDir.existsSync()) backupDir.createSync();
@@ -68,9 +68,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         const SnackBar(content: Text('Backup completed successfully')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Backup failed: $e')));
     } finally {
       setState(() => _loading = false);
     }
@@ -92,12 +92,14 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         // Close the database before restoring
         await DatabaseHelper.instance.close();
         if (dbPath == null) {
-  // Web: handle differently
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Backup/restore is not supported on Web"))
-  );
-  return;
-}
+          // Web: handle differently
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Backup/restore is not supported on Web"),
+            ),
+          );
+          return;
+        }
 
         // Copy backup to actual db location
         await selectedFile.copy(dbPath);
@@ -110,43 +112,43 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         );
       }
     } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _prepareBulkSync(String table) async {
+    setState(() => _loading = true);
+    try {
+      final bulkSyncService = BulkSyncService();
+      final jsonData = await bulkSyncService.prepareJsonForBulkSync(table);
+
+      // Optional: Save JSON to a file
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(p.join(dir.path, '$table-bulk.json'));
+      await file.writeAsString(jsonData);
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: $e')),
+        SnackBar(
+          content: Text('Bulk sync data for "$table" prepared at ${file.path}'),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to prepare bulk sync: $e')),
       );
     } finally {
       setState(() => _loading = false);
     }
   }
-  Future<void> _prepareBulkSync(String table) async {
-  setState(() => _loading = true);
-  try {
-    final bulkSyncService = BulkSyncService();
-    final jsonData = await bulkSyncService.prepareJsonForBulkSync(table);
-
-    // Optional: Save JSON to a file
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, '$table-bulk.json'));
-    await file.writeAsString(jsonData);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Bulk sync data for "$table" prepared at ${file.path}')),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to prepare bulk sync: $e')),
-    );
-  } finally {
-    setState(() => _loading = false);
-  }
-}
-
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Backup & Restore'),
-      ),
+      appBar: AppBar(title: const Text('Backup & Restore')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: _loading
@@ -173,12 +175,13 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                     style: const TextStyle(fontSize: 14),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () => _prepareBulkSync('products'), // You can add a dropdown later for tables
+                    onPressed: () => _prepareBulkSync(
+                      'products',
+                    ), // You can add a dropdown later for tables
                     icon: const Icon(Icons.cloud_upload),
                     label: const Text('Prepare Bulk Sync for Products'),
                   ),
                   const SizedBox(height: 16),
-
                 ],
               ),
       ),

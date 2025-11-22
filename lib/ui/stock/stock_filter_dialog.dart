@@ -64,7 +64,9 @@ class _StockFilterDialogState extends State<StockFilterDialog> {
             ),
             SwitchListTile(
               title: const Text("Detailed View"),
-              subtitle: const Text("Show profit, reorder level, and calculations"),
+              subtitle: const Text(
+                "Show profit, reorder level, and calculations",
+              ),
               value: _detailedView,
               onChanged: (v) => setState(() => _detailedView = v),
             ),
@@ -90,9 +92,7 @@ class _StockFilterDialogState extends State<StockFilterDialog> {
           },
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 }

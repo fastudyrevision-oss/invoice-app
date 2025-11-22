@@ -26,15 +26,12 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
 
   List<SupplierCompany> _companies = [];
   final SupplierCompany allCompaniesOption = SupplierCompany(
-  id: '-1',
-  name: 'Select Company', // or any default
-  createdAt: DateTime.now().toIso8601String(),
-  updatedAt: DateTime.now().toIso8601String(),
-  // fill other fields if needed
-);
-
-
-
+    id: '-1',
+    name: 'Select Company', // or any default
+    createdAt: DateTime.now().toIso8601String(),
+    updatedAt: DateTime.now().toIso8601String(),
+    // fill other fields if needed
+  );
 
   @override
   void initState() {
@@ -53,7 +50,9 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
   }
 
   void _loadCompanies() async {
-    final list = await widget.repo.getAllCompanies(showDeleted: false); // only active companies
+    final list = await widget.repo.getAllCompanies(
+      showDeleted: false,
+    ); // only active companies
     if (mounted) setState(() => _companies = list);
   }
 
@@ -65,8 +64,12 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
       id: widget.supplier?.id ?? const Uuid().v4(),
       name: _nameCtrl.text.trim(),
       phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
-      contactPerson: _contactCtrl.text.trim().isEmpty ? null : _contactCtrl.text.trim(),
+      address: _addressCtrl.text.trim().isEmpty
+          ? null
+          : _addressCtrl.text.trim(),
+      contactPerson: _contactCtrl.text.trim().isEmpty
+          ? null
+          : _contactCtrl.text.trim(),
       companyId: _companyId,
       pendingAmount: widget.supplier?.pendingAmount ?? 0.0,
       creditLimit: double.tryParse(_creditCtrl.text.trim()) ?? 0.0,
@@ -81,7 +84,8 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
       await widget.repo.updateSupplier(supplier);
     }
 
-    if (mounted) Navigator.pop(context, true); // triggers refresh in SupplierFrame
+    if (mounted)
+      Navigator.pop(context, true); // triggers refresh in SupplierFrame
   }
 
   @override
@@ -129,40 +133,38 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
-              DropdownSearch<SupplierCompany>( // or Mode.BOTTOM_SHEET / Mode.DIALOG
-                    items:(items, props)=> _companies,
-                    itemAsString: (SupplierCompany c) => c.name,
-                   onChanged: (c) {
-                        if (c != null) {
-                          setState(() => _companyId = c.id);
-                        } else {
-                          setState(() => _companyId = null);
-                        }
-                      }
-                      ,
-                      compareFn:(SupplierCompany a, SupplierCompany b) => a.id == b.id,
-                                selectedItem: _companies.firstWhere(
-                (c) => c.id == _companyId,
-                orElse: () => allCompaniesOption, // return null if not found
-              ),
+              DropdownSearch<SupplierCompany>(
+                // or Mode.BOTTOM_SHEET / Mode.DIALOG
+                items: (items, props) => _companies,
+                itemAsString: (SupplierCompany c) => c.name,
+                onChanged: (c) {
+                  if (c != null) {
+                    setState(() => _companyId = c.id);
+                  } else {
+                    setState(() => _companyId = null);
+                  }
+                },
+                compareFn: (SupplierCompany a, SupplierCompany b) =>
+                    a.id == b.id,
+                selectedItem: _companies.firstWhere(
+                  (c) => c.id == _companyId,
+                  orElse: () => allCompaniesOption, // return null if not found
+                ),
 
-                   popupProps: PopupProps.menu(
-                    showSearchBox: true,
-                    fit: FlexFit.loose,
-                  ),// lets user type to search
-                    decoratorProps: DropDownDecoratorProps(
-                    decoration: InputDecoration(
-                      labelText: "Company",
-                      border: OutlineInputBorder(),
-                    ),
+                popupProps: PopupProps.menu(
+                  showSearchBox: true,
+                  fit: FlexFit.loose,
+                ), // lets user type to search
+                decoratorProps: DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    labelText: "Company",
+                    border: OutlineInputBorder(),
                   ),
-            ),
+                ),
+              ),
 
               const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _save,
-                child: const Text("Save"),
-              ),
+              ElevatedButton(onPressed: _save, child: const Text("Save")),
             ],
           ),
         ),

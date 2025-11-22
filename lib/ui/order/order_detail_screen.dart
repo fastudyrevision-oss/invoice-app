@@ -29,14 +29,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Future<void> _loadDetails() async {
     final db = await DatabaseHelper.instance.db;
     final customerDao = CustomerDao(db);
-    final customer = await customerDao.getCustomerById(widget.invoice.customerId);
+    final customer = await customerDao.getCustomerById(
+      widget.invoice.customerId,
+    );
 
-    final rawItems = await db.rawQuery('''
+    final rawItems = await db.rawQuery(
+      '''
       SELECT ii.qty, ii.price, p.name as product_name
       FROM invoice_items ii
       JOIN products p ON ii.product_id = p.id
       WHERE ii.invoice_id = ?
-    ''', [widget.invoice.id]);
+    ''',
+      [widget.invoice.id],
+    );
 
     setState(() {
       _customer = customer;
@@ -48,9 +53,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final invoice = widget.invoice;
@@ -71,7 +74,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             onPressed: () async {
               try {
                 invoice.customerName ??= _customer?.name ?? "Unknown";
-                final File? pdfFile = await generateInvoicePdf(invoice, items: _items);
+                final File? pdfFile = await generateInvoicePdf(
+                  invoice,
+                  items: _items,
+                );
                 if (pdfFile != null) {
                   await shareOrPrintPdf(pdfFile);
                 } else {
@@ -98,7 +104,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             children: [
               // --- Header Card ---
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 16),
                 child: Padding(
@@ -106,9 +114,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Invoice #${invoice.id}",
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(
+                        "Invoice #${invoice.id}",
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text("Customer: ${_customer?.name ?? 'Unknown'}"),
                       Text("Date: ${invoice.date}"),
@@ -119,7 +131,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
               // --- Totals Card ---
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 16),
                 child: Padding(
@@ -127,15 +141,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Invoice Summary",
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const Text(
+                        "Invoice Summary",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       _buildSummaryRow("Total", invoice.total),
                       _buildSummaryRow("Discount", invoice.discount),
                       _buildSummaryRow("Paid", invoice.paid),
-                      _buildSummaryRow("Pending", invoice.pending,
-                          color: Colors.red),
+                      _buildSummaryRow(
+                        "Pending",
+                        invoice.pending,
+                        color: Colors.red,
+                      ),
                     ],
                   ),
                 ),
@@ -145,9 +166,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               const Text(
                 "Items",
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Colors.black87),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.black87,
+                ),
               ),
               const SizedBox(height: 10),
 
@@ -163,20 +185,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     title: Text(
                       item['product_name'],
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 16),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
                     subtitle: Text("Qty: $qty × ${price.toStringAsFixed(2)}"),
                     trailing: Text(
                       total.toStringAsFixed(2),
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Colors.black87),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                 );
@@ -187,9 +214,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 child: Text(
                   "Thank you for your business!",
                   style: TextStyle(
-                      color: Colors.grey[700],
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14),
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],
@@ -205,9 +233,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style:
-                  const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           Text(
             value.toStringAsFixed(2),
             style: TextStyle(

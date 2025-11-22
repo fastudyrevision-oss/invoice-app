@@ -46,26 +46,26 @@ class Purchase {
   }
 
   Map<String, dynamic> toMap() => {
-        "id": id,
-        "supplier_id": supplierId,
-        "invoice_no": invoiceNo,
-        "total": total,
-        "paid": paid,
-        "pending": pending,
-        "date": date,
-        "created_at": createdAt,
-        "updated_at": updatedAt,
-      };
+    "id": id,
+    "supplier_id": supplierId,
+    "invoice_no": invoiceNo,
+    "total": total,
+    "paid": paid,
+    "pending": pending,
+    "date": date,
+    "created_at": createdAt,
+    "updated_at": updatedAt,
+  };
 
   factory Purchase.fromMap(Map<String, dynamic> map) => Purchase(
-        id: map["id"],
-        supplierId: map["supplier_id"],
-        invoiceNo: map["invoice_no"],
-        total: (map["total"] ?? 0).toDouble(),
-        paid: (map["paid"] ?? 0).toDouble(),
-        pending: (map["pending"] ?? 0).toDouble(),
-        date: map["date"],
-        createdAt: map["created_at"],
-        updatedAt: map["updated_at"],
-      );
+    id: map["id"],
+    supplierId: map["supplier_id"],
+    invoiceNo: map["invoice_no"],
+    total: (map["total"] ?? 0).toDouble(),
+    paid: (map["paid"] ?? 0).toDouble(),
+    pending: (map["pending"] ?? 0).toDouble(),
+    date: map["date"],
+    createdAt: map["created_at"],
+    updatedAt: map["updated_at"],
+  );
 }

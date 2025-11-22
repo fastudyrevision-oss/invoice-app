@@ -1,9 +1,9 @@
 class PaymentReport {
   final String supplierName;
   final String reference; // Invoice No. or Payment Ref
-  final double debit;     // Purchases
-  final double credit;    // Payments
-  final double balance;   // Running balance
+  final double debit; // Purchases
+  final double credit; // Payments
+  final double balance; // Running balance
   final DateTime date;
 
   PaymentReport({

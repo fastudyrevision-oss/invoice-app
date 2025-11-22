@@ -23,10 +23,7 @@ class FilePrintService {
             level: 0,
             child: pw.Text(
               'Stock Report',
-              style: pw.TextStyle(
-                fontSize: 22,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.SizedBox(height: 10),
@@ -126,11 +123,12 @@ class FilePrintService {
     }
 
     final totalItems = report.length;
-    final totalQty =
-        report.fold<int>(0, (sum, item) => sum + item.remainingQty);
+    final totalQty = report.fold<int>(
+      0,
+      (sum, item) => sum + item.remainingQty,
+    );
     final totalValue = includePrice
-        ? report.fold<double>(
-            0, (sum, item) => sum + item.totalSellValue)
+        ? report.fold<double>(0, (sum, item) => sum + item.totalSellValue)
         : 0.0;
 
     return pw.Container(
@@ -144,8 +142,7 @@ class FilePrintService {
         children: [
           pw.Text(
             'Summary',
-            style:
-                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
           ),
           pw.SizedBox(height: 5),
           pw.Text('Total Products: $totalItems'),

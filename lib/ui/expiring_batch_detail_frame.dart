@@ -43,12 +43,14 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
     // ✅ fallback: if repo fetch fails but batch has supplierName
     if (supplier == null && widget.batch.supplierName != null) {
       supplier = Supplier(
-        id: widget.batch.purchaseId, // placeholder id (better if you add supplier_id in ExpiringBatchDetail)
+        id: widget
+            .batch
+            .purchaseId, // placeholder id (better if you add supplier_id in ExpiringBatchDetail)
         name: widget.batch.supplierName!,
         phone: null,
         address: null,
         createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),  // required
+        updatedAt: DateTime.now().toIso8601String(), // required
       );
     }
 
@@ -80,7 +82,9 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
                   Text(
                     _product?.name ?? widget.batch.productName,
                     style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const Divider(),
 
@@ -111,14 +115,15 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
                     ),
                     Text("Date: ${_purchase!.date}"),
                     Text("Invoice No: ${_purchase!.invoiceNo ?? 'N/A'}"),
-                    
                   ],
 
                   if (_purchase == null)
                     const Text(
                       "Purchase details not available.",
                       style: TextStyle(
-                          color: Colors.grey, fontStyle: FontStyle.italic),
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                 ],
               ),

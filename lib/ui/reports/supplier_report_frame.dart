@@ -45,11 +45,13 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
         }
 
         // --- Safe interval calculation ---
-       final maxPurchase = reports
-    .map((e) => e.totalPurchases)
-    .fold<double>(0, (prev, elem) => elem > prev ? elem : elem);
+        final maxPurchase = reports
+            .map((e) => e.totalPurchases)
+            .fold<double>(0, (prev, elem) => elem > prev ? elem : elem);
 
-final interval = maxPurchase > 0 ? (maxPurchase / 5).ceilToDouble() : 1.0;
+        final interval = maxPurchase > 0
+            ? (maxPurchase / 5).ceilToDouble()
+            : 1.0;
         return SingleChildScrollView(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -72,8 +74,9 @@ final interval = maxPurchase > 0 ? (maxPurchase / 5).ceilToDouble() : 1.0;
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ListTile(
                       title: Text(r.supplierName),
-                      subtitle:
-                          Text("Purchases: ${r.totalPurchases}, Paid: ${r.totalPaid}"),
+                      subtitle: Text(
+                        "Purchases: ${r.totalPurchases}, Paid: ${r.totalPaid}",
+                      ),
                       trailing: Text("Balance: ${r.balance}"),
                     ),
                   );

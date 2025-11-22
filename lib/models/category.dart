@@ -28,34 +28,34 @@ class Category {
   });
 
   factory Category.fromMap(Map<String, dynamic> map) => Category(
-        id: map['id'],
-        name: map['name'],
-        slug: map['slug'],
-        description: map['description'],
-        parentId: map['parent_id'],
-        isActive: (map['is_active'] ?? 1) == 1,
-        isDeleted: (map['is_deleted'] ?? 0) == 1,
-        icon: map['icon'],
-        color: map['color'],
-        sortOrder: map['sort_order'] ?? 0,
-        createdAt: map['created_at'],
-        updatedAt: map['updated_at'],
-      );
+    id: map['id'],
+    name: map['name'],
+    slug: map['slug'],
+    description: map['description'],
+    parentId: map['parent_id'],
+    isActive: (map['is_active'] ?? 1) == 1,
+    isDeleted: (map['is_deleted'] ?? 0) == 1,
+    icon: map['icon'],
+    color: map['color'],
+    sortOrder: map['sort_order'] ?? 0,
+    createdAt: map['created_at'],
+    updatedAt: map['updated_at'],
+  );
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'slug': slug,
-        'description': description,
-        'parent_id': parentId,
-        'is_active': isActive ? 1 : 0,
-        'is_deleted': isDeleted ? 1 : 0,
-        'icon': icon,
-        'color': color,
-        'sort_order': sortOrder,
-        'created_at': createdAt,
-        'updated_at': updatedAt,
-      };
+    'id': id,
+    'name': name,
+    'slug': slug,
+    'description': description,
+    'parent_id': parentId,
+    'is_active': isActive ? 1 : 0,
+    'is_deleted': isDeleted ? 1 : 0,
+    'icon': icon,
+    'color': color,
+    'sort_order': sortOrder,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+  };
 
   Category copyWith({
     String? id,

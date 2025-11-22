@@ -58,18 +58,22 @@ class OrderRepository {
       }
 
       // 🧍‍♂️ Update customer's pending balance
-      final customerDao = CustomerDao( txn);
+      final customerDao = CustomerDao(txn);
       await customerDao.updatePendingAmount(customerId, pending);
     });
   }
 
   /// Save an order (invoice + items + stock adjustments)
-  Future<void> saveOrder(Invoice invoice, String customerName, List<InvoiceItem> items) async {
+  Future<void> saveOrder(
+    Invoice invoice,
+    String customerName,
+    List<InvoiceItem> items,
+  ) async {
     await dbHelper.runInTransaction((txn) async {
       final invoiceDao = InvoiceDao(txn);
       final itemDao = InvoiceItemDao(txn);
       final productDao = ProductDao(txn);
-      final customerDao = CustomerDao( txn);
+      final customerDao = CustomerDao(txn);
 
       // ------------------------------
       // 1️⃣ Insert invoice
@@ -83,15 +87,20 @@ class OrderRepository {
         double remainingQty = item.qty.toDouble();
 
         // --- Fetch available batches (FIFO / earliest expiry first)
-        final availableBatches = await txn.rawQuery('''
+        final availableBatches = await txn.rawQuery(
+          '''
           SELECT id, qty, batch_no, expiry_date
           FROM product_batches
           WHERE product_id = ? AND qty > 0
           ORDER BY expiry_date ASC, created_at ASC
-        ''', [item.productId]);
+        ''',
+          [item.productId],
+        );
 
         if (availableBatches.isEmpty) {
-          throw Exception('No available stock batches for product ${item.productId}');
+          throw Exception(
+            'No available stock batches for product ${item.productId}',
+          );
         }
 
         for (final batch in availableBatches) {
@@ -121,7 +130,8 @@ class OrderRepository {
         // --- Ensure full allocation happened
         if (remainingQty > 0) {
           throw Exception(
-              'Insufficient stock for product ${item.productId}, short by $remainingQty units');
+            'Insufficient stock for product ${item.productId}, short by $remainingQty units',
+          );
         }
 
         // --- Update total product quantity
@@ -131,7 +141,10 @@ class OrderRepository {
       // ------------------------------
       // 3️⃣ Update customer pending balance
       // ------------------------------
-      await customerDao.updatePendingAmount(invoice.customerId, invoice.pending);
+      await customerDao.updatePendingAmount(
+        invoice.customerId,
+        invoice.pending,
+      );
 
       // ------------------------------
       // 4️⃣ Ledger & Audit logging hooks (optional)
@@ -142,13 +155,18 @@ class OrderRepository {
   }
 
   /// Fetch all available batches for a product (for UI / selection)
-  Future<List<Map<String, dynamic>>> getAvailableBatches(String productId) async {
+  Future<List<Map<String, dynamic>>> getAvailableBatches(
+    String productId,
+  ) async {
     final db = await dbHelper.db;
-    return await db.rawQuery('''
+    return await db.rawQuery(
+      '''
       SELECT id, batch_no, qty, expiry_date, sell_price
       FROM product_batches
       WHERE product_id = ? AND qty > 0
       ORDER BY expiry_date ASC, created_at ASC
-    ''', [productId]);
+    ''',
+      [productId],
+    );
   }
 }

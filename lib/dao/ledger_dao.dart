@@ -7,7 +7,10 @@ class LedgerDao {
   Future<int> insert(LedgerEntry entry) async =>
       await dbHelper.insert("ledger", entry.toMap());
 
-  Future<List<LedgerEntry>> getByEntity(String entityId, String entityType) async {
+  Future<List<LedgerEntry>> getByEntity(
+    String entityId,
+    String entityType,
+  ) async {
     final data = await dbHelper.queryWhere(
       "ledger",
       "entity_id = ? AND entity_type = ?",

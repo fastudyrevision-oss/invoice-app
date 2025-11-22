@@ -21,28 +21,29 @@ class SupplierRepository {
   );
 
   /// ===/// ===========================
-/// SUPPLIERS
+  /// SUPPLIERS
   /// ===========================
   Future<List<Supplier>> getAllSuppliers({bool showDeleted = false}) async {
     return _supplierDao.getAllSuppliers(showDeleted: showDeleted);
   }
-  /// Fetch suppliers with pagination (lazy loading)
-Future<List<Supplier>> getSuppliersPaged({
-  int page = 0,
-  int pageSize = 50,
-  String? keyword,
-  bool showDeleted = false,
-}) async { // async added
-  final offset = page * pageSize;
-  final suppliers = await _supplierDao.getSuppliersPaged(
-    offset: offset,
-    limit: pageSize,
-    keyword: keyword,
-    showDeleted: showDeleted,
-  );
-  return suppliers;
-}
 
+  /// Fetch suppliers with pagination (lazy loading)
+  Future<List<Supplier>> getSuppliersPaged({
+    int page = 0,
+    int pageSize = 50,
+    String? keyword,
+    bool showDeleted = false,
+  }) async {
+    // async added
+    final offset = page * pageSize;
+    final suppliers = await _supplierDao.getSuppliersPaged(
+      offset: offset,
+      limit: pageSize,
+      keyword: keyword,
+      showDeleted: showDeleted,
+    );
+    return suppliers;
+  }
 
   Future<Supplier?> getSupplierById(String id) async {
     return _supplierDao.getSupplierById(id);
@@ -50,10 +51,7 @@ Future<List<Supplier>> getSuppliersPaged({
 
   Future<void> insertSupplier(Supplier supplier) async {
     final now = DateTime.now().toIso8601String();
-    final newSupplier = supplier.copyWith(
-      createdAt: now,
-      updatedAt: now,
-    );
+    final newSupplier = supplier.copyWith(createdAt: now, updatedAt: now);
     await _supplierDao.insertSupplier(newSupplier);
   }
 
@@ -75,14 +73,19 @@ Future<List<Supplier>> getSuppliersPaged({
   }
 
   /// 🔍 Search suppliers by name/phone
-  Future<List<Supplier>> searchSuppliers(String keyword, {bool showDeleted = false}) async {
+  Future<List<Supplier>> searchSuppliers(
+    String keyword, {
+    bool showDeleted = false,
+  }) async {
     final all = await _supplierDao.getAllSuppliers(showDeleted: showDeleted);
-    return all.where((s) =>
-      s.name.toLowerCase().contains(keyword.toLowerCase()) ||
-      (s.phone?.toLowerCase().contains(keyword.toLowerCase()) ?? false)
-    ).toList();
+    return all
+        .where(
+          (s) =>
+              s.name.toLowerCase().contains(keyword.toLowerCase()) ||
+              (s.phone?.toLowerCase().contains(keyword.toLowerCase()) ?? false),
+        )
+        .toList();
   }
-
 
   /// ===========================
   /// PAYMENTS
@@ -91,7 +94,11 @@ Future<List<Supplier>> getSuppliersPaged({
     return _paymentDao.getPayments(supplierId);
   }
 
-  Future<void> addPayment(String supplierId, double amount, {String note = ""}) async {
+  Future<void> addPayment(
+    String supplierId,
+    double amount, {
+    String note = "",
+  }) async {
     final payment = SupplierPayment(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       supplierId: supplierId,
@@ -106,18 +113,20 @@ Future<List<Supplier>> getSuppliersPaged({
     final supplier = await _supplierDao.getSupplierById(supplierId);
     if (supplier != null) {
       final updated = supplier.copyWith(
-        pendingAmount: (supplier.pendingAmount - amount).clamp(0, double.infinity),
+        pendingAmount: (supplier.pendingAmount - amount).clamp(
+          0,
+          double.infinity,
+        ),
       );
       await _supplierDao.updateSupplier(updated);
     }
   }
 
-/// COMPANIES
-/// ===========================
+  /// COMPANIES
+  /// ===========================
   Future<List<SupplierCompany>> getAllCompanies({bool showDeleted = false}) {
-  return _companyDao.getAllCompanies(showDeleted: showDeleted);
-}
-
+    return _companyDao.getAllCompanies(showDeleted: showDeleted);
+  }
 
   Future<void> deleteCompany(String id) async {
     await _companyDao.deleteCompany(id); // soft delete
@@ -133,10 +142,7 @@ Future<List<Supplier>> getSuppliersPaged({
 
   Future<void> insertCompany(SupplierCompany company) async {
     final now = DateTime.now().toIso8601String();
-    final newCompany = company.copyWith(
-      createdAt: now,
-      updatedAt: now,
-    );
+    final newCompany = company.copyWith(createdAt: now, updatedAt: now);
     await _companyDao.insertCompany(newCompany);
   }
 
@@ -150,18 +156,24 @@ Future<List<Supplier>> getSuppliersPaged({
   /// 🔍 Search companies by name / notes / phone
   Future<List<SupplierCompany>> searchCompanies(String keyword) async {
     final all = await _companyDao.getAllCompanies();
-    return all.where((c) =>
-      c.name.toLowerCase().contains(keyword.toLowerCase()) ||
-      (c.phone?.toLowerCase().contains(keyword.toLowerCase()) ?? false) ||
-      (c.notes?.toLowerCase().contains(keyword.toLowerCase()) ?? false)
-    ).toList();
+    return all
+        .where(
+          (c) =>
+              c.name.toLowerCase().contains(keyword.toLowerCase()) ||
+              (c.phone?.toLowerCase().contains(keyword.toLowerCase()) ??
+                  false) ||
+              (c.notes?.toLowerCase().contains(keyword.toLowerCase()) ?? false),
+        )
+        .toList();
   }
 
   /// ===========================
   /// REPORTS
   /// ===========================
   Future<List<SupplierReport>> getSupplierReports(
-      String startDate, String endDate) async {
+    String startDate,
+    String endDate,
+  ) async {
     return _reportDao.getReports(startDate, endDate);
   }
 }

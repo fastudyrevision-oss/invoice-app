@@ -67,7 +67,6 @@ class _ProductFrameState extends State<ProductFrame> {
   Future<void> _loadInitialData() async {
     if (!mounted) return;
 
-
     setState(() => _isLoading = true);
 
     final categoryRepo = await CategoryRepository.create();
@@ -77,14 +76,25 @@ class _ProductFrameState extends State<ProductFrame> {
     // Insert pseudo "All Suppliers" option
     _suppliers.insert(
       0,
-      Supplier(id: 'all', name: 'All', phone: null, address: null, createdAt: '', updatedAt: ''),
+      Supplier(
+        id: 'all',
+        name: 'All',
+        phone: null,
+        address: null,
+        createdAt: '',
+        updatedAt: '',
+      ),
     );
     // Insert pseudo "All" category
-  _categories.insert(
-    0,
-    Category(id: "all", name: "All Categories" , createdAt: DateTime.now().toIso8601String(), updatedAt: DateTime.now().toIso8601String()),
-  );
-
+    _categories.insert(
+      0,
+      Category(
+        id: "all",
+        name: "All Categories",
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
 
     await _loadNextPage();
     setState(() => _isLoading = false);
@@ -93,8 +103,6 @@ class _ProductFrameState extends State<ProductFrame> {
   Future<void> _loadNextPage() async {
     if (!_hasMore) return;
     if (!mounted) return;
-
-
 
     setState(() => _isLoadingPage = true);
 
@@ -119,11 +127,11 @@ class _ProductFrameState extends State<ProductFrame> {
   }
 
   void _onCategoryChanged(Category? category) {
-   if (category == null || category.id == "all") {
-    _selectedCategory = null;  // means ALL categories
-  } else {
-    _selectedCategory = category;
-  }
+    if (category == null || category.id == "all") {
+      _selectedCategory = null; // means ALL categories
+    } else {
+      _selectedCategory = category;
+    }
     _resetPagination();
   }
 
@@ -162,13 +170,15 @@ class _ProductFrameState extends State<ProductFrame> {
     }
 
     if (_selectedCategory != null) {
-      filtered =
-          filtered.where((p) => p.categoryId == _selectedCategory!.id).toList();
+      filtered = filtered
+          .where((p) => p.categoryId == _selectedCategory!.id)
+          .toList();
     }
 
     if (_selectedSupplier != null) {
-      filtered =
-          filtered.where((p) => p.supplierId == _selectedSupplier!.id).toList();
+      filtered = filtered
+          .where((p) => p.supplierId == _selectedSupplier!.id)
+          .toList();
     }
 
     if (_lowStockOnly) {
@@ -195,12 +205,24 @@ class _ProductFrameState extends State<ProductFrame> {
   void _showAddEditProductDialog([Product? product]) {
     final nameController = TextEditingController(text: product?.name ?? "");
     final skuController = TextEditingController(text: product?.sku ?? "");
-    final unitController = TextEditingController(text: product?.defaultUnit ?? "");
-    final costController = TextEditingController(text: product?.costPrice.toString() ?? "");
-    final sellController = TextEditingController(text: product?.sellPrice.toString() ?? "");
-    final quantityController = TextEditingController(text: product?.quantity.toString() ?? "");
-    final minStockController = TextEditingController(text: product?.minStock.toString() ?? "");
-    final descController = TextEditingController(text: product?.description ?? "");
+    final unitController = TextEditingController(
+      text: product?.defaultUnit ?? "",
+    );
+    final costController = TextEditingController(
+      text: product?.costPrice.toString() ?? "",
+    );
+    final sellController = TextEditingController(
+      text: product?.sellPrice.toString() ?? "",
+    );
+    final quantityController = TextEditingController(
+      text: product?.quantity.toString() ?? "",
+    );
+    final minStockController = TextEditingController(
+      text: product?.minStock.toString() ?? "",
+    );
+    final descController = TextEditingController(
+      text: product?.description ?? "",
+    );
     bool trackExpiry = product?.trackExpiry ?? false;
     String? selectedSupplierId = product?.supplierId;
     Category? selectedCategory = product != null
@@ -219,14 +241,42 @@ class _ProductFrameState extends State<ProductFrame> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: "Name")),
-                TextField(controller: skuController, decoration: const InputDecoration(labelText: "SKU")),
-                TextField(controller: unitController, decoration: const InputDecoration(labelText: "Default Unit")),
-                TextField(controller: costController, decoration: const InputDecoration(labelText: "Cost Price"), keyboardType: TextInputType.number),
-                TextField(controller: sellController, decoration: const InputDecoration(labelText: "Sell Price"), keyboardType: TextInputType.number),
-                TextField(controller: quantityController, decoration: const InputDecoration(labelText: "Quantity"), keyboardType: TextInputType.number),
-                TextField(controller: minStockController, decoration: const InputDecoration(labelText: "Min Stock"), keyboardType: TextInputType.number),
-                TextField(controller: descController, decoration: const InputDecoration(labelText: "Description")),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: "Name"),
+                ),
+                TextField(
+                  controller: skuController,
+                  decoration: const InputDecoration(labelText: "SKU"),
+                ),
+                TextField(
+                  controller: unitController,
+                  decoration: const InputDecoration(labelText: "Default Unit"),
+                ),
+                TextField(
+                  controller: costController,
+                  decoration: const InputDecoration(labelText: "Cost Price"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: sellController,
+                  decoration: const InputDecoration(labelText: "Sell Price"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: quantityController,
+                  decoration: const InputDecoration(labelText: "Quantity"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: minStockController,
+                  decoration: const InputDecoration(labelText: "Min Stock"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(labelText: "Description"),
+                ),
 
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -235,37 +285,52 @@ class _ProductFrameState extends State<ProductFrame> {
                     selectedItem: selectedCategory,
                     itemAsString: (c) => c.name,
                     compareFn: (a, b) => a.id == b.id,
-                    popupProps: PopupProps.menu(showSearchBox: true, fit: FlexFit.loose),
-                    decoratorProps: DropDownDecoratorProps(decoration: InputDecoration(labelText: "Category", border: OutlineInputBorder())),
-                    onChanged: (c) => setStateDialog(() => selectedCategory = c ?? _categories.firstWhere((x) => x.id == 'cat-001')),
+                    popupProps: PopupProps.menu(
+                      showSearchBox: true,
+                      fit: FlexFit.loose,
+                    ),
+                    decoratorProps: DropDownDecoratorProps(
+                      decoration: InputDecoration(
+                        labelText: "Category",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    onChanged: (c) => setStateDialog(
+                      () => selectedCategory =
+                          c ?? _categories.firstWhere((x) => x.id == 'cat-001'),
+                    ),
                   ),
                 ),
 
                 Padding(
-  padding: const EdgeInsets.symmetric(vertical: 8),
-  child: DropdownSearch<Supplier>(
-    items: (filter, _) => _suppliers,
-    selectedItem: _suppliers.firstWhere(
-      (s) => s.id == selectedSupplierId,
-      orElse: () => _suppliers.first,
-    ),
-    itemAsString: (s) => s.name,
-    compareFn: (a, b) => a.id == b.id,
-    popupProps: PopupProps.menu(showSearchBox: true),
-    decoratorProps: DropDownDecoratorProps(
-      decoration: const InputDecoration(
-        labelText: "Supplier",
-        border: OutlineInputBorder(),
-      ),
-    ),
-    onChanged: (s) => setStateDialog(() => selectedSupplierId = s?.id),
-  ),
-),
-
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: DropdownSearch<Supplier>(
+                    items: (filter, _) => _suppliers,
+                    selectedItem: _suppliers.firstWhere(
+                      (s) => s.id == selectedSupplierId,
+                      orElse: () => _suppliers.first,
+                    ),
+                    itemAsString: (s) => s.name,
+                    compareFn: (a, b) => a.id == b.id,
+                    popupProps: PopupProps.menu(showSearchBox: true),
+                    decoratorProps: DropDownDecoratorProps(
+                      decoration: const InputDecoration(
+                        labelText: "Supplier",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    onChanged: (s) =>
+                        setStateDialog(() => selectedSupplierId = s?.id),
+                  ),
+                ),
 
                 Row(
                   children: [
-                    Checkbox(value: trackExpiry, onChanged: (val) => setStateDialog(() => trackExpiry = val ?? false)),
+                    Checkbox(
+                      value: trackExpiry,
+                      onChanged: (val) =>
+                          setStateDialog(() => trackExpiry = val ?? false),
+                    ),
                     const Text("Track Expiry"),
                   ],
                 ),
@@ -276,7 +341,9 @@ class _ProductFrameState extends State<ProductFrame> {
             ElevatedButton(
               onPressed: () async {
                 final newProduct = Product(
-                  id: product?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                  id:
+                      product?.id ??
+                      DateTime.now().millisecondsSinceEpoch.toString(),
                   name: nameController.text,
                   description: descController.text,
                   sku: skuController.text,
@@ -286,9 +353,12 @@ class _ProductFrameState extends State<ProductFrame> {
                   quantity: int.tryParse(quantityController.text) ?? 0,
                   minStock: int.tryParse(minStockController.text) ?? 0,
                   trackExpiry: trackExpiry,
-                 supplierId: (selectedSupplierId == "all") ? null : selectedSupplierId,
+                  supplierId: (selectedSupplierId == "all")
+                      ? null
+                      : selectedSupplierId,
                   categoryId: selectedCategory?.id ?? 'cat-001',
-                  createdAt: product?.createdAt ?? DateTime.now().toIso8601String(),
+                  createdAt:
+                      product?.createdAt ?? DateTime.now().toIso8601String(),
                   updatedAt: DateTime.now().toIso8601String(),
                 );
 
@@ -303,7 +373,10 @@ class _ProductFrameState extends State<ProductFrame> {
               },
               child: Text(product == null ? "Add" : "Update"),
             ),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
           ],
         ),
       ),
@@ -314,15 +387,17 @@ class _ProductFrameState extends State<ProductFrame> {
   Widget build(BuildContext context) {
     final displayedProducts = _applyFilters(_products);
     if (_isLoading || _categories.isEmpty || _suppliers.isEmpty) {
-  return const Center(child: CircularProgressIndicator());
-}
-
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Products"),
         actions: [
-          IconButton(onPressed: () => _showAddEditProductDialog(), icon: const Icon(Icons.add)),
+          IconButton(
+            onPressed: () => _showAddEditProductDialog(),
+            icon: const Icon(Icons.add),
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(100),
@@ -366,8 +441,8 @@ class _ProductFrameState extends State<ProductFrame> {
                     // Supplier Filter with "All"
                     Expanded(
                       child: DropdownSearch<Supplier>(
-                        items:(filter , props) => _suppliers,
-                        selectedItem: _selectedSupplier ,
+                        items: (filter, props) => _suppliers,
+                        selectedItem: _selectedSupplier,
                         itemAsString: (s) => s.name,
                         compareFn: (a, b) => a?.id == b?.id,
                         onChanged: _onSupplierChanged,
@@ -385,7 +460,10 @@ class _ProductFrameState extends State<ProductFrame> {
                     Column(
                       children: [
                         const Text("Low Stock"),
-                        Checkbox(value: _lowStockOnly, onChanged: _onLowStockChanged),
+                        Checkbox(
+                          value: _lowStockOnly,
+                          onChanged: _onLowStockChanged,
+                        ),
                       ],
                     ),
                     const SizedBox(width: 8),
@@ -393,10 +471,14 @@ class _ProductFrameState extends State<ProductFrame> {
                     DropdownButton<ProductSortOption>(
                       value: _sortOption,
                       items: ProductSortOption.values
-                          .map((e) => DropdownMenuItem(
-                                value: e,
-                                child: Text(e.name[0].toUpperCase() + e.name.substring(1)),
-                              ))
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e,
+                              child: Text(
+                                e.name[0].toUpperCase() + e.name.substring(1),
+                              ),
+                            ),
+                          )
                           .toList(),
                       onChanged: _onSortOptionChanged,
                     ),
@@ -423,29 +505,54 @@ class _ProductFrameState extends State<ProductFrame> {
                 final p = displayedProducts[index];
                 final supplier = _suppliers.firstWhere(
                   (s) => s.id == p.supplierId,
-                  orElse: () => Supplier(id: "0", name: "Unlinked", phone: null, address: null, createdAt: "", updatedAt: ""),
+                  orElse: () => Supplier(
+                    id: "0",
+                    name: "Unlinked",
+                    phone: null,
+                    address: null,
+                    createdAt: "",
+                    updatedAt: "",
+                  ),
                 );
                 final category = _categories.firstWhere(
                   (c) => c.id == p.categoryId,
-                  orElse: () => Category(id: "0", name: "Uncategorized", createdAt: DateTime.now().toIso8601String(), updatedAt: DateTime.now().toIso8601String()),
+                  orElse: () => Category(
+                    id: "0",
+                    name: "Uncategorized",
+                    createdAt: DateTime.now().toIso8601String(),
+                    updatedAt: DateTime.now().toIso8601String(),
+                  ),
                 );
 
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   color: index.isEven ? Colors.blue.shade50 : Colors.white,
                   child: ListTile(
-                    title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text(
+                      p.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text("SKU: ${p.sku} | Unit: ${p.defaultUnit}"),
-                        Text("Category: ${category.name} | Supplier: ${supplier.name}"),
-                        Text("Cost: \$${p.costPrice.toStringAsFixed(2)} | Sell: \$${p.sellPrice.toStringAsFixed(2)}"),
+                        Text(
+                          "Category: ${category.name} | Supplier: ${supplier.name}",
+                        ),
+                        Text(
+                          "Cost: \$${p.costPrice.toStringAsFixed(2)} | Sell: \$${p.sellPrice.toStringAsFixed(2)}",
+                        ),
                         Text("Qty: ${p.quantity} | Min Stock: ${p.minStock}"),
                         Row(
                           children: [
                             const Text("Expiry tracked: "),
-                            Icon(p.trackExpiry ? Icons.check_circle : Icons.cancel, color: p.trackExpiry ? Colors.green : Colors.red),
+                            Icon(
+                              p.trackExpiry ? Icons.check_circle : Icons.cancel,
+                              color: p.trackExpiry ? Colors.green : Colors.red,
+                            ),
                           ],
                         ),
                       ],
@@ -453,7 +560,10 @@ class _ProductFrameState extends State<ProductFrame> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(icon: const Icon(Icons.edit), onPressed: () => _showAddEditProductDialog(p)),
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _showAddEditProductDialog(p),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete),
                           onPressed: () async {

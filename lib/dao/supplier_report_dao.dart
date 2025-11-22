@@ -9,7 +9,8 @@ class SupplierReportDao {
     required String startDate,
     required String endDate,
   }) async {
-    final data = await dbHelper.rawQuery("""
+    final data = await dbHelper.rawQuery(
+      """
       SELECT 
         s.id as supplier_id, 
         s.name as supplier_name, 
@@ -22,7 +23,9 @@ class SupplierReportDao {
       LEFT JOIN purchases p ON p.supplier_id = s.id
       WHERE p.date BETWEEN ? AND ?
       GROUP BY s.id, s.name, c.name
-    """, [startDate, endDate]);
+    """,
+      [startDate, endDate],
+    );
 
     return data.map((e) => SupplierReport.fromMap(e)).toList();
   }
@@ -32,7 +35,8 @@ class SupplierReportDao {
     required String startDate,
     required String endDate,
   }) async {
-    final data = await dbHelper.rawQuery("""
+    final data = await dbHelper.rawQuery(
+      """
       SELECT 
         c.id as supplier_id, 
         c.name as company_name,
@@ -45,14 +49,19 @@ class SupplierReportDao {
       LEFT JOIN purchases p ON p.supplier_id = s.id
       WHERE p.date BETWEEN ? AND ?
       GROUP BY c.id, c.name
-    """, [startDate, endDate]);
+    """,
+      [startDate, endDate],
+    );
 
     return data.map((e) => SupplierReport.fromMap(e)).toList();
   }
 
   /// 🔥 Combined method for repo (default: supplier-wise)
-  Future<List<SupplierReport>> getReports(String startDate, String endDate,
-      {bool byCompany = false}) async {
+  Future<List<SupplierReport>> getReports(
+    String startDate,
+    String endDate, {
+    bool byCompany = false,
+  }) async {
     if (byCompany) {
       return getCompanyReports(startDate: startDate, endDate: endDate);
     } else {
@@ -65,14 +74,15 @@ class SupplierReportDao {
     required String startDate,
     required String endDate,
   }) async {
-    final suppliers =
-        await getSupplierReports(startDate: startDate, endDate: endDate);
-    final companies =
-        await getCompanyReports(startDate: startDate, endDate: endDate);
+    final suppliers = await getSupplierReports(
+      startDate: startDate,
+      endDate: endDate,
+    );
+    final companies = await getCompanyReports(
+      startDate: startDate,
+      endDate: endDate,
+    );
 
-    return {
-      "suppliers": suppliers,
-      "companies": companies,
-    };
+    return {"suppliers": suppliers, "companies": companies};
   }
 }

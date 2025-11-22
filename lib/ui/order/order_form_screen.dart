@@ -55,8 +55,8 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     _paidController.addListener(() => setState(() {}));
 
     _qtyController.addListener(() {
-    setState(() {}); // rebuild to refresh button state
-  });
+      setState(() {}); // rebuild to refresh button state
+    });
   }
 
   @override
@@ -100,9 +100,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     if (_selectedProduct == null || _qtyController.text.isEmpty) return;
 
     if (!_products.any((p) => p.id == _selectedProduct?.id)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid product selected")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Invalid product selected")));
       return;
     }
 
@@ -185,8 +185,14 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         title: const Text("Remove Item?"),
         content: const Text("Do you want to remove this item from the order?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Remove")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Remove"),
+          ),
         ],
       ),
     );
@@ -197,11 +203,13 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final batchDao = ProductBatchDao(db);
 
     if (item.reservedBatches != null) {
-      await Future.wait(item.reservedBatches!.map((batchInfo) async {
-        final batchId = batchInfo['batchId'] as String;
-        final qty = (batchInfo['qty'] as num).toInt();
-        await batchDao.addBackToBatch(batchId, qty);
-      }));
+      await Future.wait(
+        item.reservedBatches!.map((batchInfo) async {
+          final batchId = batchInfo['batchId'] as String;
+          final qty = (batchInfo['qty'] as num).toInt();
+          await batchDao.addBackToBatch(batchId, qty);
+        }),
+      );
     }
 
     setState(() => _items.remove(item));
@@ -211,7 +219,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   Future<void> _saveOrder() async {
     if (_selectedCustomer == null || _items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a customer and add at least one item")),
+        const SnackBar(
+          content: Text("Please select a customer and add at least one item"),
+        ),
       );
       return;
     }
@@ -256,7 +266,10 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         await productDao.refreshProductQuantityFromBatches(item.productId);
       }
 
-      await customerDao.updatePendingAmount(_selectedCustomer!.id, invoice.pending);
+      await customerDao.updatePendingAmount(
+        _selectedCustomer!.id,
+        invoice.pending,
+      );
     });
 
     Navigator.pop(context);
@@ -278,12 +291,22 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: "Customer Name")),
-            TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Phone Number")),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Customer Name"),
+            ),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: "Phone Number"),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
@@ -342,39 +365,44 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Select Customer", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Select Customer",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
                               child: DropdownSearch<Customer>(
-  items:(items, props)=> _customers,
-  selectedItem: _selectedCustomer,
-  compareFn: (a, b) => a.id == b.id,
-  itemAsString: (c) => c.name,
-  popupProps: PopupProps.modalBottomSheet(
-    showSearchBox: true,
-    searchFieldProps: TextFieldProps(
-      decoration: const InputDecoration(
-        labelText: "Search Customer",
-        border: OutlineInputBorder(),
-      ),
-    ),
-  ),
-  decoratorProps: const DropDownDecoratorProps(
-    decoration: InputDecoration(
-      labelText: "Customer",
-      border: OutlineInputBorder(),
-    ),
-  ),
-  onChanged: (val) {
-    setState(() => _selectedCustomer = val);
-  },
-),
-
+                                items: (items, props) => _customers,
+                                selectedItem: _selectedCustomer,
+                                compareFn: (a, b) => a.id == b.id,
+                                itemAsString: (c) => c.name,
+                                popupProps: PopupProps.modalBottomSheet(
+                                  showSearchBox: true,
+                                  searchFieldProps: TextFieldProps(
+                                    decoration: const InputDecoration(
+                                      labelText: "Search Customer",
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                decoratorProps: const DropDownDecoratorProps(
+                                  decoration: InputDecoration(
+                                    labelText: "Customer",
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                                onChanged: (val) {
+                                  setState(() => _selectedCustomer = val);
+                                },
+                              ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.add_circle, color: Colors.blue),
+                              icon: const Icon(
+                                Icons.add_circle,
+                                color: Colors.blue,
+                              ),
                               onPressed: _showAddCustomerDialog,
                             ),
                           ],
@@ -384,7 +412,10 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               "Pending: ${_selectedCustomer!.pendingAmount.toStringAsFixed(2)}",
-                              style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.orange,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                       ],
@@ -401,38 +432,40 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Add Product", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Add Product",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
                               flex: 2,
                               child: DropdownSearch<Product>(
-  items:(items, props)=> _products,
-  selectedItem: _selectedProduct,
-  compareFn: (a, b) => a.id == b.id,
-  itemAsString: (p) => p.name,
-  popupProps: PopupProps.modalBottomSheet(
-    showSearchBox: true,
-    searchFieldProps: TextFieldProps(
-      decoration: const InputDecoration(
-        labelText: "Search Product",
-        border: OutlineInputBorder(),
-      ),
-    ),
-  ),
-  decoratorProps: const DropDownDecoratorProps(
-    decoration: InputDecoration(
-      labelText: "Product",
-      border: OutlineInputBorder(),
-    ),
-  ),
-  onChanged: (val) async {
-    setState(() => _selectedProduct = val);
-    await _loadAvailableStock();
-  },
-)
-,
+                                items: (items, props) => _products,
+                                selectedItem: _selectedProduct,
+                                compareFn: (a, b) => a.id == b.id,
+                                itemAsString: (p) => p.name,
+                                popupProps: PopupProps.modalBottomSheet(
+                                  showSearchBox: true,
+                                  searchFieldProps: TextFieldProps(
+                                    decoration: const InputDecoration(
+                                      labelText: "Search Product",
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                decoratorProps: const DropDownDecoratorProps(
+                                  decoration: InputDecoration(
+                                    labelText: "Product",
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                                onChanged: (val) async {
+                                  setState(() => _selectedProduct = val);
+                                  await _loadAvailableStock();
+                                },
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -440,10 +473,15 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                               child: TextFormField(
                                 controller: _qtyController,
                                 keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                decoration: const InputDecoration(labelText: "Qty"),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                decoration: const InputDecoration(
+                                  labelText: "Qty",
+                                ),
                                 validator: (val) {
-                                  if (val == null || val.isEmpty) return "Enter quantity";
+                                  if (val == null || val.isEmpty)
+                                    return "Enter quantity";
                                   final q = int.tryParse(val);
                                   if (q == null || q <= 0) return "Invalid qty";
                                   return null;
@@ -451,11 +489,16 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                               ),
                             ),
                             IconButton(
-                                    icon: const Icon(Icons.add_circle, color: Colors.green),
-                                    onPressed: (_selectedProduct != null && _qtyController.text.isNotEmpty)
-                                        ? _addItem
-                                        : null,
-                                  ),
+                              icon: const Icon(
+                                Icons.add_circle,
+                                color: Colors.green,
+                              ),
+                              onPressed:
+                                  (_selectedProduct != null &&
+                                      _qtyController.text.isNotEmpty)
+                                  ? _addItem
+                                  : null,
+                            ),
                           ],
                         ),
                         if (_selectedProduct != null)
@@ -464,7 +507,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                             child: Text(
                               "Available Stock: $_availableStock | Price: ${_selectedProduct!.sellPrice}",
                               style: TextStyle(
-                                color: _availableStock > 0 ? Colors.green : Colors.red,
+                                color: _availableStock > 0
+                                    ? Colors.green
+                                    : Colors.red,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -483,21 +528,33 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         children: _items.map((item) {
-                          final product = _products.firstWhere((p) => p.id == item.productId);
+                          final product = _products.firstWhere(
+                            (p) => p.id == item.productId,
+                          );
                           return ListTile(
-                            title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            title: Text(
+                              product.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text("Qty: ${item.qty} × ${item.price}"),
-                                if (item.reservedBatches != null && item.reservedBatches!.isNotEmpty)
+                                if (item.reservedBatches != null &&
+                                    item.reservedBatches!.isNotEmpty)
                                   Wrap(
                                     spacing: 4,
                                     runSpacing: 4,
                                     children: item.reservedBatches!
-                                        .map((b) => Chip(
-                                              label: Text("${b['batchId'].substring(0, 6)}(${b['qty']})"),
-                                            ))
+                                        .map(
+                                          (b) => Chip(
+                                            label: Text(
+                                              "${b['batchId'].substring(0, 6)}(${b['qty']})",
+                                            ),
+                                          ),
+                                        )
                                         .toList(),
                                   ),
                               ],
@@ -521,23 +578,41 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Total: $_total", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(
+                          "Total: $_total",
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _discountController,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          decoration: const InputDecoration(labelText: "Discount"),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: "Discount",
+                          ),
                         ),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _paidController,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
                           decoration: const InputDecoration(labelText: "Paid"),
                         ),
                         const SizedBox(height: 8),
-                        Text("Pending: $_pending", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                        Text(
+                          "Pending: $_pending",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -545,7 +620,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                   onPressed: _saveOrder,
                   icon: const Icon(Icons.save),
                   label: const Text("Save Order"),

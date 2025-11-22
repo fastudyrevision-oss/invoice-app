@@ -2,9 +2,8 @@ import 'package:sqflite/sqflite.dart';
 import '../models/purchase.dart';
 
 class PurchaseDao {
-    final DatabaseExecutor db;
-    PurchaseDao(this.db);
-
+  final DatabaseExecutor db;
+  PurchaseDao(this.db);
 
   Future<void> insertPurchase(Purchase purchase) async {
     await db.insert(
@@ -15,7 +14,11 @@ class PurchaseDao {
   }
 
   Future<Purchase?> getPurchaseById(String id) async {
-    final result = await db.query("purchases", where: "id = ?", whereArgs: [id]);
+    final result = await db.query(
+      "purchases",
+      where: "id = ?",
+      whereArgs: [id],
+    );
     if (result.isNotEmpty) {
       return Purchase.fromMap(result.first);
     }
@@ -25,8 +28,7 @@ class PurchaseDao {
   Future<List<Purchase>> getAllPurchases() async {
     final result = await db.query("purchases", orderBy: "date DESC");
     return result.map<Purchase>((row) => Purchase.fromMap(row)).toList();
-    }
-
+  }
 
   Future<int> updatePurchase(Purchase purchase) async {
     return await db.update(

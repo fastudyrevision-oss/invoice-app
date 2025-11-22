@@ -3,22 +3,22 @@ class SupplierCompany {
   final String name;
   final String? address;
   final String? phone;
-  final String? notes;       // ✅ new field
+  final String? notes; // ✅ new field
   final String createdAt;
   final String updatedAt;
   final bool isSynced;
-  final int deleted;          // 0 = active, 1 = deleted
+  final int deleted; // 0 = active, 1 = deleted
 
   SupplierCompany({
     required this.id,
     required this.name,
     this.address,
     this.phone,
-    this.notes,              // ✅ constructor
+    this.notes, // ✅ constructor
     required this.createdAt,
     required this.updatedAt,
     this.isSynced = false,
-    this.deleted = 0,        // default is active
+    this.deleted = 0, // default is active
   });
 
   Map<String, dynamic> toMap() {
@@ -27,11 +27,11 @@ class SupplierCompany {
       "name": name,
       "address": address,
       "phone": phone,
-      "notes": notes,         // ✅ include
+      "notes": notes, // ✅ include
       "created_at": createdAt,
       "updated_at": updatedAt,
       "is_synced": isSynced ? 1 : 0,
-      "deleted": deleted,      // ✅ include
+      "deleted": deleted, // ✅ include
     };
   }
 
@@ -41,7 +41,7 @@ class SupplierCompany {
       name: map["name"],
       address: map["address"],
       phone: map["phone"],
-      notes: map["notes"],    // ✅ parse
+      notes: map["notes"], // ✅ parse
       createdAt: map["created_at"],
       updatedAt: map["updated_at"],
       isSynced: map["is_synced"] == 1,
@@ -59,7 +59,7 @@ class SupplierCompany {
     String? createdAt,
     String? updatedAt,
     bool? isSynced,
-    int? deleted,             // ✅ add deleted to copyWith
+    int? deleted, // ✅ add deleted to copyWith
   }) {
     return SupplierCompany(
       id: id ?? this.id,

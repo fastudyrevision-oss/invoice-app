@@ -55,14 +55,19 @@ class CategoryDao {
     );
     return res.map((e) => Category.fromMap(e)).toList();
   }
-  Future<List<Category>> getAllPaged(int offset, int limit, {bool includeDeleted = false}) async {
+
+  Future<List<Category>> getAllPaged(
+    int offset,
+    int limit, {
+    bool includeDeleted = false,
+  }) async {
     final res = await db.query(
       'categories',
       where: includeDeleted ? null : 'is_deleted = 0',
       orderBy: 'sort_order ASC, name ASC',
       limit: limit,
       offset: offset,
-    ); 
-    return res.map((e) => Category.fromMap(e)).toList();   
+    );
+    return res.map((e) => Category.fromMap(e)).toList();
   }
 }

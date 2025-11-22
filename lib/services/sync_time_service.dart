@@ -19,13 +19,9 @@ class SyncTimeService {
 
   Future<void> setLastSync(String table, DateTime time) async {
     final db = await dbHelper.db;
-    await db.insert(
-      'sync_meta',
-      {
-        'table_name': table,
-        'last_synced_at': time.toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('sync_meta', {
+      'table_name': table,
+      'last_synced_at': time.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }

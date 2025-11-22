@@ -65,13 +65,17 @@ class _CustomerFrameState extends State<CustomerFrame> {
 
   void _sortCustomers() {
     if (_sortMode == SortMode.name) {
-      _filteredCustomers.sort((a, b) => _sortAscending
-          ? a.name.toLowerCase().compareTo(b.name.toLowerCase())
-          : b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+      _filteredCustomers.sort(
+        (a, b) => _sortAscending
+            ? a.name.toLowerCase().compareTo(b.name.toLowerCase())
+            : b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+      );
     } else if (_sortMode == SortMode.pending) {
-      _filteredCustomers.sort((a, b) => _sortAscending
-          ? a.pendingAmount.compareTo(b.pendingAmount)
-          : b.pendingAmount.compareTo(a.pendingAmount));
+      _filteredCustomers.sort(
+        (a, b) => _sortAscending
+            ? a.pendingAmount.compareTo(b.pendingAmount)
+            : b.pendingAmount.compareTo(a.pendingAmount),
+      );
     }
   }
 
@@ -111,14 +115,17 @@ class _CustomerFrameState extends State<CustomerFrame> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Name")),
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Name"),
+            ),
             TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: "Phone")),
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: "Phone"),
+            ),
             TextField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: "Email")),
+              controller: emailController,
+              decoration: const InputDecoration(labelText: "Email"),
+            ),
           ],
         ),
         actions: [
@@ -140,7 +147,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
             child: const Text("Add"),
           ),
           TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
         ],
       ),
     );
@@ -159,14 +168,17 @@ class _CustomerFrameState extends State<CustomerFrame> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Name")),
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Name"),
+            ),
             TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: "Phone")),
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: "Phone"),
+            ),
             TextField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: "Email")),
+              controller: emailController,
+              decoration: const InputDecoration(labelText: "Email"),
+            ),
           ],
         ),
         actions: [
@@ -189,7 +201,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
             child: const Text("Update"),
           ),
           TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
         ],
       ),
     );
@@ -211,7 +225,10 @@ class _CustomerFrameState extends State<CustomerFrame> {
               decoration: const InputDecoration(labelText: "Amount"),
               keyboardType: TextInputType.number,
             ),
-            TextField(controller: noteController, decoration: const InputDecoration(labelText: "Note")),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: "Note"),
+            ),
           ],
         ),
         actions: [
@@ -231,7 +248,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
             child: const Text("Add Payment"),
           ),
           TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
         ],
       ),
     );
@@ -244,7 +263,10 @@ class _CustomerFrameState extends State<CustomerFrame> {
       appBar: AppBar(
         title: const Text("Customers"),
         actions: [
-          IconButton(onPressed: _showAddCustomerDialog, icon: const Icon(Icons.add)),
+          IconButton(
+            onPressed: _showAddCustomerDialog,
+            icon: const Icon(Icons.add),
+          ),
         ],
       ),
       body: _isLoading
@@ -282,7 +304,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: Card(
                     elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
@@ -312,7 +336,11 @@ class _CustomerFrameState extends State<CustomerFrame> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(_sortAscending ? Icons.arrow_downward : Icons.arrow_upward),
+                            icon: Icon(
+                              _sortAscending
+                                  ? Icons.arrow_downward
+                                  : Icons.arrow_upward,
+                            ),
                             onPressed: () {
                               setState(() {
                                 _sortAscending = !_sortAscending;
@@ -337,8 +365,13 @@ class _CustomerFrameState extends State<CustomerFrame> {
                         final customer = _filteredCustomers[index];
 
                         return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           elevation: 2,
                           child: Padding(
                             padding: const EdgeInsets.all(12.0),
@@ -348,14 +381,21 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                 // Customer info
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(customer.name,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold, fontSize: 16)),
+                                      Text(
+                                        customer.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
                                       const SizedBox(height: 4),
-                                      Text("${customer.phone}\n${customer.email ?? ''}",
-                                          style: const TextStyle(fontSize: 14)),
+                                      Text(
+                                        "${customer.phone}\n${customer.email ?? ''}",
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -366,8 +406,11 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                   children: [
                                     // Pending amount chip
                                     Chip(
-                                      label: Text("\$${customer.pendingAmount.toStringAsFixed(2)}"),
-                                      backgroundColor: customer.pendingAmount > 0
+                                      label: Text(
+                                        "\$${customer.pendingAmount.toStringAsFixed(2)}",
+                                      ),
+                                      backgroundColor:
+                                          customer.pendingAmount > 0
                                           ? Colors.red.shade100
                                           : Colors.green.shade100,
                                       labelStyle: TextStyle(
@@ -393,7 +436,8 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                         IconButton(
                                           icon: const Icon(Icons.edit),
                                           tooltip: "Edit Customer",
-                                          onPressed: () => _showEditCustomerDialog(customer),
+                                          onPressed: () =>
+                                              _showEditCustomerDialog(customer),
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(),
                                         ),
@@ -401,7 +445,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                           icon: const Icon(Icons.delete),
                                           tooltip: "Delete Customer",
                                           onPressed: () async {
-                                            await _repo!.deleteCustomer(customer.id);
+                                            await _repo!.deleteCustomer(
+                                              customer.id,
+                                            );
                                             await _loadCustomers();
                                           },
                                           padding: EdgeInsets.zero,
@@ -410,7 +456,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                       ],
                                     ),
                                   ],
-                                )
+                                ),
                               ],
                             ),
                           ),

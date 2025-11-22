@@ -10,7 +10,7 @@ class Product {
   final int minStock;
   final bool trackExpiry;
   final String? supplierId;
-  
+
   final String createdAt;
   final String updatedAt;
   final bool isDeleted; // ✅ NEW field
@@ -66,7 +66,7 @@ class Product {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isDeleted: isDeleted ?? this.isDeleted,
-       categoryId: categoryId ?? this.categoryId, // NEW
+      categoryId: categoryId ?? this.categoryId, // NEW
     );
   }
 
@@ -86,7 +86,7 @@ class Product {
       "created_at": createdAt,
       "updated_at": updatedAt,
       "is_deleted": isDeleted ? 1 : 0, // ✅ store as integer
-      'category_id':categoryId, // NEW
+      'category_id': categoryId, // NEW
     };
   }
 

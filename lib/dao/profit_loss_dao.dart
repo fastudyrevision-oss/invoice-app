@@ -4,7 +4,10 @@ import '../models/profit_loss_report.dart';
 class ProfitLossDao {
   final dbHelper = DatabaseHelper();
 
-  Future<ProfitLossReport> generateReport(String startDate, String endDate) async {
+  Future<ProfitLossReport> generateReport(
+    String startDate,
+    String endDate,
+  ) async {
     // --- Total Sales (Invoices) ---
     final salesData = await dbHelper.rawQuery(
       "SELECT SUM(total) as total_sales FROM invoices WHERE date BETWEEN ? AND ?",
@@ -13,14 +16,17 @@ class ProfitLossDao {
     double totalSales = salesData.first["total_sales"] ?? 0.0;
 
     // --- COGS (Purchase Price × Qty sold) ---
-    final cogsData = await dbHelper.rawQuery("""
+    final cogsData = await dbHelper.rawQuery(
+      """
       SELECT SUM(ii.qty * pi.purchase_price) as total_cogs
       FROM invoice_items ii
       JOIN purchase_items pi ON ii.product_id = pi.product_id
       WHERE ii.invoice_id IN (
         SELECT id FROM invoices WHERE date BETWEEN ? AND ?
       )
-    """, [startDate, endDate]);
+    """,
+      [startDate, endDate],
+    );
     double totalCOGS = cogsData.first["total_cogs"] ?? 0.0;
 
     // --- Expenses ---

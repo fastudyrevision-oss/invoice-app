@@ -26,11 +26,7 @@ class CustomerDao {
 
   /// Get customer by ID
   Future<Customer?> getCustomerById(String id) async {
-    final data = await db.query(
-      "customers",
-      where: "id = ?",
-      whereArgs: [id],
-    );
+    final data = await db.query("customers", where: "id = ?", whereArgs: [id]);
     return data.isNotEmpty ? Customer.fromMap(data.first) : null;
   }
 
@@ -46,15 +42,14 @@ class CustomerDao {
 
   /// Delete a customer
   Future<int> deleteCustomer(String id) async {
-    return await db.delete(
-      "customers",
-      where: "id = ?",
-      whereArgs: [id],
-    );
+    return await db.delete("customers", where: "id = ?", whereArgs: [id]);
   }
 
   /// Safely update a customer's pending amount
-  Future<void> updatePendingAmount(String customerId, double pendingToAdd) async {
+  Future<void> updatePendingAmount(
+    String customerId,
+    double pendingToAdd,
+  ) async {
     if (customerId.isEmpty) return; // safety check
 
     // Fetch current pending amount

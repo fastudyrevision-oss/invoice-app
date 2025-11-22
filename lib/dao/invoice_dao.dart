@@ -3,17 +3,13 @@ import 'package:sqflite/sqflite.dart';
 
 class InvoiceDao {
   final DatabaseExecutor db;
-InvoiceDao(this.db);
+  InvoiceDao(this.db);
 
   // =========================
   // INSERT
   // =========================
   Future<int> insert(Invoice invoice, String customerName) async {
-  
-
-  return await db.insert(
-    "invoices",
-    {
+    return await db.insert("invoices", {
       "id": invoice.id,
       "customer_id": invoice.customerId,
       "customer_name": customerName, // <-- provide the name here
@@ -24,26 +20,23 @@ InvoiceDao(this.db);
       "date": invoice.date,
       "created_at": invoice.createdAt,
       "updated_at": invoice.updatedAt,
-    },
-    conflictAlgorithm: ConflictAlgorithm.replace
-  );
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // =========================
   // GET ALL (simple)
   // =========================
   Future<List<Invoice>> getAll() async {
-    
     final res = await db.query('invoices');
     return res.map((e) => Invoice.fromMap(e)).toList();
   }
 
   // =========================
   // =========================
-// GET ALL WITH CUSTOMER NAME (for list screen)
-// =========================
+  // GET ALL WITH CUSTOMER NAME (for list screen)
+  // =========================
   Future<List<Invoice>> getAllInvoices() async {
-     // use txn if provided
+    // use txn if provided
 
     final data = await db.rawQuery('''
       SELECT i.*, c.name as customer_name
@@ -62,18 +55,19 @@ InvoiceDao(this.db);
     return invoices;
   }
 
-
   // =========================
   // GET BY ID
   // =========================
   Future<Invoice?> getById(String id) async {
-    
-    final res = await db.rawQuery('''
+    final res = await db.rawQuery(
+      '''
       SELECT i.*, c.name as customer_name
       FROM invoices i
       LEFT JOIN customers c ON i.customer_id = c.id
       WHERE i.id = ?
-    ''', [id]);
+    ''',
+      [id],
+    );
 
     if (res.isNotEmpty) {
       final invoice = Invoice.fromMap(res.first);
@@ -87,7 +81,6 @@ InvoiceDao(this.db);
   // UPDATE
   // =========================
   Future<int> update(Invoice invoice) async {
-   
     return await db.update(
       'invoices',
       invoice.toMap(),
@@ -97,10 +90,23 @@ InvoiceDao(this.db);
   }
 
   // =========================
+  // GET PENDING BY CUSTOMER
+  // =========================
+  Future<List<Invoice>> getPendingByCustomerId(String customerId) async {
+    final data = await db.query(
+      'invoices',
+      where: 'customer_id = ? AND pending > 0',
+      whereArgs: [customerId],
+      orderBy: 'date ASC',
+    );
+
+    return data.map<Invoice>((e) => Invoice.fromMap(e)).toList();
+  }
+
+  // =========================
   // DELETE
   // =========================
   Future<int> delete(String id) async {
-    
     return await db.delete('invoices', where: 'id = ?', whereArgs: [id]);
   }
 }

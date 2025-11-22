@@ -28,17 +28,16 @@ class _SupplierFrameState extends State<SupplierFrame> {
   int _currentPage = 0;
   final int _pageSize = 10;
   final ScrollController _scrollController = ScrollController();
- // Dummy "All Companies" option
+  // Dummy "All Companies" option
   late final SupplierCompany allCompaniesOption;
   // Payment status filter: null = All, true = Pending, false = Paid
   bool? _pendingFilter;
-    // Controllers for credit limit range
+  // Controllers for credit limit range
   final TextEditingController _minCreditCtrl = TextEditingController();
   final TextEditingController _maxCreditCtrl = TextEditingController();
 
   final TextEditingController _minPendingCtrl = TextEditingController();
-final TextEditingController _maxPendingCtrl = TextEditingController();
-
+  final TextEditingController _maxPendingCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -69,8 +68,6 @@ final TextEditingController _maxPendingCtrl = TextEditingController();
   }
 
   Future<void> _loadNextPage() async {
-    
-
     if (_isLoading || !_hasMore) return;
 
     setState(() => _isLoading = true);
@@ -84,13 +81,17 @@ final TextEditingController _maxPendingCtrl = TextEditingController();
 
     // Apply filters
     final filtered = nextPage.where((s) {
-      final minCredit = double.tryParse(_minCreditCtrl.text) ?? double.negativeInfinity;
-final maxCredit = double.tryParse(_maxCreditCtrl.text) ?? double.infinity;
-if (s.creditLimit < minCredit || s.creditLimit > maxCredit) return false;
+      final minCredit =
+          double.tryParse(_minCreditCtrl.text) ?? double.negativeInfinity;
+      final maxCredit = double.tryParse(_maxCreditCtrl.text) ?? double.infinity;
+      if (s.creditLimit < minCredit || s.creditLimit > maxCredit) return false;
 
-final minPending = double.tryParse(_minPendingCtrl.text) ?? double.negativeInfinity;
-final maxPending = double.tryParse(_maxPendingCtrl.text) ?? double.infinity;
-if (s.pendingAmount < minPending || s.pendingAmount > maxPending) return false;
+      final minPending =
+          double.tryParse(_minPendingCtrl.text) ?? double.negativeInfinity;
+      final maxPending =
+          double.tryParse(_maxPendingCtrl.text) ?? double.infinity;
+      if (s.pendingAmount < minPending || s.pendingAmount > maxPending)
+        return false;
 
       // Company filter
       if (_selectedCompany != null && _selectedCompany!.id != "-1") {
@@ -123,7 +124,8 @@ if (s.pendingAmount < minPending || s.pendingAmount > maxPending) return false;
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SupplierFormFrame(repo: widget.repo, supplier: supplier),
+        builder: (_) =>
+            SupplierFormFrame(repo: widget.repo, supplier: supplier),
       ),
     );
     if (result == true) _resetAndLoad();
@@ -136,80 +138,85 @@ if (s.pendingAmount < minPending || s.pendingAmount > maxPending) return false;
         title: const Text("Delete Supplier"),
         content: Text("Are you sure you want to delete '${supplier.name}'?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
         ],
       ),
     );
     if (confirmed == true) {
-  await widget.repo.deleteSupplier(supplier.id); // <- actually delete
-  _resetAndLoad();
-}
+      await widget.repo.deleteSupplier(supplier.id); // <- actually delete
+      _resetAndLoad();
+    }
   }
 
   Future<void> _restoreSupplier(Supplier supplier) async {
     await widget.repo.restoreSupplier(supplier.id);
     _resetAndLoad();
   }
-// --- Credit Limit Range Filter ---
-Widget _buildCreditLimitFilter() {
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      SizedBox(
-        width: 80,
-        child: TextField(
-          controller: _minCreditCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "Min Pending"),
-          onSubmitted: (_) => _resetAndLoad(),
-        ),
-      ),
-      const SizedBox(width: 4),
-      SizedBox(
-        width: 80,
-        child: TextField(
-          controller: _maxCreditCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "Max Pending"),
-          onSubmitted: (_) => _resetAndLoad(),
-        ),
-      ),
-    ],
-  );
-}
 
-// --- Credit Limit Range Filter ---
-Widget _buildPendingLimitFilter() {
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      SizedBox(
-        width: 80,
-        child: TextField(
-          controller: _minPendingCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "Min Credit"),
-          onSubmitted: (_) => _resetAndLoad(),
+  // --- Credit Limit Range Filter ---
+  Widget _buildCreditLimitFilter() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 80,
+          child: TextField(
+            controller: _minCreditCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: "Min Pending"),
+            onSubmitted: (_) => _resetAndLoad(),
+          ),
         ),
-      ),
-      const SizedBox(width: 4),
-      SizedBox(
-        width: 80,
-        child: TextField(
-          controller: _maxPendingCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "Max Credit"),
-          onSubmitted: (_) => _resetAndLoad(),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 80,
+          child: TextField(
+            controller: _maxCreditCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: "Max Pending"),
+            onSubmitted: (_) => _resetAndLoad(),
+          ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
+
+  // --- Credit Limit Range Filter ---
+  Widget _buildPendingLimitFilter() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 80,
+          child: TextField(
+            controller: _minPendingCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: "Min Credit"),
+            onSubmitted: (_) => _resetAndLoad(),
+          ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 80,
+          child: TextField(
+            controller: _maxPendingCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: "Max Credit"),
+            onSubmitted: (_) => _resetAndLoad(),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildFilterSection() {
-    
-
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -219,8 +226,8 @@ Widget _buildPendingLimitFilter() {
               // Company DropdownSearch
               Expanded(
                 child: DropdownSearch<SupplierCompany>(
-                  items: (filter , props) => _companies,
-                  selectedItem: _selectedCompany ?? allCompaniesOption ,
+                  items: (filter, props) => _companies,
+                  selectedItem: _selectedCompany ?? allCompaniesOption,
                   itemAsString: (c) => c.name,
                   compareFn: (a, b) => a.id == b.id,
                   popupProps: PopupProps.menu(
@@ -258,13 +265,20 @@ Widget _buildPendingLimitFilter() {
                         title: const Text("Search Supplier"),
                         content: TextField(
                           controller: ctrl,
-                          decoration: const InputDecoration(labelText: "Name or Phone"),
+                          decoration: const InputDecoration(
+                            labelText: "Name or Phone",
+                          ),
                         ),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
                           TextButton(
-                              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                              child: const Text("Search")),
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text("Cancel"),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(ctx, ctrl.text.trim()),
+                            child: const Text("Search"),
+                          ),
                         ],
                       );
                     },
@@ -286,8 +300,8 @@ Widget _buildPendingLimitFilter() {
                   initialValue: _pendingFilter == null
                       ? "All"
                       : _pendingFilter == true
-                          ? "Pending"
-                          : "Paid",
+                      ? "Pending"
+                      : "Paid",
                   items: const [
                     DropdownMenuItem(value: "All", child: Text("All")),
                     DropdownMenuItem(value: "Pending", child: Text("Pending")),
@@ -301,17 +315,19 @@ Widget _buildPendingLimitFilter() {
                     setState(() {
                       if (v == "Pending") {
                         _pendingFilter = true;
-                      } else if (v == "Paid") _pendingFilter = false;
-                      else _pendingFilter = null;
+                      } else if (v == "Paid")
+                        _pendingFilter = false;
+                      else
+                        _pendingFilter = null;
                       _resetAndLoad();
                     });
                   },
                 ),
               ),
               const SizedBox(width: 8),
-        _buildCreditLimitFilter(),
-         const SizedBox(width: 8),
-        _buildPendingLimitFilter(),
+              _buildCreditLimitFilter(),
+              const SizedBox(width: 8),
+              _buildPendingLimitFilter(),
               // TODO: Add range filter / additional filters if needed
             ],
           ),
@@ -335,7 +351,9 @@ Widget _buildPendingLimitFilter() {
           ),
           actions: [
             IconButton(
-              icon: Icon(_showDeleted ? Icons.visibility_off : Icons.visibility),
+              icon: Icon(
+                _showDeleted ? Icons.visibility_off : Icons.visibility,
+              ),
               tooltip: _showDeleted ? "Hide Deleted" : "Show Deleted",
               onPressed: () {
                 setState(() {
@@ -366,7 +384,9 @@ Widget _buildPendingLimitFilter() {
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Text("Load More"),
                           ),
@@ -377,7 +397,9 @@ Widget _buildPendingLimitFilter() {
                       final isDeleted = supplier.deleted == 1;
 
                       return Card(
-                        color: isDeleted ? const Color.fromARGB(255, 204, 93, 93) : null,
+                        color: isDeleted
+                            ? const Color.fromARGB(255, 204, 93, 93)
+                            : null,
                         child: ListTile(
                           leading: CircleAvatar(child: Text("${index + 1}")),
                           title: Text(supplier.name),
@@ -393,13 +415,27 @@ Widget _buildPendingLimitFilter() {
                                 onSelected: (value) {
                                   if (value == 'edit') {
                                     _editSupplier(supplier);
-                                  } else if (value == 'delete') _deleteSupplier(supplier);
-                                  else if (value == 'restore') _restoreSupplier(supplier);
+                                  } else if (value == 'delete')
+                                    _deleteSupplier(supplier);
+                                  else if (value == 'restore')
+                                    _restoreSupplier(supplier);
                                 },
                                 itemBuilder: (ctx) => [
-                                  if (!isDeleted) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                  if (!isDeleted) const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                  if (isDeleted) const PopupMenuItem(value: 'restore', child: Text('Restore')),
+                                  if (!isDeleted)
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Text('Edit'),
+                                    ),
+                                  if (!isDeleted)
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Delete'),
+                                    ),
+                                  if (isDeleted)
+                                    const PopupMenuItem(
+                                      value: 'restore',
+                                      child: Text('Restore'),
+                                    ),
                                 ],
                               ),
                             ],
@@ -436,7 +472,9 @@ Widget _buildPendingLimitFilter() {
                 onPressed: () async {
                   final result = await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => SupplierFormFrame(repo: widget.repo)),
+                    MaterialPageRoute(
+                      builder: (_) => SupplierFormFrame(repo: widget.repo),
+                    ),
                   );
                   if (result == true) _resetAndLoad();
                 },

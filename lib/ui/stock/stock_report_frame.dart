@@ -104,8 +104,10 @@ class _StockReportFrameState extends State<StockReportFrame> {
   Widget _summaryTile(String label, double value, {bool isProfit = false}) {
     return Column(
       children: [
-        Text(label,
-            style: const TextStyle(fontSize: 14, color: Colors.black54)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, color: Colors.black54),
+        ),
         Text(
           value.toStringAsFixed(2),
           style: TextStyle(
@@ -127,7 +129,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
       'Product',
       'Batch', // ✅ NEW COLUMN
       'Purchased',
-      
+
       'Sold',
       'Remaining',
       if (_showExpiry) 'Supplier',
@@ -157,7 +159,8 @@ class _StockReportFrameState extends State<StockReportFrame> {
             )
             .toList(),
         rows: _report.map((r) {
-          final isLow = r.reorderLevel != null &&
+          final isLow =
+              r.reorderLevel != null &&
               r.reorderLevel! > 0 &&
               r.remainingQty <= r.reorderLevel!;
           final rowColor = isLow ? Colors.red.shade50 : Colors.white;
@@ -165,29 +168,31 @@ class _StockReportFrameState extends State<StockReportFrame> {
           return DataRow(
             color: WidgetStateProperty.all(rowColor),
             cells: [
-              DataCell(Text(
-                r.productName,
-                style: TextStyle(
-                  color: isLow ? Colors.red : Colors.black,
-                  fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
+              DataCell(
+                Text(
+                  r.productName,
+                  style: TextStyle(
+                    color: isLow ? Colors.red : Colors.black,
+                    fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
+                  ),
                 ),
-              )),
+              ),
               DataCell(Text(r.batchNo ?? '-')), // ✅ NEW DATA CELL for Batch No
               DataCell(Text(r.purchasedQty.toString())),
               DataCell(Text(r.soldQty.toString())),
               DataCell(Text(r.remainingQty.toString())),
+              if (_showExpiry) DataCell(Text(r.supplierName ?? "-")),
+              if (_showExpiry) DataCell(Text(r.companyName ?? "-")), // NEW
               if (_showExpiry)
-                DataCell(Text(r.supplierName ?? "-")),
-              if (_showExpiry)
-                DataCell(Text(r.companyName ?? "-")),  // NEW
-              if (_showExpiry)
-                DataCell(Text(r.expiryDate != null
-                    ? "${r.expiryDate!.toLocal()}".split(' ')[0]
-                    : "-")),
-              if (_includePrice)
-                DataCell(Text(r.costPrice.toStringAsFixed(2))),
-              if (_includePrice)
-                DataCell(Text(r.sellPrice.toStringAsFixed(2))),
+                DataCell(
+                  Text(
+                    r.expiryDate != null
+                        ? "${r.expiryDate!.toLocal()}".split(' ')[0]
+                        : "-",
+                  ),
+                ),
+              if (_includePrice) DataCell(Text(r.costPrice.toStringAsFixed(2))),
+              if (_includePrice) DataCell(Text(r.sellPrice.toStringAsFixed(2))),
               if (_detailedView)
                 DataCell(Text(r.profitPerUnit.toStringAsFixed(2))),
               if (_detailedView)
@@ -257,13 +262,16 @@ class _StockReportFrameState extends State<StockReportFrame> {
                   barGroups: chartData.asMap().entries.map((entry) {
                     final i = entry.key;
                     final e = entry.value;
-                    return BarChartGroupData(x: i, barRods: [
-                      BarChartRodData(
-                        toY: (e['remaining'] ?? 0).toDouble(),
-                        width: 16,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ]);
+                    return BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: (e['remaining'] ?? 0).toDouble(),
+                          width: 16,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    );
                   }).toList(),
                 ),
               ),
@@ -337,10 +345,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
                     child: SingleChildScrollView(
                       scrollDirection: Axis.vertical,
                       child: Column(
-                        children: [
-                          _buildDataTable(),
-                          _buildChart(),
-                        ],
+                        children: [_buildDataTable(), _buildChart()],
                       ),
                     ),
                   ),

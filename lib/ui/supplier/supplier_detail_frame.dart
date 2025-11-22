@@ -3,6 +3,7 @@ import 'package:invoice_app/repositories/supplier_payment_repo.dart';
 import '../../repositories/supplier_repo.dart';
 import '../../models/supplier.dart';
 import 'supplier_payment_frame.dart';
+
 class SupplierDetailFrame extends StatelessWidget {
   final SupplierRepository repo;
   final SupplierPaymentRepository repo2;
@@ -51,7 +52,10 @@ class SupplierDetailFrame extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             "Pending: ${supplier.pendingAmount.toStringAsFixed(2)}",
-            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           Text("Credit Limit: ${supplier.creditLimit.toStringAsFixed(2)}"),
         ],

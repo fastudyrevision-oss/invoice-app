@@ -18,12 +18,12 @@ class DatabaseHelper {
   DatabaseHelper._internal();
   static DatabaseHelper get instance => _instance; // ✅ Add this
 
-
   sqflite.Database? _db; // SQLite DB
   sembast.Database? _webDb; // Sembast DB for web
 
   // Stores for Sembast
-  final Map<String, sembast.StoreRef<String, Map<String, dynamic>>> _stores = {};
+  final Map<String, sembast.StoreRef<String, Map<String, dynamic>>> _stores =
+      {};
 
   final List<String> _tables = [
     "users",
@@ -42,9 +42,10 @@ class DatabaseHelper {
     "expenses",
     "ledger",
     "audit_logs",
-    "attachments"
+    "attachments",
   ];
-   /// ✅ Factory for tests — In-memory SQLite instance
+
+  /// ✅ Factory for tests — In-memory SQLite instance
   factory DatabaseHelper.testInstance() {
     final helper = DatabaseHelper._internal();
     sqflite_ffi.sqfliteFfiInit();
@@ -69,13 +70,14 @@ class DatabaseHelper {
     }
     _db = null;
   }
-  
 
   /// Initialize database
   Future<void> init() async {
     if (kIsWeb) {
       // Web: Sembast
-      _webDb = await sembast_web.databaseFactoryWeb.openDatabase('invoice_app.db');
+      _webDb = await sembast_web.databaseFactoryWeb.openDatabase(
+        'invoice_app.db',
+      );
       for (var table in _tables) {
         _stores[table] = sembast.stringMapStoreFactory.store(table);
       }
@@ -99,7 +101,6 @@ class DatabaseHelper {
       );
     }
   }
-
 
   Future<dynamic> get db async {
     if (kIsWeb) {
@@ -126,8 +127,6 @@ class DatabaseHelper {
       _db = null;
     }
   }
-
-
 
   // ================== CREATE TABLES FOR SQLite ==================
   Future _onCreate(sqflite.Database db, int version) async {
@@ -194,7 +193,7 @@ class DatabaseHelper {
       )
     ''');
     // CATEGORIES
-await db.execute('''
+    await db.execute('''
   CREATE TABLE categories (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
@@ -211,18 +210,16 @@ await db.execute('''
     FOREIGN KEY(parent_id) REFERENCES categories(id) ON DELETE SET NULL
   )
 ''');
-await db.insert('categories', {
-  'id': 'cat-001',
-  'name': 'Uncategorized',
-  'slug': 'uncategorized',
-  'description': 'Default category for products without category',
-  'created_at': DateTime.now().toIso8601String(),
-  'updated_at': DateTime.now().toIso8601String(),
-  'is_active': 1,
-  'is_deleted': 0,
-});
-
-
+    await db.insert('categories', {
+      'id': 'cat-001',
+      'name': 'Uncategorized',
+      'slug': 'uncategorized',
+      'description': 'Default category for products without category',
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+      'is_active': 1,
+      'is_deleted': 0,
+    });
 
     // PRODUCTS
     await db.execute('''
@@ -439,42 +436,71 @@ await db.insert('categories', {
         uploaded_at TEXT
       )
     ''');
-      // SYNC META TABLE
-  await db.execute('''
+    // SYNC META TABLE
+    await db.execute('''
     CREATE TABLE sync_meta (
       table_name TEXT PRIMARY KEY,
       last_synced_at TEXT
     )
   ''');
 
-
     // Indexes
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id)');
-    await db.execute('CREATE INDEX idx_batches_product_id ON product_batches(product_id);');
-await db.execute('CREATE INDEX idx_batches_supplier_id ON product_batches(supplier_id);');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_batches_product_id ON product_batches(product_id);',
+    );
+    await db.execute(
+      'CREATE INDEX idx_batches_supplier_id ON product_batches(supplier_id);',
+    );
 
     // Products extra column
-await addColumnIfNotExists(db, "products", "is_deleted", "INTEGER DEFAULT 0");
+    await addColumnIfNotExists(
+      db,
+      "products",
+      "is_deleted",
+      "INTEGER DEFAULT 0",
+    );
 
-// Purchase items extra columns
-await addColumnIfNotExists(db, "purchase_items", "product_name", "TEXT");
-await addColumnIfNotExists(db, "purchase_items", "cost_price", "REAL DEFAULT 0");
-
+    // Purchase items extra columns
+    await addColumnIfNotExists(db, "purchase_items", "product_name", "TEXT");
+    await addColumnIfNotExists(
+      db,
+      "purchase_items",
+      "cost_price",
+      "REAL DEFAULT 0",
+    );
   }
+
   /// Safely adds a column if it doesn't exist
-Future<void> addColumnIfNotExists(
-    sqflite.Database db, String table, String column, String columnType) async {
-  final result = await db.rawQuery("PRAGMA table_info($table);");
-  final exists = result.any((row) => row['name'] == column);
-  if (!exists) {
-    await db.execute("ALTER TABLE $table ADD COLUMN $column $columnType;");
+  Future<void> addColumnIfNotExists(
+    sqflite.Database db,
+    String table,
+    String column,
+    String columnType,
+  ) async {
+    final result = await db.rawQuery("PRAGMA table_info($table);");
+    final exists = result.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute("ALTER TABLE $table ADD COLUMN $column $columnType;");
+    }
   }
-}
 
   // ================== GENERIC CRUD ==================
   Future<int> insert(String table, Map<String, dynamic> row) async {
@@ -484,8 +510,10 @@ Future<void> addColumnIfNotExists(
     } else {
       final dbClient = await db;
       return await dbClient.insert(
-          table, row,
-          conflictAlgorithm: sqflite.ConflictAlgorithm.replace);
+        table,
+        row,
+        conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
+      );
     }
   }
 
@@ -509,8 +537,11 @@ Future<void> addColumnIfNotExists(
     }
   }
 
-  Future<List<Map<String, dynamic>>> queryWhere(String table, String where,
-      List<Object?> whereArgs) async {
+  Future<List<Map<String, dynamic>>> queryWhere(
+    String table,
+    String where,
+    List<Object?> whereArgs,
+  ) async {
     if (kIsWeb) {
       final records = await _stores[table]!.find(_webDb!);
       final filtered = records.where((record) {
@@ -530,13 +561,17 @@ Future<void> addColumnIfNotExists(
     }
   }
 
-  Future<List<Map<String, dynamic>>> rawQuery(String sql,
-      [List<Object?>? arguments]) async {
+  Future<List<Map<String, dynamic>>> rawQuery(
+    String sql, [
+    List<Object?>? arguments,
+  ]) async {
     if (kIsWeb) {
       sql = sql.toLowerCase();
       if (sql.startsWith("select") && sql.contains("from")) {
         final table = sql.split("from")[1].trim().split(" ")[0];
-        return (await _stores[table]!.find(_webDb!)).map((r) => r.value).toList();
+        return (await _stores[table]!.find(
+          _webDb!,
+        )).map((r) => r.value).toList();
       } else {
         throw Exception("rawQuery is limited on web (Sembast)");
       }
@@ -552,7 +587,12 @@ Future<void> addColumnIfNotExists(
       return 1;
     } else {
       final dbClient = await db;
-      return await dbClient.update(table, row, where: "id = ?", whereArgs: [id]);
+      return await dbClient.update(
+        table,
+        row,
+        where: "id = ?",
+        whereArgs: [id],
+      );
     }
   }
 
@@ -576,10 +616,9 @@ Future<void> addColumnIfNotExists(
       });
     }
   }
+
   Future<int> rawUpdate(String sql, List<Object?> args) async {
-  final dbClient = await db;
-  return await dbClient.rawUpdate(sql, args);
-}
-
-
+    final dbClient = await db;
+    return await dbClient.rawUpdate(sql, args);
+  }
 }

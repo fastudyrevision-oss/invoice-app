@@ -14,18 +14,18 @@ class Expense {
   });
 
   Map<String, dynamic> toMap() => {
-        "id": id,
-        "description": description,
-        "amount": amount,
-        "date": date,
-        "category": category,
-      };
+    "id": id,
+    "description": description,
+    "amount": amount,
+    "date": date,
+    "category": category,
+  };
 
   factory Expense.fromMap(Map<String, dynamic> map) => Expense(
-        id: map["id"],
-        description: map["description"],
-        amount: map["amount"],
-        date: map["date"],
-        category: map["category"] ?? "General",
-      );
+    id: map["id"],
+    description: map["description"],
+    amount: map["amount"],
+    date: map["date"],
+    category: map["category"] ?? "General",
+  );
 }

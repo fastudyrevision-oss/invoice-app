@@ -20,7 +20,7 @@ class ReportsDashboard extends StatelessWidget {
             isScrollable: true, // helps if there are many tabs
             tabs: [
               Tab(text: "Suppliers"),
-              
+
               Tab(text: "Products"),
               Tab(text: "Expenses"),
               Tab(text: "Expiry"),

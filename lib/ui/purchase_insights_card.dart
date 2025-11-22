@@ -4,26 +4,27 @@ import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../models/invoice.dart';
-import 'pdf_export_helper.dart'; // helper for PDF with chart
 
-class OrderInsightCard extends StatefulWidget {
-  final List<Invoice> orders;
+import '../../models/purchase.dart';
+import 'purchase_pdf_export_helper.dart'; // create or reuse order helper
+
+class PurchaseInsightCard extends StatefulWidget {
+  final List<Purchase> purchases;
   final bool loading;
   final DateTime? lastUpdated;
 
-  const OrderInsightCard({
+  const PurchaseInsightCard({
     super.key,
-    required this.orders,
+    required this.purchases,
     required this.loading,
     required this.lastUpdated,
   });
 
   @override
-  State<OrderInsightCard> createState() => _OrderInsightCardState();
+  State<PurchaseInsightCard> createState() => _PurchaseInsightCardState();
 }
 
-class _OrderInsightCardState extends State<OrderInsightCard> {
+class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
   bool expanded = false;
   final GlobalKey chartKey = GlobalKey();
 
@@ -32,7 +33,6 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
   @override
   Widget build(BuildContext context) {
     if (widget.loading) {
-      // shimmer while loading
       return Padding(
         padding: const EdgeInsets.all(12),
         child: Shimmer.fromColors(
@@ -49,16 +49,18 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
       );
     }
 
-    final total = widget.orders.length;
-    final pendingCount = widget.orders
-        .where((o) => _safeDouble(o.pending) > 0)
+    final total = widget.purchases.length;
+    final pendingCount = widget.purchases
+        .where((p) => _safeDouble(p.pending) > 0)
         .length;
     final paidCount = total - pendingCount;
-    final revenue = widget.orders.fold<double>(
+
+    final totalAmount = widget.purchases.fold<double>(
       0.0,
-      (s, o) => s + _safeDouble(o.total),
+      (s, p) => s + _safeDouble(p.total),
     );
-    final avgInvoice = total > 0 ? revenue / total : 0.0;
+
+    final avgPurchase = total > 0 ? totalAmount / total : 0.0;
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -78,7 +80,7 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _insightItem(
-                      Icons.shopping_bag,
+                      Icons.shopping_cart,
                       "Total",
                       total.toString(),
                       Colors.blue,
@@ -96,9 +98,9 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
                       Colors.green,
                     ),
                     _insightItem(
-                      Icons.attach_money,
-                      "Revenue",
-                      revenue.toStringAsFixed(0),
+                      Icons.receipt_long,
+                      "Amount",
+                      totalAmount.toStringAsFixed(0),
                       Colors.purple,
                     ),
                   ],
@@ -114,7 +116,7 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
                     ),
                   ),
 
-                // --- Expandable section ---
+                // --- Expandable Section ---
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 300),
                   crossFadeState: expanded
@@ -127,17 +129,17 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
                       const Divider(),
                       const SizedBox(height: 8),
 
-                      // Additional insights
                       Text(
-                        "Average Invoice: \$${avgInvoice.toStringAsFixed(2)}",
+                        "Average Purchase: Rs ${avgPurchase.toStringAsFixed(2)}",
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+
                       const SizedBox(height: 16),
 
-                      // --- Chart inside RepaintBoundary ---
+                      // --- Chart area ---
                       RepaintBoundary(
                         key: chartKey,
                         child: SizedBox(
@@ -151,7 +153,7 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
                                 LineChartBarData(
                                   isCurved: true,
                                   color: Colors.blueAccent,
-                                  spots: _buildRevenueSpots(widget.orders),
+                                  spots: _buildPurchaseSpots(widget.purchases),
                                   dotData: const FlDotData(show: false),
                                   belowBarData: BarAreaData(
                                     show: true,
@@ -166,15 +168,14 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
 
                       const SizedBox(height: 16),
 
-                      // --- Export button ---
                       OutlinedButton.icon(
                         icon: const Icon(Icons.picture_as_pdf),
                         label: const Text("Export as PDF"),
                         onPressed: () async => await _exportChartToPdf(
                           chartKey,
                           total: total,
-                          avgInvoice: avgInvoice,
-                          revenue: revenue,
+                          totalAmount: totalAmount,
+                          avgPurchase: avgPurchase,
                         ),
                       ),
                     ],
@@ -190,7 +191,6 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
 
   Widget _insightItem(IconData icon, String label, String value, Color color) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         CircleAvatar(
           backgroundColor: color.withOpacity(0.1),
@@ -206,10 +206,12 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
     );
   }
 
-  List<FlSpot> _buildRevenueSpots(List<Invoice> orders) {
-    if (orders.isEmpty) return [const FlSpot(0, 0)];
-    final sorted = List<Invoice>.from(orders)
+  List<FlSpot> _buildPurchaseSpots(List<Purchase> purchases) {
+    if (purchases.isEmpty) return [const FlSpot(0, 0)];
+
+    final sorted = List<Purchase>.from(purchases)
       ..sort((a, b) => a.date.compareTo(b.date));
+
     return List.generate(
       sorted.length,
       (i) => FlSpot(i.toDouble(), _safeDouble(sorted[i].total)),
@@ -219,33 +221,34 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
   Future<void> _exportChartToPdf(
     GlobalKey chartKey, {
     required int total,
-    required double avgInvoice,
-    required double revenue,
+    required double totalAmount,
+    required double avgPurchase,
   }) async {
     try {
       final boundary =
           chartKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData!.buffer.asUint8List();
 
-      final pdfFile = await generatePdfReportWithChart(
-        title: 'Order Insights Report',
+      final pdfFile = await generatePurchasePdfWithChart(
+        title: 'Purchase Insights Report',
         chartBytes: pngBytes,
-        totalRevenue: revenue,
-        avgInvoice: avgInvoice,
+        totalAmount: totalAmount,
+        avgPurchase: avgPurchase,
       );
 
       if (pdfFile != null) {
         await shareOrPrintPdf(pdfFile);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('✅ PDF saved: ${pdfFile.path}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ PDF saved: ${pdfFile.path}')),
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('❌ Failed to generate PDF')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ Failed to generate PDF')),
+      );
     }
   }
 }
