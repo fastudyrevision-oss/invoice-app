@@ -125,7 +125,7 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     if (diff < 0) {
       color = Colors.grey.shade600;
     } else if (diff <= 7)
-      color = Colors.red.shade300;
+      color = const Color.fromARGB(255, 245, 2, 2);
     else if (diff <= 15)
       color = Colors.orange.shade300;
     else if (diff <= 30)

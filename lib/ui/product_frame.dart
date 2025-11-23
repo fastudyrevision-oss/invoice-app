@@ -444,7 +444,7 @@ class _ProductFrameState extends State<ProductFrame> {
                         items: (filter, props) => _suppliers,
                         selectedItem: _selectedSupplier,
                         itemAsString: (s) => s.name,
-                        compareFn: (a, b) => a?.id == b?.id,
+                        compareFn: (a, b) => a.id == b.id,
                         onChanged: _onSupplierChanged,
                         popupProps: PopupProps.menu(showSearchBox: true),
                         decoratorProps: DropDownDecoratorProps(

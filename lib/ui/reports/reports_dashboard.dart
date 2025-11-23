@@ -5,14 +5,16 @@ import 'expense_report_frame.dart';
 import 'expiry_report_frame.dart';
 import 'payment_report_frame.dart';
 import '../stock/stock_report_frame.dart';
+import '../../agent/flutter_sql_agent_ai.dart';
 
 class ReportsDashboard extends StatelessWidget {
-  const ReportsDashboard({super.key});
+   final SqlAgentService sqlAgent;
+  const ReportsDashboard({super.key, required this.sqlAgent});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6, // updated count
+      length: 7, // updated count
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Reports Dashboard"),
@@ -26,10 +28,11 @@ class ReportsDashboard extends StatelessWidget {
               Tab(text: "Expiry"),
               Tab(text: "Payments"),
               Tab(text: "Stock Report"),
+               Tab(text: "AI Reports"),  // ← NEW TAB
             ],
           ),
         ),
-        body: const TabBarView(
+        body:  TabBarView(
           children: [
             SupplierReportFrame(),
             ProductReportFrame(),
@@ -37,6 +40,8 @@ class ReportsDashboard extends StatelessWidget {
             ExpiryReportFrame(),
             PaymentReportFrame(),
             StockReportFrame(),
+              // ---- AI TAB ----
+            ReportRunnerWidget(agent: sqlAgent), // ← THIS IS YOUR AI UI
           ],
         ),
       ),

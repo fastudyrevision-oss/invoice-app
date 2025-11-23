@@ -480,8 +480,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                                   labelText: "Qty",
                                 ),
                                 validator: (val) {
-                                  if (val == null || val.isEmpty)
+                                  if (val == null || val.isEmpty) {
                                     return "Enter quantity";
+                                  }
                                   final q = int.tryParse(val);
                                   if (q == null || q <= 0) return "Invalid qty";
                                   return null;

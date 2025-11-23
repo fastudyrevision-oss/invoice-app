@@ -84,8 +84,9 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
       await widget.repo.updateSupplier(supplier);
     }
 
-    if (mounted)
+    if (mounted) {
       Navigator.pop(context, true); // triggers refresh in SupplierFrame
+    }
   }
 
   @override

@@ -261,8 +261,9 @@ class _OrderListScreenState extends State<OrderListScreen>
                           lastDate: DateTime(now.year + 5),
                           initialDateRange: _selectedDateRange,
                         );
-                        if (range != null)
+                        if (range != null) {
                           setSheetState(() => _selectedDateRange = range);
+                        }
                       },
                     ),
                   ],

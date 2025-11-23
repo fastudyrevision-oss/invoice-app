@@ -32,6 +32,7 @@ dependencies:
   shimmer: ^3.0.0
   open_file: ^3.5.10
   dropdown_search: ^6.0.2
+  
 
   
 dev_dependencies:

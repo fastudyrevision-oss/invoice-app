@@ -40,7 +40,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
   String _searchQuery = "";
   String? _selectedSupplierId;
-  String _sortBy = "date_desc";
+  final String _sortBy = "date_desc";
 
   @override
   void initState() {
@@ -178,7 +178,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: DropdownButtonFormField<String?>(
-        value: _selectedSupplierId,
+        initialValue: _selectedSupplierId,
         decoration: const InputDecoration(
           labelText: "Filter by Supplier",
           border: OutlineInputBorder(),

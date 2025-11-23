@@ -5,7 +5,7 @@ import '../../repositories/category_repository.dart';
 import 'category_form_screen.dart';
 
 class CategoryListFrame extends StatefulWidget {
-  const CategoryListFrame({Key? key}) : super(key: key);
+  const CategoryListFrame({super.key});
 
   @override
   _CategoryListFrameState createState() => _CategoryListFrameState();
@@ -13,7 +13,7 @@ class CategoryListFrame extends StatefulWidget {
 
 class _CategoryListFrameState extends State<CategoryListFrame> {
   final TextEditingController _searchController = TextEditingController();
-  List<Category> _categories = [];
+  final List<Category> _categories = [];
   bool _loading = false;
   bool _loadingMore = false;
   bool _showDeleted = false;
@@ -145,10 +145,12 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   }
 
   Widget _buildList() {
-    if (_loading && _categories.isEmpty)
+    if (_loading && _categories.isEmpty) {
       return const Center(child: CircularProgressIndicator());
-    if (_filteredCategories.isEmpty)
+    }
+    if (_filteredCategories.isEmpty) {
       return const Center(child: Text('No categories found'));
+    }
 
     return ListView.builder(
       itemCount: _filteredCategories.length + (_hasMoreData ? 1 : 0),
@@ -276,8 +278,8 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openForm(),
-        child: const Icon(Icons.add),
         tooltip: 'Add Category',
+        child: const Icon(Icons.add),
       ),
     );
   }

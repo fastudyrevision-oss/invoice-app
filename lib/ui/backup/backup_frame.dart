@@ -13,7 +13,7 @@ import '../../services/bulk_sync_service.dart';
 // You can also add more error handling and user feedback as needed.
 
 class BackupRestoreScreen extends StatefulWidget {
-  const BackupRestoreScreen({Key? key}) : super(key: key);
+  const BackupRestoreScreen({super.key});
 
   @override
   _BackupRestoreScreenState createState() => _BackupRestoreScreenState();

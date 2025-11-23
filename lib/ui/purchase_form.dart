@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:dropdown_search/dropdown_search.dart';
-import '../utils/id_generator.dart';
 import '../repositories/purchase_repo.dart';
 import '../models/purchase.dart';
 import '../models/purchase_item.dart';

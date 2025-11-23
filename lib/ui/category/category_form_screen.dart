@@ -6,7 +6,7 @@ import '../../repositories/category_repository.dart';
 
 class CategoryFormScreen extends StatefulWidget {
   final Category? category;
-  const CategoryFormScreen({Key? key, this.category}) : super(key: key);
+  const CategoryFormScreen({super.key, this.category});
 
   @override
   _CategoryFormScreenState createState() => _CategoryFormScreenState();
@@ -114,7 +114,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String?>(
-                      value: _parentId,
+                      initialValue: _parentId,
                       items:
                           [
                             const DropdownMenuItem<String?>(

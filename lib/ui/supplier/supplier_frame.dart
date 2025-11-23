@@ -90,8 +90,9 @@ class _SupplierFrameState extends State<SupplierFrame> {
           double.tryParse(_minPendingCtrl.text) ?? double.negativeInfinity;
       final maxPending =
           double.tryParse(_maxPendingCtrl.text) ?? double.infinity;
-      if (s.pendingAmount < minPending || s.pendingAmount > maxPending)
+      if (s.pendingAmount < minPending || s.pendingAmount > maxPending) {
         return false;
+      }
 
       // Company filter
       if (_selectedCompany != null && _selectedCompany!.id != "-1") {

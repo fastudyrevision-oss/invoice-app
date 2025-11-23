@@ -19,6 +19,7 @@ import '../dao/supplier_dao.dart';
 import '../dao/supplier_report_dao.dart';
 import '../dao/supplier_payment_dao.dart';
 import '../dao/supplier_company_dao.dart';
+import '../agent/flutter_sql_agent_ai.dart';
 import 'package:sqflite/sqflite.dart';
 
 class MainFrame extends StatefulWidget {
@@ -40,6 +41,8 @@ class _MainFrameState extends State<MainFrame>
 
   Database? _db;
   int _expiringCount = 0;
+   late SqlAgentService _sqlAgent;
+late GeminiService _gemini;
 
   @override
   void initState() {
@@ -47,7 +50,23 @@ class _MainFrameState extends State<MainFrame>
     _buildTabs();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _initRepos();
+   
+ _initAI();    // ---- ADD THIS
+  
+
   }
+  void _initAI() {
+  _gemini = GeminiService(
+    apiKey: GEMINI_API_KEY,
+    apiUrl: GEMINI_API_URL,
+  );
+
+  _sqlAgent = SqlAgentService(
+    gemini: _gemini,
+    dbHelper: DatabaseHelper.instance,
+  );
+}
+
 
   void _buildTabs() {
     _tabs = [
@@ -106,6 +125,7 @@ class _MainFrameState extends State<MainFrame>
 
     await _refreshExpiringCount();
   }
+  
 
   Future<void> _refreshExpiringCount({int days = 30}) async {
     if (_purchaseRepo == null) return;
@@ -136,7 +156,7 @@ class _MainFrameState extends State<MainFrame>
       body: TabBarView(
         controller: _tabController,
         children: [
-          const ReportsDashboard(),
+          ReportsDashboard(sqlAgent: _sqlAgent),
           const CustomerFrame(),
           const ProductFrame(),
           const ExpenseFrame(),
