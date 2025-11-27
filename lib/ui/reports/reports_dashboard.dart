@@ -7,6 +7,11 @@ import 'payment_report_frame.dart';
 import '../stock/stock_report_frame.dart';
 import '../../agent/flutter_sql_agent_ai.dart';
 
+import '../../modules/profit_loss/presentation/profit_loss_screen.dart';
+import '../../modules/profit_loss/data/repository/profit_loss_repo.dart';
+import '../../modules/profit_loss/data/dao/profit_loss_dao.dart';
+
+
 class ReportsDashboard extends StatelessWidget {
    final SqlAgentService sqlAgent;
   const ReportsDashboard({super.key, required this.sqlAgent});
@@ -14,7 +19,7 @@ class ReportsDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 7, // updated count
+      length: 8, // updated count
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Reports Dashboard"),
@@ -29,6 +34,7 @@ class ReportsDashboard extends StatelessWidget {
               Tab(text: "Payments"),
               Tab(text: "Stock Report"),
                Tab(text: "AI Reports"),  // ← NEW TAB
+               Tab(text: "Profit and Loss"),
             ],
           ),
         ),
@@ -42,6 +48,11 @@ class ReportsDashboard extends StatelessWidget {
             StockReportFrame(),
               // ---- AI TAB ----
             ReportRunnerWidget(agent: sqlAgent), // ← THIS IS YOUR AI UI
+            ProfitLossScreen(
+          controller: ProfitLossUIController(
+            ProfitLossRepository(ProfitLossDao()),
+          ),
+        ), //
           ],
         ),
       ),

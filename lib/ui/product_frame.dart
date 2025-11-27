@@ -6,7 +6,6 @@ import '../models/product.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/supplier_repo.dart';
 import '../models/supplier.dart';
-import '../models/category.dart';
 import '../dao/supplier_dao.dart';
 import '../dao/supplier_report_dao.dart';
 import '../dao/supplier_payment_dao.dart';
@@ -78,7 +77,7 @@ class _ProductFrameState extends State<ProductFrame> {
       0,
       Supplier(
         id: 'all',
-        name: 'All',
+        name: 'Unlinked/All',
         phone: null,
         address: null,
         createdAt: '',

@@ -1,0 +1,148 @@
+import '../../../../db/database_helper.dart';
+import '../models/category_profit.dart';
+import '../models/product_profit.dart';
+import '../models/profit_loss_summary.dart';
+import '../models/supplier_profit.dart';
+
+class ProfitLossDao {
+  final db = DatabaseHelper.instance;
+
+  // ---------- Summary Queries ----------
+  Future<double> getTotalSales(DateTime start, DateTime end) async {
+    final result = await db.rawQuery(
+        'SELECT SUM(total) AS total FROM invoices WHERE date BETWEEN ? AND ?',
+        [start.toIso8601String(), end.toIso8601String()]);
+    return (result.first['total'] ?? 0) * 1.0;
+  }
+
+  Future<double> getTotalDiscounts(DateTime start, DateTime end) async {
+    final result = await db.rawQuery(
+        'SELECT SUM(discount) AS discount FROM invoices WHERE date BETWEEN ? AND ?',
+        [start.toIso8601String(), end.toIso8601String()]);
+    return (result.first['discount'] ?? 0) * 1.0;
+  }
+
+  Future<double> getTotalExpenses(DateTime start, DateTime end) async {
+    final result = await db.rawQuery(
+        'SELECT SUM(amount) AS amount FROM expenses WHERE date BETWEEN ? AND ?',
+        [start.toIso8601String(), end.toIso8601String()]);
+    return (result.first['amount'] ?? 0) * 1.0;
+  }
+
+  Future<double> getCustomerPendings() async {
+    final result = await db.rawQuery('SELECT SUM(pending) AS pending FROM invoices');
+    return (result.first['pending'] ?? 0) * 1.0;
+  }
+
+  Future<double> getSupplierPendings() async {
+    final result = await db.rawQuery('SELECT SUM(pending) AS pending FROM purchases');
+    return (result.first['pending'] ?? 0) * 1.0;
+  }
+
+  Future<double> getInHandCash(DateTime start, DateTime end) async {
+    final result = await db.rawQuery(
+        'SELECT SUM(paid) AS paid FROM invoices WHERE date BETWEEN ? AND ?',
+        [start.toIso8601String(), end.toIso8601String()]);
+    final paid = (result.first['paid'] ?? 0) * 1.0;
+    final expenses = await getTotalExpenses(start, end);
+    return paid - expenses;
+  }
+
+  Future<double> getTotalCostOfGoodsSold(DateTime start, DateTime end) async {
+    final result = await db.rawQuery('''
+      SELECT SUM(ii.qty * pi.purchase_price) AS cogs
+      FROM invoice_items ii
+      LEFT JOIN purchase_items pi ON ii.product_id = pi.product_id
+      LEFT JOIN invoices inv ON ii.invoice_id = inv.id
+      WHERE inv.date BETWEEN ? AND ?
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+    return (result.first['cogs'] ?? 0) * 1.0;
+  }
+
+  // ---------- Product Profits ----------
+  Future<List<ProductProfit>> getProductWiseProfit(DateTime start, DateTime end) async {
+    final result = await db.rawQuery('''
+      SELECT 
+        p.id AS product_id,
+        p.name AS product_name,
+        SUM(ii.qty * ii.price) AS total_sales,
+        SUM(ii.qty * pi.purchase_price) AS total_cost,
+        SUM(ii.qty) AS sold_qty
+      FROM products p
+      LEFT JOIN invoice_items ii ON ii.product_id = p.id
+      LEFT JOIN purchase_items pi ON pi.product_id = p.id
+      LEFT JOIN invoices inv ON ii.invoice_id = inv.id
+      WHERE inv.date BETWEEN ? AND ?
+      GROUP BY p.id
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return result.map((row) {
+      final totalSales = (row['total_sales'] ?? 0) * 1.0;
+      final totalCost = (row['total_cost'] ?? 0) * 1.0;
+      return ProductProfit(
+        productId: row['product_id'],
+        name: row['product_name'],
+        totalSales: totalSales,
+        totalCost: totalCost,
+        profit: totalSales - totalCost,
+        totalSoldQty: row['sold_qty'] ?? 0,
+        expiredQty: 0,
+        expiredLoss: 0,
+      );
+    }).toList();
+  }
+
+  // ---------- Category Profits ----------
+  Future<List<CategoryProfit>> getCategoryWiseProfit(DateTime start, DateTime end) async {
+    final result = await db.rawQuery('''
+      SELECT 
+        c.id AS category_id,
+        c.name AS category_name,
+        SUM(ii.qty * ii.price) AS total_sales,
+        SUM(ii.qty * pi.purchase_price) AS total_cost
+      FROM categories c
+      LEFT JOIN products p ON p.category_id = c.id
+      LEFT JOIN invoice_items ii ON ii.product_id = p.id
+      LEFT JOIN purchase_items pi ON pi.product_id = p.id
+      LEFT JOIN invoices inv ON ii.invoice_id = inv.id
+      WHERE inv.date BETWEEN ? AND ?
+      GROUP BY c.id
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return result.map((row) {
+      final totalSales = (row['total_sales'] ?? 0) * 1.0;
+      final totalCost = (row['total_cost'] ?? 0) * 1.0;
+      return CategoryProfit(
+        categoryId: row['category_id'],
+        name: row['category_name'],
+        totalSales: totalSales,
+        totalCost: totalCost,
+        profit: totalSales - totalCost,
+      );
+    }).toList();
+  }
+
+  // ---------- Supplier Profits ----------
+  Future<List<SupplierProfit>> getSupplierWiseProfit(DateTime start, DateTime end) async {
+    final result = await db.rawQuery('''
+      SELECT 
+        s.id AS supplier_id,
+        s.name AS supplier_name,
+        SUM(pur.total) AS total_purchases,
+        SUM(pur.pending) AS pending_to_supplier
+      FROM suppliers s
+      LEFT JOIN purchases pur ON pur.supplier_id = s.id
+      WHERE pur.date BETWEEN ? AND ?
+      GROUP BY s.id
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return result.map((row) {
+      return SupplierProfit(
+        supplierId: row['supplier_id'],
+        name: row['supplier_name'],
+        totalPurchases: (row['total_purchases'] ?? 0) * 1.0,
+        pendingToSupplier: (row['pending_to_supplier'] ?? 0) * 1.0,
+      );
+    }).toList();
+  }
+}
