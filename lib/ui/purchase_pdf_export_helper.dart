@@ -28,12 +28,24 @@ Future<File?> generatePurchasePdfWithChart({
           children: [
             pw.Text(title, style: pw.TextStyle(font: boldFont, fontSize: 24)),
             pw.SizedBox(height: 16),
-            pw.Text('Purchase Report Summary', style: pw.TextStyle(font: regularFont, fontSize: 16)),
+            pw.Text(
+              'Purchase Report Summary',
+              style: pw.TextStyle(font: regularFont, fontSize: 16),
+            ),
             pw.SizedBox(height: 10),
-            pw.Text('Total Purchase Amount: \$${totalAmount.toStringAsFixed(2)}', style: pw.TextStyle(font: regularFont, fontSize: 14)),
-            pw.Text('Average Purchase: \$${avgPurchase.toStringAsFixed(2)}', style: pw.TextStyle(font: regularFont, fontSize: 14)),
+            pw.Text(
+              'Total Purchase Amount: Rs ${totalAmount.toStringAsFixed(2)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 14),
+            ),
+            pw.Text(
+              'Average Purchase: Rs ${avgPurchase.toStringAsFixed(2)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 14),
+            ),
             pw.SizedBox(height: 20),
-            pw.Text('Purchase Trend Chart:', style: pw.TextStyle(font: boldFont, fontSize: 14)),
+            pw.Text(
+              'Purchase Trend Chart:',
+              style: pw.TextStyle(font: boldFont, fontSize: 14),
+            ),
             pw.SizedBox(height: 10),
             pw.Center(
               child: pw.Image(
@@ -45,7 +57,11 @@ Future<File?> generatePurchasePdfWithChart({
             pw.SizedBox(height: 30),
             pw.Text(
               'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
-              style: pw.TextStyle(font: regularFont, fontSize: 10, color: PdfColors.grey),
+              style: pw.TextStyle(
+                font: regularFont,
+                fontSize: 10,
+                color: PdfColors.grey,
+              ),
             ),
           ],
         );
@@ -87,10 +103,9 @@ Future<File?> generatePurchaseInvoicePdf(
     print('⚠️ Logo not found, skipping: $e');
   }
 
-  final date = DateFormat('dd MMM yyyy, hh:mm a').format(
-  DateTime.tryParse(purchase.date) ?? DateTime.now(),
-);
-
+  final date = DateFormat(
+    'dd MMM yyyy, hh:mm a',
+  ).format(DateTime.tryParse(purchase.date) ?? DateTime.now());
 
   pdf.addPage(
     pw.Page(
@@ -109,37 +124,70 @@ Future<File?> generatePurchaseInvoicePdf(
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Mian Traders', style: pw.TextStyle(font: boldFont, fontSize: 22)),
-                      pw.Text('Kotmomi road ,Bhagtanawala, Sargodha', style: pw.TextStyle(font: regularFont, fontSize: 12)),
-                      pw.Text('Phone: +92-300-1234567 | info@company.com', style: pw.TextStyle(font: regularFont, fontSize: 12)),
+                      pw.Text(
+                        'Mian Traders',
+                        style: pw.TextStyle(font: boldFont, fontSize: 22),
+                      ),
+                      pw.Text(
+                        'Kotmomi road ,Bhagtanawala, Sargodha',
+                        style: pw.TextStyle(font: regularFont, fontSize: 12),
+                      ),
+                      pw.Text(
+                        'Phone: +92-300-1234567 | info@company.com',
+                        style: pw.TextStyle(font: regularFont, fontSize: 12),
+                      ),
                     ],
                   ),
                   if (logoImage != null)
-                    pw.Container(height: 60, width: 60, child: pw.Image(logoImage, fit: pw.BoxFit.contain)),
+                    pw.Container(
+                      height: 60,
+                      width: 60,
+                      child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                    ),
                 ],
               ),
               pw.SizedBox(height: 20),
               pw.Divider(),
               pw.SizedBox(height: 12),
 
-              pw.Text('Purchase #${purchase.id}', style: pw.TextStyle(font: boldFont, fontSize: 18)),
+              pw.Text(
+                'Purchase #${purchase.id}',
+                style: pw.TextStyle(font: boldFont, fontSize: 18),
+              ),
               pw.SizedBox(height: 8),
-              pw.Text('Date: $date', style: pw.TextStyle(font: regularFont, fontSize: 12)),
+              pw.Text(
+                'Date: $date',
+                style: pw.TextStyle(font: regularFont, fontSize: 12),
+              ),
               pw.Divider(),
               pw.SizedBox(height: 16),
 
-              pw.Text('Total: ${purchase.total.toStringAsFixed(2)}', style: pw.TextStyle(font: regularFont, fontSize: 14)),
-              pw.Text('Pending: ${purchase.pending.toStringAsFixed(2)}', style: pw.TextStyle(font: regularFont, fontSize: 14)),
-              pw.Text('Paid: ${(purchase.total - purchase.pending).toStringAsFixed(2)}', style: pw.TextStyle(font: regularFont, fontSize: 14)),
+              pw.Text(
+                'Total: ${purchase.total.toStringAsFixed(2)}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
+              pw.Text(
+                'Pending: ${purchase.pending.toStringAsFixed(2)}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
+              pw.Text(
+                'Paid: ${(purchase.total - purchase.pending).toStringAsFixed(2)}',
+                style: pw.TextStyle(font: regularFont, fontSize: 14),
+              ),
 
               if (items != null && items.isNotEmpty) ...[
                 pw.SizedBox(height: 24),
-                pw.Text('Items', style: pw.TextStyle(font: boldFont, fontSize: 16)),
+                pw.Text(
+                  'Items',
+                  style: pw.TextStyle(font: boldFont, fontSize: 16),
+                ),
                 pw.SizedBox(height: 8),
                 pw.Table.fromTextArray(
                   border: pw.TableBorder.all(width: 0.5),
                   cellAlignment: pw.Alignment.centerLeft,
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  headerDecoration: const pw.BoxDecoration(
+                    color: PdfColors.grey200,
+                  ),
                   headerStyle: pw.TextStyle(font: boldFont, fontSize: 12),
                   cellStyle: pw.TextStyle(font: regularFont, fontSize: 10),
                   headers: ['Product', 'Qty', 'Price', 'Total'],
@@ -147,14 +195,28 @@ Future<File?> generatePurchaseInvoicePdf(
                     final qty = item['qty'] ?? 0;
                     final price = item['price'] ?? 0.0;
                     final total = qty * price;
-                    return [item['product_name'] ?? '', qty.toString(), price.toStringAsFixed(2), total.toStringAsFixed(2)];
+                    return [
+                      item['product_name'] ?? '',
+                      qty.toString(),
+                      price.toStringAsFixed(2),
+                      total.toStringAsFixed(2),
+                    ];
                   }).toList(),
                 ),
               ],
 
               pw.Spacer(),
               pw.Divider(),
-              pw.Center(child: pw.Text('Thank you for your business!', style: pw.TextStyle(font: regularFont, fontSize: 12, color: PdfColors.grey700))),
+              pw.Center(
+                child: pw.Text(
+                  'Thank you for your business!',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 12,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+              ),
             ],
           ),
         );

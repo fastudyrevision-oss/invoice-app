@@ -10,10 +10,10 @@ import '../../agent/flutter_sql_agent_ai.dart';
 import '../../modules/profit_loss/presentation/profit_loss_screen.dart';
 import '../../modules/profit_loss/data/repository/profit_loss_repo.dart';
 import '../../modules/profit_loss/data/dao/profit_loss_dao.dart';
-
+import '../../modules/profit_loss/data/dao/manual_entry_dao.dart';
 
 class ReportsDashboard extends StatelessWidget {
-   final SqlAgentService sqlAgent;
+  final SqlAgentService sqlAgent;
   const ReportsDashboard({super.key, required this.sqlAgent});
 
   @override
@@ -33,12 +33,12 @@ class ReportsDashboard extends StatelessWidget {
               Tab(text: "Expiry"),
               Tab(text: "Payments"),
               Tab(text: "Stock Report"),
-               Tab(text: "AI Reports"),  // ← NEW TAB
-               Tab(text: "Profit and Loss"),
+              Tab(text: "AI Reports"), // ← NEW TAB
+              Tab(text: "Profit and Loss"),
             ],
           ),
         ),
-        body:  TabBarView(
+        body: TabBarView(
           children: [
             SupplierReportFrame(),
             ProductReportFrame(),
@@ -46,13 +46,13 @@ class ReportsDashboard extends StatelessWidget {
             ExpiryReportFrame(),
             PaymentReportFrame(),
             StockReportFrame(),
-              // ---- AI TAB ----
+            // ---- AI TAB ----
             ReportRunnerWidget(agent: sqlAgent), // ← THIS IS YOUR AI UI
             ProfitLossScreen(
-          controller: ProfitLossUIController(
-            ProfitLossRepository(ProfitLossDao()),
-          ),
-        ), //
+              controller: ProfitLossUIController(
+                ProfitLossRepository(ProfitLossDao(), ManualEntryDao()),
+              ),
+            ), //
           ],
         ),
       ),

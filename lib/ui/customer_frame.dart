@@ -407,7 +407,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                     // Pending amount chip
                                     Chip(
                                       label: Text(
-                                        "\$${customer.pendingAmount.toStringAsFixed(2)}",
+                                        "Rs ${customer.pendingAmount.toStringAsFixed(2)}",
                                       ),
                                       backgroundColor:
                                           customer.pendingAmount > 0

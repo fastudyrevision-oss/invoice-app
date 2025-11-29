@@ -1,16 +1,19 @@
 import '../dao/profit_loss_dao.dart';
+import '../dao/manual_entry_dao.dart';
 import '../models/category_profit.dart';
 import '../models/product_profit.dart';
 import '../models/profit_loss_summary.dart';
 import '../models/supplier_profit.dart';
+import '../models/manual_entry.dart';
 
 // =======================
 // REPOSITORY: ProfitLossRepository
 // =======================
 class ProfitLossRepository {
   final ProfitLossDao dao;
+  final ManualEntryDao manualEntryDao;
 
-  ProfitLossRepository(this.dao);
+  ProfitLossRepository(this.dao, this.manualEntryDao);
 
   /// Fetch Profit & Loss summary within date range
   Future<ProfitLossSummary> loadSummary(DateTime start, DateTime end) async {
@@ -19,17 +22,24 @@ class ProfitLossRepository {
     final cogs = await dao.getTotalCostOfGoodsSold(start, end);
     final grossProfit = sales - cogs;
     final expenses = await dao.getTotalExpenses(start, end);
-    final net = grossProfit - expenses;
+
+    // Add manual entries
+    final manualIncome = await manualEntryDao.getTotalIncome(start, end);
+    final manualExpense = await manualEntryDao.getTotalExpense(start, end);
+
+    final totalExpenses = expenses + manualExpense;
+    final totalIncome = sales + manualIncome;
+    final net = grossProfit + manualIncome - totalExpenses;
 
     final pendingCustomers = await dao.getCustomerPendings();
     final pendingSuppliers = await dao.getSupplierPendings();
     final inHand = await dao.getInHandCash(start, end);
 
     return ProfitLossSummary(
-      totalSales: sales,
+      totalSales: totalIncome,
       totalCostOfGoods: cogs,
       grossProfit: grossProfit,
-      totalExpenses: expenses,
+      totalExpenses: totalExpenses,
       netProfit: net,
       totalDiscounts: discounts,
       pendingFromCustomers: pendingCustomers,
@@ -41,9 +51,16 @@ class ProfitLossRepository {
   Future<List<ProductProfit>> loadProductProfit(DateTime start, DateTime end) =>
       dao.getProductWiseProfit(start, end);
 
-  Future<List<CategoryProfit>> loadCategoryProfit(DateTime start, DateTime end) =>
-      dao.getCategoryWiseProfit(start, end);
+  Future<List<CategoryProfit>> loadCategoryProfit(
+    DateTime start,
+    DateTime end,
+  ) => dao.getCategoryWiseProfit(start, end);
 
-  Future<List<SupplierProfit>> loadSupplierProfit(DateTime start, DateTime end) =>
-      dao.getSupplierWiseProfit(start, end);
+  Future<List<SupplierProfit>> loadSupplierProfit(
+    DateTime start,
+    DateTime end,
+  ) => dao.getSupplierWiseProfit(start, end);
+
+  Future<List<ManualEntry>> loadManualEntries(DateTime start, DateTime end) =>
+      manualEntryDao.getByDateRange(start, end);
 }

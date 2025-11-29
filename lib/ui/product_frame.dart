@@ -542,7 +542,7 @@ class _ProductFrameState extends State<ProductFrame> {
                           "Category: ${category.name} | Supplier: ${supplier.name}",
                         ),
                         Text(
-                          "Cost: \$${p.costPrice.toStringAsFixed(2)} | Sell: \$${p.sellPrice.toStringAsFixed(2)}",
+                          "Cost: Rs ${p.costPrice.toStringAsFixed(2)} | Sell: Rs ${p.sellPrice.toStringAsFixed(2)}",
                         ),
                         Text("Qty: ${p.quantity} | Min Stock: ${p.minStock}"),
                         Row(

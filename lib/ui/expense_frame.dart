@@ -3,6 +3,7 @@ import '../models/expense.dart';
 import '../repositories/expense_repository.dart';
 
 enum ExpenseSortMode { date, amount }
+
 enum ExpenseFilterType { daily, weekly, monthly, yearly, all }
 
 class ExpenseFrame extends StatefulWidget {
@@ -22,8 +23,6 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
   ExpenseSortMode _sortMode = ExpenseSortMode.date;
   ExpenseFilterType _filterType = ExpenseFilterType.all;
   double _filteredTotal = 0.0;
-
-
 
   @override
   void initState() {
@@ -147,89 +146,82 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
       ),
     );
   }
+
   Widget _buildFilterChips() {
-  return Wrap(
-    spacing: 8,
-    children: [
-      _chip("All", ExpenseFilterType.all),
-      _chip("Daily", ExpenseFilterType.daily),
-      _chip("Weekly", ExpenseFilterType.weekly),
-      _chip("Monthly", ExpenseFilterType.monthly),
-      _chip("Yearly", ExpenseFilterType.yearly),
-      
-
-    ],
-    
-  );
-}
-void _applyFilters() {
-  DateTime now = DateTime.now();
-
-  List<Expense> filtered = _expenses;
-
-  switch (_filterType) {
-    case ExpenseFilterType.daily:
-      filtered = filtered.where((e) {
-        DateTime d = DateTime.parse(e.date);
-        return d.year == now.year &&
-               d.month == now.month &&
-               d.day == now.day;
-      }).toList();
-      break;
-
-    case ExpenseFilterType.weekly:
-      final beginningOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      filtered = filtered.where((e) {
-        DateTime d = DateTime.parse(e.date);
-        return d.isAfter(beginningOfWeek) && d.isBefore(now.add(const Duration(days: 1)));
-      }).toList();
-      break;
-
-    case ExpenseFilterType.monthly:
-      filtered = filtered.where((e) {
-        DateTime d = DateTime.parse(e.date);
-        return d.year == now.year && d.month == now.month;
-      }).toList();
-      break;
-
-    case ExpenseFilterType.yearly:
-      filtered = filtered.where((e) {
-        DateTime d = DateTime.parse(e.date);
-        return d.year == now.year;
-      }).toList();
-      break;
-
-    case ExpenseFilterType.all:
-      // Do nothing
-      break;
+    return Wrap(
+      spacing: 8,
+      children: [
+        _chip("All", ExpenseFilterType.all),
+        _chip("Daily", ExpenseFilterType.daily),
+        _chip("Weekly", ExpenseFilterType.weekly),
+        _chip("Monthly", ExpenseFilterType.monthly),
+        _chip("Yearly", ExpenseFilterType.yearly),
+      ],
+    );
   }
+
+  void _applyFilters() {
+    DateTime now = DateTime.now();
+
+    List<Expense> filtered = _expenses;
+
+    switch (_filterType) {
+      case ExpenseFilterType.daily:
+        filtered = filtered.where((e) {
+          DateTime d = DateTime.parse(e.date);
+          return d.year == now.year && d.month == now.month && d.day == now.day;
+        }).toList();
+        break;
+
+      case ExpenseFilterType.weekly:
+        final beginningOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        filtered = filtered.where((e) {
+          DateTime d = DateTime.parse(e.date);
+          return d.isAfter(beginningOfWeek) &&
+              d.isBefore(now.add(const Duration(days: 1)));
+        }).toList();
+        break;
+
+      case ExpenseFilterType.monthly:
+        filtered = filtered.where((e) {
+          DateTime d = DateTime.parse(e.date);
+          return d.year == now.year && d.month == now.month;
+        }).toList();
+        break;
+
+      case ExpenseFilterType.yearly:
+        filtered = filtered.where((e) {
+          DateTime d = DateTime.parse(e.date);
+          return d.year == now.year;
+        }).toList();
+        break;
+
+      case ExpenseFilterType.all:
+        // Do nothing
+        break;
+    }
     // 🔥 calculate total
-  final total = filtered.fold<double>(
-    0.0,
-    (sum, item) => sum + item.amount,
-  );
+    final total = filtered.fold<double>(0.0, (sum, item) => sum + item.amount);
 
-  setState(() {
-    _filteredExpenses = filtered;
-    _filteredTotal=total;
-  });
-}
+    setState(() {
+      _filteredExpenses = filtered;
+      _filteredTotal = total;
+    });
+  }
 
-
-Widget _chip(String label, ExpenseFilterType type) {
-  final isSelected = _filterType == type;
-  return ChoiceChip(
-    label: Text(label),
-    selected: isSelected,
-    onSelected: (selected) {
-      setState(() {
-        _filterType = type;
-      });
-      _applyFilters();
-    },
-  );
-}
-
+  Widget _chip(String label, ExpenseFilterType type) {
+    final isSelected = _filterType == type;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _filterType = type;
+        });
+        _applyFilters();
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -322,16 +314,16 @@ Widget _chip(String label, ExpenseFilterType type) {
                     ),
                   ),
                 ),
-                 _buildFilterChips(),
-                  const SizedBox(height: 8),
-                  const SizedBox( width: 8),
-      Text(
-  "Total: $_filteredTotal",
-  style: const TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.bold,
-  ),
-),
+                _buildFilterChips(),
+                const SizedBox(height: 8),
+                const SizedBox(width: 8),
+                Text(
+                  "Total: $_filteredTotal",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
 
                 // Expense list
                 Expanded(
@@ -376,7 +368,7 @@ Widget _chip(String label, ExpenseFilterType type) {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    "\$${expense.amount.toStringAsFixed(2)}",
+                                    "Rs ${expense.amount.toStringAsFixed(2)}",
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: expense.amount > 0

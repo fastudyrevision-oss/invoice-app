@@ -1,7 +1,6 @@
 import '../../../../db/database_helper.dart';
 import '../models/category_profit.dart';
 import '../models/product_profit.dart';
-import '../models/profit_loss_summary.dart';
 import '../models/supplier_profit.dart';
 
 class ProfitLossDao {
@@ -10,58 +9,73 @@ class ProfitLossDao {
   // ---------- Summary Queries ----------
   Future<double> getTotalSales(DateTime start, DateTime end) async {
     final result = await db.rawQuery(
-        'SELECT SUM(total) AS total FROM invoices WHERE date BETWEEN ? AND ?',
-        [start.toIso8601String(), end.toIso8601String()]);
-    return (result.first['total'] ?? 0) * 1.0;
+      'SELECT SUM(total) AS total FROM invoices WHERE date BETWEEN ? AND ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['total'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getTotalDiscounts(DateTime start, DateTime end) async {
     final result = await db.rawQuery(
-        'SELECT SUM(discount) AS discount FROM invoices WHERE date BETWEEN ? AND ?',
-        [start.toIso8601String(), end.toIso8601String()]);
-    return (result.first['discount'] ?? 0) * 1.0;
+      'SELECT SUM(discount) AS discount FROM invoices WHERE date BETWEEN ? AND ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['discount'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getTotalExpenses(DateTime start, DateTime end) async {
     final result = await db.rawQuery(
-        'SELECT SUM(amount) AS amount FROM expenses WHERE date BETWEEN ? AND ?',
-        [start.toIso8601String(), end.toIso8601String()]);
-    return (result.first['amount'] ?? 0) * 1.0;
+      'SELECT SUM(amount) AS amount FROM expenses WHERE date BETWEEN ? AND ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['amount'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getCustomerPendings() async {
-    final result = await db.rawQuery('SELECT SUM(pending) AS pending FROM invoices');
-    return (result.first['pending'] ?? 0) * 1.0;
+    final result = await db.rawQuery(
+      'SELECT SUM(pending) AS pending FROM invoices',
+    );
+    return (result.first['pending'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getSupplierPendings() async {
-    final result = await db.rawQuery('SELECT SUM(pending) AS pending FROM purchases');
-    return (result.first['pending'] ?? 0) * 1.0;
+    final result = await db.rawQuery(
+      'SELECT SUM(pending) AS pending FROM purchases',
+    );
+    return (result.first['pending'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getInHandCash(DateTime start, DateTime end) async {
     final result = await db.rawQuery(
-        'SELECT SUM(paid) AS paid FROM invoices WHERE date BETWEEN ? AND ?',
-        [start.toIso8601String(), end.toIso8601String()]);
-    final paid = (result.first['paid'] ?? 0) * 1.0;
+      'SELECT SUM(paid) AS paid FROM invoices WHERE date BETWEEN ? AND ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    final paid = (result.first['paid'] as num? ?? 0) * 1.0;
     final expenses = await getTotalExpenses(start, end);
     return paid - expenses;
   }
 
   Future<double> getTotalCostOfGoodsSold(DateTime start, DateTime end) async {
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT SUM(ii.qty * pi.purchase_price) AS cogs
       FROM invoice_items ii
       LEFT JOIN purchase_items pi ON ii.product_id = pi.product_id
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
       WHERE inv.date BETWEEN ? AND ?
-    ''', [start.toIso8601String(), end.toIso8601String()]);
-    return (result.first['cogs'] ?? 0) * 1.0;
+    ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['cogs'] as num? ?? 0) * 1.0;
   }
 
   // ---------- Product Profits ----------
-  Future<List<ProductProfit>> getProductWiseProfit(DateTime start, DateTime end) async {
-    final result = await db.rawQuery('''
+  Future<List<ProductProfit>> getProductWiseProfit(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final result = await db.rawQuery(
+      '''
       SELECT 
         p.id AS product_id,
         p.name AS product_name,
@@ -74,18 +88,20 @@ class ProfitLossDao {
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
       WHERE inv.date BETWEEN ? AND ?
       GROUP BY p.id
-    ''', [start.toIso8601String(), end.toIso8601String()]);
+    ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
 
     return result.map((row) {
-      final totalSales = (row['total_sales'] ?? 0) * 1.0;
-      final totalCost = (row['total_cost'] ?? 0) * 1.0;
+      final totalSales = (row['total_sales'] as num? ?? 0) * 1.0;
+      final totalCost = (row['total_cost'] as num? ?? 0) * 1.0;
       return ProductProfit(
-        productId: row['product_id'],
-        name: row['product_name'],
+        productId: row['product_id'] as String? ?? '',
+        name: row['product_name'] as String? ?? 'Unknown',
         totalSales: totalSales,
         totalCost: totalCost,
         profit: totalSales - totalCost,
-        totalSoldQty: row['sold_qty'] ?? 0,
+        totalSoldQty: (row['sold_qty'] as num? ?? 0).toInt(),
         expiredQty: 0,
         expiredLoss: 0,
       );
@@ -93,8 +109,12 @@ class ProfitLossDao {
   }
 
   // ---------- Category Profits ----------
-  Future<List<CategoryProfit>> getCategoryWiseProfit(DateTime start, DateTime end) async {
-    final result = await db.rawQuery('''
+  Future<List<CategoryProfit>> getCategoryWiseProfit(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final result = await db.rawQuery(
+      '''
       SELECT 
         c.id AS category_id,
         c.name AS category_name,
@@ -107,14 +127,16 @@ class ProfitLossDao {
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
       WHERE inv.date BETWEEN ? AND ?
       GROUP BY c.id
-    ''', [start.toIso8601String(), end.toIso8601String()]);
+    ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
 
     return result.map((row) {
-      final totalSales = (row['total_sales'] ?? 0) * 1.0;
-      final totalCost = (row['total_cost'] ?? 0) * 1.0;
+      final totalSales = (row['total_sales'] as num? ?? 0) * 1.0;
+      final totalCost = (row['total_cost'] as num? ?? 0) * 1.0;
       return CategoryProfit(
-        categoryId: row['category_id'],
-        name: row['category_name'],
+        categoryId: row['category_id'] as String? ?? '',
+        name: row['category_name'] as String? ?? 'Unknown',
         totalSales: totalSales,
         totalCost: totalCost,
         profit: totalSales - totalCost,
@@ -123,8 +145,12 @@ class ProfitLossDao {
   }
 
   // ---------- Supplier Profits ----------
-  Future<List<SupplierProfit>> getSupplierWiseProfit(DateTime start, DateTime end) async {
-    final result = await db.rawQuery('''
+  Future<List<SupplierProfit>> getSupplierWiseProfit(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final result = await db.rawQuery(
+      '''
       SELECT 
         s.id AS supplier_id,
         s.name AS supplier_name,
@@ -134,14 +160,16 @@ class ProfitLossDao {
       LEFT JOIN purchases pur ON pur.supplier_id = s.id
       WHERE pur.date BETWEEN ? AND ?
       GROUP BY s.id
-    ''', [start.toIso8601String(), end.toIso8601String()]);
+    ''',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
 
     return result.map((row) {
       return SupplierProfit(
-        supplierId: row['supplier_id'],
-        name: row['supplier_name'],
-        totalPurchases: (row['total_purchases'] ?? 0) * 1.0,
-        pendingToSupplier: (row['pending_to_supplier'] ?? 0) * 1.0,
+        supplierId: row['supplier_id'] as String? ?? '',
+        name: row['supplier_name'] as String? ?? 'Unknown',
+        totalPurchases: (row['total_purchases'] as num? ?? 0) * 1.0,
+        pendingToSupplier: (row['pending_to_supplier'] as num? ?? 0) * 1.0,
       );
     }).toList();
   }

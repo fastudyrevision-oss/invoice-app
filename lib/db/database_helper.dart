@@ -40,6 +40,7 @@ class DatabaseHelper {
     "customer_payments",
     "supplier_payments",
     "expenses",
+    "manual_entries",
     "ledger",
     "audit_logs",
     "attachments",
@@ -389,6 +390,20 @@ class DatabaseHelper {
         category TEXT DEFAULT 'general',
         amount REAL NOT NULL,
         date TEXT,
+        created_at TEXT,
+        updated_at TEXT,
+        is_synced INTEGER DEFAULT 0
+      )
+    ''');
+
+    // MANUAL ENTRIES
+    await db.execute('''
+      CREATE TABLE manual_entries (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        date TEXT NOT NULL,
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0

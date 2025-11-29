@@ -8,7 +8,8 @@ import '../models/supplier_profit.dart';
 // =======================
 class ProfitLossModel {
   final double totalSales;
-  final double totalPurchaseCost;
+  final double totalPurchaseCost; // This is COGS
+  final double totalPurchases; // This is actual purchases made
   final double totalProfit;
   final double totalExpenses;
   final double totalDiscounts;
@@ -23,6 +24,7 @@ class ProfitLossModel {
   ProfitLossModel({
     this.totalSales = 0.0,
     this.totalPurchaseCost = 0.0,
+    this.totalPurchases = 0.0,
     this.totalProfit = 0.0,
     this.totalExpenses = 0.0,
     this.totalDiscounts = 0.0,
@@ -35,10 +37,14 @@ class ProfitLossModel {
   });
 
   // Factory from ProfitLossSummary
-  factory ProfitLossModel.fromSummary(ProfitLossSummary s) {
+  factory ProfitLossModel.fromSummary(
+    ProfitLossSummary s, {
+    double totalPurchases = 0.0,
+  }) {
     return ProfitLossModel(
       totalSales: s.totalSales,
       totalPurchaseCost: s.totalCostOfGoods,
+      totalPurchases: totalPurchases,
       totalProfit: s.netProfit,
       totalExpenses: s.totalExpenses,
       totalDiscounts: s.totalDiscounts,

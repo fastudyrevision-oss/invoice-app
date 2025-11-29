@@ -35,11 +35,11 @@ Future<File?> generatePdfReportWithChart({
             ),
             pw.SizedBox(height: 10),
             pw.Text(
-              'Total Revenue: \$${totalRevenue.toStringAsFixed(2)}',
+              'Total Revenue: Rs ${totalRevenue.toStringAsFixed(2)}',
               style: pw.TextStyle(font: regularFont, fontSize: 14),
             ),
             pw.Text(
-              'Average Invoice: \$${avgInvoice.toStringAsFixed(2)}',
+              'Average Invoice: Rs ${avgInvoice.toStringAsFixed(2)}',
               style: pw.TextStyle(font: regularFont, fontSize: 14),
             ),
             pw.SizedBox(height: 20),

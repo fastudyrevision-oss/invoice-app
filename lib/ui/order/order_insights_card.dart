@@ -129,7 +129,7 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
 
                       // Additional insights
                       Text(
-                        "Average Invoice: \$${avgInvoice.toStringAsFixed(2)}",
+                        "Average Invoice: Rs ${avgInvoice.toStringAsFixed(2)}",
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
