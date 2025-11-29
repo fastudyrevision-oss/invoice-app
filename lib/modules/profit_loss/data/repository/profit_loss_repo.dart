@@ -33,7 +33,17 @@ class ProfitLossRepository {
 
     final pendingCustomers = await dao.getCustomerPendings();
     final pendingSuppliers = await dao.getSupplierPendings();
-    final inHand = await dao.getInHandCash(start, end);
+
+    // Get purchase data
+    final paidPurchases = await dao.getTotalPaidPurchases(start, end);
+    final totalPurchases = await dao.getTotalPurchases(start, end);
+
+    // Calculate In-Hand Cash
+    // dao.getInHandCash returns (paidInvoices - expenses)
+    final netInvoicesMinusExpenses = await dao.getInHandCash(start, end);
+    final paidInvoices = netInvoicesMinusExpenses + expenses;
+
+    final inHand = paidInvoices + manualIncome - paidPurchases - totalExpenses;
 
     return ProfitLossSummary(
       totalSales: totalIncome,
@@ -44,6 +54,7 @@ class ProfitLossRepository {
       totalDiscounts: discounts,
       pendingFromCustomers: pendingCustomers,
       pendingToSuppliers: pendingSuppliers,
+      totalPurchases: totalPurchases,
       inHandCash: inHand,
     );
   }

@@ -120,18 +120,7 @@ class ProfitLossUIController {
 
     try {
       final summary = await repo.loadSummary(rangeStart, rangeEnd);
-      // Calculate total purchases for previous period if needed for consistency
-      // For now, we'll just return summary as is, or fetch suppliers if we want strict accuracy for "Cash Flow" mode in previous period.
-      // Let's fetch suppliers to be consistent with getData.
-      final suppliers = await repo.loadSupplierProfit(rangeStart, rangeEnd);
-      double totalPurchases = 0;
-      for (var s in suppliers) {
-        totalPurchases += s.totalPurchases;
-      }
-      return ProfitLossModel.fromSummary(
-        summary,
-        totalPurchases: totalPurchases,
-      );
+      return ProfitLossModel.fromSummary(summary);
     } catch (e) {
       return null;
     }
@@ -145,10 +134,10 @@ class ProfitLossUIController {
     try {
       {
         final dao = repo.manualEntryDao;
-        if (start != null && end != null && dao.getByDateRange != null) {
+        if (start != null && end != null) {
           return await dao.getByDateRange(start, end);
         }
-        if (dao.getAll != null) return await dao.getAll();
+        return await dao.getAll();
       }
     } catch (e) {
       // ignore
@@ -161,8 +150,7 @@ class ProfitLossUIController {
 class ProfitLossScreen extends StatefulWidget {
   final ProfitLossUIController controller;
 
-  const ProfitLossScreen({required this.controller, Key? key})
-    : super(key: key);
+  const ProfitLossScreen({required this.controller, super.key});
 
   @override
   State<ProfitLossScreen> createState() => _ProfitLossScreenState();
@@ -515,6 +503,130 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
+  Widget _buildManualEntriesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Manual Entries",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_circle, color: Colors.blue),
+              onPressed: () => _showManualEntryDialog(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: "Search entries...",
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
+          onChanged: _filterManualEntries,
+        ),
+        const SizedBox(height: 8),
+        if (filteredManualEntries.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text("No manual entries found."),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredManualEntries.length,
+            itemBuilder: (context, index) {
+              final entry = filteredManualEntries[index];
+              final isExpense = entry.type == 'expense';
+              return Slidable(
+                endActionPane: ActionPane(
+                  motion: const ScrollMotion(),
+                  children: [
+                    SlidableAction(
+                      onPressed: (ctx) => _deleteManualEntry(entry),
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete,
+                      label: 'Delete',
+                    ),
+                  ],
+                ),
+                child: Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isExpense
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.green.withOpacity(0.1),
+                      child: Icon(
+                        isExpense ? Icons.arrow_downward : Icons.arrow_upward,
+                        color: isExpense ? Colors.red : Colors.green,
+                      ),
+                    ),
+                    title: Text(entry.description),
+                    subtitle: Text(
+                      DateFormat('dd MMM yyyy').format(entry.date),
+                    ),
+                    trailing: Text(
+                      "${isExpense ? '-' : '+'}Rs ${entry.amount.toStringAsFixed(2)}",
+                      style: TextStyle(
+                        color: isExpense ? Colors.red : Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showManualEntryDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) =>
+          ManualEntryDialog(dao: widget.controller.repo.manualEntryDao),
+    );
+
+    if (result == true) {
+      fetchAll();
+    }
+  }
+
+  Future<void> _deleteManualEntry(ManualEntry entry) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Entry"),
+        content: const Text("Are you sure you want to delete this entry?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await widget.controller.repo.manualEntryDao.delete(entry.id);
+      fetchAll();
+    }
+  }
+
   Widget _buildFilters() {
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -590,186 +702,16 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
-  Widget _buildExportButton() {
-    final enabled = summaryData != null;
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ElevatedButton.icon(
-        icon: const Icon(Icons.picture_as_pdf),
-        label: const Text("Export PDF"),
-        onPressed: enabled
-            ? () async {
-                await PDFExporter.exportDashboard(
-                  summary: summaryData!,
-                  categories: categories,
-                  products: products,
-                  suppliers: suppliers,
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('PDF exported to Documents folder'),
-                  ),
-                );
-              }
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildManualEntriesSection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Manual Entries",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle, color: Colors.blue),
-                  onPressed: () => _showManualEntryDialog(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Search Bar
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: "Search entries...",
-                prefixIcon: const Icon(Icons.search),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 0,
-                  horizontal: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              onChanged: _filterManualEntries,
-            ),
-            const SizedBox(height: 8),
-            if (filteredManualEntries.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Center(child: Text('No manual entries found')),
-              )
-            else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: filteredManualEntries.length,
-                separatorBuilder: (ctx, i) => const Divider(height: 1),
-                itemBuilder: (ctx, i) {
-                  final entry = filteredManualEntries[i];
-                  return Slidable(
-                    key: ValueKey(entry.id),
-                    endActionPane: ActionPane(
-                      motion: const ScrollMotion(),
-                      children: [
-                        SlidableAction(
-                          onPressed: (_) =>
-                              _showManualEntryDialog(entry: entry),
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          icon: Icons.edit,
-                          label: 'Edit',
-                        ),
-                        SlidableAction(
-                          onPressed: (_) => _deleteManualEntry(entry),
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          icon: Icons.delete,
-                          label: 'Delete',
-                        ),
-                      ],
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      title: Text(
-                        entry.description,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: Text(
-                        DateFormat('yyyy-MM-dd').format(entry.date),
-                      ),
-                      trailing: Text(
-                        '${entry.type == "income" ? "+" : "-"}Rs ${entry.amount.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          color: entry.type == "income"
-                              ? Colors.green
-                              : Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showManualEntryDialog({ManualEntry? entry}) async {
-    final result = await showDialog<bool?>(
-      context: context,
-      builder: (context) => ManualEntryDialog(
-        dao: widget.controller.repo.manualEntryDao,
-        entry: entry,
-      ),
-    );
-    if (result == true) await fetchAll();
-  }
-
-  Future<void> _deleteManualEntry(ManualEntry entry) async {
-    // Optimistic update or confirm dialog
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Entry'),
-        content: const Text('Are you sure you want to delete this entry?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await widget.controller.repo.manualEntryDao.delete(entry.id);
-      await fetchAll();
-    }
-  }
-
   Future<void> _exportPDF() async {
+    if (summaryData == null) return;
+
     await PDFExporter.exportDashboard(
       summary: summaryData!,
       categories: categories,
       products: products,
       suppliers: suppliers,
     );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('PDF exported to Documents folder')),
@@ -779,7 +721,6 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
 }
 
 // ---------------------- PDF EXPORT HELPER ----------------------
-// ---------------------- PDF EXPORT HELPER ----------------------
 class PDFExporter {
   static Future<void> exportDashboard({
     required ProfitLossModel summary,
@@ -788,12 +729,13 @@ class PDFExporter {
     required List<SupplierProfit> suppliers,
   }) async {
     try {
-      // Debug logging to catch bad values early
+      // Debug logging
       debugPrint(
         "Exporting PDF: sales=${_sanitizeValue(summary.totalSales)}, "
         "profit=${_sanitizeValue(summary.totalProfit)}, "
         "expenses=${_sanitizeValue(summary.totalExpenses)}",
       );
+
       final pdf = pw.Document();
 
       pdf.addPage(
@@ -808,11 +750,272 @@ class PDFExporter {
                   style: pw.TextStyle(
                     fontSize: 24,
                     fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 20),
+
+              // Summary Cards Row 1
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  _summaryCardPdf(
+                    "Total Sales",
+                    summary.totalSales,
+                    PdfColors.blue,
+                  ),
+                  _summaryCardPdf(
+                    "COGS Profit",
+                    summary.totalProfit,
+                    PdfColors.green,
+                  ),
+                  _summaryCardPdf(
+                    "Expenses",
+                    summary.totalExpenses,
+                    PdfColors.red,
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+
+              // Summary Cards Row 2
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  _summaryCardPdf(
+                    "Discounts",
+                    summary.totalDiscounts,
+                    PdfColors.orange,
+                  ),
+                  _summaryCardPdf(
+                    "Receivables",
+                    summary.pendingFromCustomers,
+                    PdfColors.indigo,
+                  ),
+                  _summaryCardPdf(
+                    "Payables",
+                    summary.pendingToSuppliers,
+                    PdfColors.deepOrange,
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              pw.Divider(),
+              pw.SizedBox(height: 10),
+
+              // Detailed Financial Breakdown
+              pw.Text(
+                "Financial Breakdown",
+                style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               pw.SizedBox(height: 10),
+              pw.TableHelper.fromTextArray(
+                headers: ["Metric", "Amount"],
+                data: [
+                  [
+                    "Gross Sales",
+                    _safeMoneyFormat(
+                      summary.totalSales + summary.totalDiscounts,
+                    ),
+                  ],
+                  ["Less: Discounts", _safeMoneyFormat(summary.totalDiscounts)],
+                  ["Net Sales", _safeMoneyFormat(summary.totalSales)],
+                  ["", ""],
+                  ["Less: COGS", _safeMoneyFormat(summary.totalPurchaseCost)],
+                  [
+                    "Gross Profit (COGS-based)",
+                    _safeMoneyFormat(
+                      summary.totalSales - summary.totalPurchaseCost,
+                    ),
+                  ],
+                  ["", ""],
+                  [
+                    "Less: Total Expenses",
+                    _safeMoneyFormat(summary.totalExpenses),
+                  ],
+                  [
+                    "Net Profit (COGS-based)",
+                    _safeMoneyFormat(summary.totalProfit),
+                  ],
+                ],
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellAlignment: pw.Alignment.centerLeft,
+              ),
+              pw.SizedBox(height: 15),
+
+              // Profit Calculation Comparison
+              pw.Text(
+                "Profit Calculation Comparison",
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // COGS-Based
+                  pw.Expanded(
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey400),
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            "COGS-Based (Standard)",
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.blue900,
+                            ),
+                          ),
+                          pw.SizedBox(height: 8),
+                          _buildCalcRow("Sales", summary.totalSales),
+                          _buildCalcRow("- COGS", summary.totalPurchaseCost),
+                          _buildCalcRow("- Expenses", summary.totalExpenses),
+                          pw.Divider(height: 4),
+                          _buildCalcRow(
+                            "= Net Profit",
+                            summary.totalProfit,
+                            bold: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(width: 10),
+                  // Purchase-Based
+                  pw.Expanded(
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey400),
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            "Purchase-Based (Cash Flow)",
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.purple900,
+                            ),
+                          ),
+                          pw.SizedBox(height: 8),
+                          _buildCalcRow("Sales", summary.totalSales),
+                          _buildCalcRow("- Purchases", summary.totalPurchases),
+                          _buildCalcRow("- Expenses", summary.totalExpenses),
+                          pw.Divider(height: 4),
+                          _buildCalcRow(
+                            "= Cash Profit",
+                            summary.totalSales -
+                                summary.totalPurchases -
+                                summary.totalExpenses,
+                            bold: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 15),
+
+              // Cash Flow Analysis
+              pw.Text(
+                "Cash Flow Analysis",
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.TableHelper.fromTextArray(
+                headers: ["Metric", "Amount"],
+                data: [
+                  [
+                    "Cash Received (Paid)",
+                    _safeMoneyFormat(
+                      summary.totalSales - summary.pendingFromCustomers,
+                    ),
+                  ],
+                  [
+                    "Receivables (Pending)",
+                    _safeMoneyFormat(summary.pendingFromCustomers),
+                  ],
+                  ["Total Sales Value", _safeMoneyFormat(summary.totalSales)],
+                  ["", ""],
+                  [
+                    "Payables (Pending to Suppliers)",
+                    _safeMoneyFormat(summary.pendingToSuppliers),
+                  ],
+                  ["In-Hand Cash", _safeMoneyFormat(summary.inHandCash)],
+                ],
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellAlignment: pw.Alignment.centerLeft,
+              ),
+              pw.SizedBox(height: 15),
+
+              // Purchase & Inventory Analysis
+              pw.Text(
+                "Purchase & Inventory Analysis",
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.TableHelper.fromTextArray(
+                headers: ["Metric", "Amount", "Note"],
+                data: [
+                  [
+                    "Total Purchases Made",
+                    _safeMoneyFormat(summary.totalPurchases),
+                    "All purchases in period",
+                  ],
+                  [
+                    "COGS (Goods Sold)",
+                    _safeMoneyFormat(summary.totalPurchaseCost),
+                    "Cost of items sold",
+                  ],
+                  [
+                    "Inventory Added",
+                    _safeMoneyFormat(
+                      summary.totalPurchases - summary.totalPurchaseCost,
+                    ),
+                    "Stock remaining",
+                  ],
+                ],
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 9),
+                cellAlignment: pw.Alignment.centerLeft,
+              ),
+              pw.SizedBox(height: 20),
+              pw.Divider(),
+
+              // Charts
+              pw.SizedBox(height: 20),
               pw.Container(
                 height: 200,
                 child: pw.Chart(
@@ -911,6 +1114,7 @@ class PDFExporter {
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 cellAlignment: pw.Alignment.centerLeft,
               ),
+
               if (suppliers.isNotEmpty) ...[
                 pw.SizedBox(height: 20),
                 pw.Text(
@@ -981,6 +1185,32 @@ class PDFExporter {
 
     final step = maxVal / 4;
     return [0, step, step * 2, step * 3, step * 4]; // 5 ticks
+  }
+
+  static pw.Widget _buildCalcRow(
+    String label,
+    double value, {
+    bool bold = false,
+  }) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: bold ? pw.FontWeight.bold : null,
+          ),
+        ),
+        pw.Text(
+          _safeMoneyFormat(value),
+          style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: bold ? pw.FontWeight.bold : null,
+          ),
+        ),
+      ],
+    );
   }
 
   static pw.Widget _summaryCardPdf(String title, num? value, PdfColor color) {

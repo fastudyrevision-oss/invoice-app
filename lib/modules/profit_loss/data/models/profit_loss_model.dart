@@ -37,14 +37,11 @@ class ProfitLossModel {
   });
 
   // Factory from ProfitLossSummary
-  factory ProfitLossModel.fromSummary(
-    ProfitLossSummary s, {
-    double totalPurchases = 0.0,
-  }) {
+  factory ProfitLossModel.fromSummary(ProfitLossSummary s) {
     return ProfitLossModel(
       totalSales: s.totalSales,
       totalPurchaseCost: s.totalCostOfGoods,
-      totalPurchases: totalPurchases,
+      totalPurchases: s.totalPurchases,
       totalProfit: s.netProfit,
       totalExpenses: s.totalExpenses,
       totalDiscounts: s.totalDiscounts,

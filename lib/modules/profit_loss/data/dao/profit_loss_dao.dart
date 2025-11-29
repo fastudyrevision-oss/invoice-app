@@ -45,6 +45,22 @@ class ProfitLossDao {
     return (result.first['pending'] as num? ?? 0) * 1.0;
   }
 
+  Future<double> getTotalPaidPurchases(DateTime start, DateTime end) async {
+    final result = await db.rawQuery(
+      'SELECT SUM(paid) AS paid FROM purchases WHERE date BETWEEN ? AND ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['paid'] as num? ?? 0) * 1.0;
+  }
+
+  Future<double> getTotalPurchases(DateTime start, DateTime end) async {
+    final result = await db.rawQuery(
+      'SELECT SUM(total) AS total FROM purchases WHERE date BETWEEN ? AND ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['total'] as num? ?? 0) * 1.0;
+  }
+
   Future<double> getInHandCash(DateTime start, DateTime end) async {
     final result = await db.rawQuery(
       'SELECT SUM(paid) AS paid FROM invoices WHERE date BETWEEN ? AND ?',
