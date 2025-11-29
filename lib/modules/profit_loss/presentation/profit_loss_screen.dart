@@ -787,179 +787,195 @@ class PDFExporter {
     required List<ProductProfit> products,
     required List<SupplierProfit> suppliers,
   }) async {
-    final pdf = pw.Document();
+    try {
+      // Debug logging to catch bad values early
+      debugPrint(
+        "Exporting PDF: sales=${_sanitizeValue(summary.totalSales)}, "
+        "profit=${_sanitizeValue(summary.totalProfit)}, "
+        "expenses=${_sanitizeValue(summary.totalExpenses)}",
+      );
+      final pdf = pw.Document();
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context ctx) {
-          return [
-            pw.Header(
-              level: 0,
-              child: pw.Text(
-                "Profit & Loss Dashboard",
-                style: pw.TextStyle(
-                  fontSize: 24,
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context ctx) {
+            return [
+              pw.Header(
+                level: 0,
+                child: pw.Text(
+                  "Profit & Loss Dashboard",
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                  fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-            ),
-            pw.SizedBox(height: 20),
-
-            // Summary Cards Row
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                _summaryCardPdf(
-                  "Total Sales",
-                  summary.totalSales,
-                  PdfColors.blue,
+              pw.SizedBox(height: 10),
+              pw.Container(
+                height: 200,
+                child: pw.Chart(
+                  grid: pw.CartesianGrid(
+                    xAxis: pw.FixedAxis(
+                      [0, 1, 2, 3],
+                      format: (v) =>
+                          ["Sales", "COGS", "Exp", "Profit"][v.toInt()],
+                    ),
+                    yAxis: pw.FixedAxis(
+                      _generateYAxisTicks(summary),
+                      format: (v) => "Rs ${v.toInt()}",
+                    ),
+                  ),
+                  datasets: [
+                    pw.BarDataSet(
+                      color: PdfColors.blue,
+                      data: [
+                        pw.PointChartValue(
+                          0,
+                          _sanitizeValue(summary.totalSales),
+                        ),
+                      ],
+                      width: 30,
+                      legend: "Sales",
+                    ),
+                    pw.BarDataSet(
+                      color: PdfColors.orange,
+                      data: [
+                        pw.PointChartValue(
+                          1,
+                          _sanitizeValue(summary.totalPurchaseCost),
+                        ),
+                      ],
+                      width: 30,
+                      legend: "COGS",
+                    ),
+                    pw.BarDataSet(
+                      color: PdfColors.red,
+                      data: [
+                        pw.PointChartValue(
+                          2,
+                          _sanitizeValue(summary.totalExpenses),
+                        ),
+                      ],
+                      width: 30,
+                      legend: "Expenses",
+                    ),
+                    pw.BarDataSet(
+                      color: PdfColors.green,
+                      data: [
+                        pw.PointChartValue(
+                          3,
+                          _sanitizeValue(summary.totalProfit),
+                        ),
+                      ],
+                      width: 30,
+                      legend: "Profit",
+                    ),
+                  ],
                 ),
-                _summaryCardPdf(
-                  "Net Profit",
-                  summary.totalProfit,
-                  PdfColors.green,
-                ),
-                _summaryCardPdf(
-                  "Expenses",
-                  summary.totalExpenses,
-                  PdfColors.red,
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 20),
-
-            // Main Chart (Bar Chart)
-            pw.Text(
-              "Income vs Expense Breakdown",
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 10),
-            pw.Container(
-              height: 200,
-              child: pw.Chart(
-                grid: pw.CartesianGrid(
-                  xAxis: pw.FixedAxis(
-                    [0, 1, 2, 3],
-                    format: (v) =>
-                        ["Sales", "COGS", "Exp", "Profit"][v.toInt()],
-                  ),
-                  yAxis: pw.FixedAxis(
-                    _generateYAxisTicks(summary),
-                    format: (v) => "\$${v.toInt()}",
-                  ),
-                ),
-                datasets: [
-                  pw.BarDataSet(
-                    color: PdfColors.blue,
-                    data: [
-                      pw.PointChartValue(0, summary.totalSales.toDouble()),
-                    ],
-                    width: 30,
-                    legend: "Sales",
-                  ),
-                  pw.BarDataSet(
-                    color: PdfColors.orange,
-                    data: [
-                      pw.PointChartValue(
-                        1,
-                        summary.totalPurchaseCost.toDouble(),
-                      ),
-                    ],
-                    width: 30,
-                    legend: "COGS",
-                  ),
-                  pw.BarDataSet(
-                    color: PdfColors.red,
-                    data: [
-                      pw.PointChartValue(2, summary.totalExpenses.toDouble()),
-                    ],
-                    width: 30,
-                    legend: "Expenses",
-                  ),
-                  pw.BarDataSet(
-                    color: PdfColors.green,
-                    data: [
-                      pw.PointChartValue(3, summary.totalProfit.toDouble()),
-                    ],
-                    width: 30,
-                    legend: "Profit",
-                  ),
-                ],
               ),
-            ),
-            pw.SizedBox(height: 20),
-
-            // Detailed Tables
-            pw.Text(
-              "Category-wise Profit",
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.TableHelper.fromTextArray(
-              headers: ["Category", "Profit"],
-              data: categories
-                  .map((c) => [c.name, c.profit.toStringAsFixed(2)])
-                  .toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              cellAlignment: pw.Alignment.centerLeft,
-            ),
-            pw.SizedBox(height: 20),
-
-            pw.Text(
-              "Product-wise Profit (Top 10)",
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.TableHelper.fromTextArray(
-              headers: ["Product", "Profit"],
-              data: products
-                  .take(10)
-                  .map((p) => [p.name, p.profit.toStringAsFixed(2)])
-                  .toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-              cellAlignment: pw.Alignment.centerLeft,
-            ),
-            if (suppliers.isNotEmpty) ...[
               pw.SizedBox(height: 20),
+
+              // Detailed Tables
               pw.Text(
-                "Supplier Purchases (Top 10)",
+                "Category-wise Profit",
                 style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               pw.TableHelper.fromTextArray(
-                headers: ["Supplier", "Purchases", "Pending"],
-                data: suppliers
-                    .take(10)
-                    .map(
-                      (s) => [
-                        s.name,
-                        s.totalPurchases.toStringAsFixed(2),
-                        s.pendingToSupplier.toStringAsFixed(2),
-                      ],
-                    )
+                headers: ["Category", "Profit"],
+                data: categories
+                    .map((c) => [c.name, _safeMoneyFormat(c.profit)])
                     .toList(),
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 cellAlignment: pw.Alignment.centerLeft,
               ),
-            ],
-          ];
-        },
-      ),
-    );
+              pw.SizedBox(height: 20),
 
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File("${dir.path}/profit_loss_dashboard.pdf");
-    await file.writeAsBytes(await pdf.save());
+              pw.Text(
+                "Product-wise Profit (Top 10)",
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.TableHelper.fromTextArray(
+                headers: ["Product", "Profit"],
+                data: products
+                    .take(10)
+                    .map((p) => [p.name, _safeMoneyFormat(p.profit)])
+                    .toList(),
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                cellAlignment: pw.Alignment.centerLeft,
+              ),
+              if (suppliers.isNotEmpty) ...[
+                pw.SizedBox(height: 20),
+                pw.Text(
+                  "Supplier Purchases (Top 10)",
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.TableHelper.fromTextArray(
+                  headers: ["Supplier", "Purchases", "Pending"],
+                  data: suppliers
+                      .take(10)
+                      .map(
+                        (s) => [
+                          s.name,
+                          _safeMoneyFormat(s.totalPurchases),
+                          _safeMoneyFormat(s.pendingToSupplier),
+                        ],
+                      )
+                      .toList(),
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellAlignment: pw.Alignment.centerLeft,
+                ),
+              ],
+            ];
+          },
+        ),
+      );
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File("${dir.path}/profit_loss_dashboard.pdf");
+      await file.writeAsBytes(await pdf.save());
+    } catch (e, st) {
+      debugPrint("PDF export failed: $e\n$st");
+      rethrow;
+    }
+  }
+
+  // Helper to sanitize values and prevent NaN
+  static double _sanitizeValue(num? value) {
+    if (value == null) return 0.0;
+    final doubleVal = value.toDouble();
+    if (doubleVal.isNaN || doubleVal.isInfinite) {
+      return 0.0;
+    }
+    return doubleVal;
+  }
+
+  // Safe format for money (prevents errors if value is NaN/null)
+  static String _safeMoneyFormat(num? value) {
+    final v = _sanitizeValue(value);
+    return "Rs ${v.toStringAsFixed(2)}";
   }
 
   static List<num> _generateYAxisTicks(ProfitLossModel summary) {
-    final maxVal = [
-      summary.totalSales,
-      summary.totalPurchaseCost,
-      summary.totalExpenses,
-      summary.totalProfit,
-    ].reduce((curr, next) => curr > next ? curr : next).toDouble();
+    // Collect only finite values
+    final numbers = <double>[
+      _sanitizeValue(summary.totalSales),
+      _sanitizeValue(summary.totalPurchaseCost),
+      _sanitizeValue(summary.totalExpenses),
+      _sanitizeValue(summary.totalProfit),
+    ];
+
+    final maxVal = numbers.reduce((curr, next) => curr > next ? curr : next);
 
     if (maxVal <= 0) return [0, 100];
 
@@ -967,7 +983,8 @@ class PDFExporter {
     return [0, step, step * 2, step * 3, step * 4]; // 5 ticks
   }
 
-  static pw.Widget _summaryCardPdf(String title, num value, PdfColor color) {
+  static pw.Widget _summaryCardPdf(String title, num? value, PdfColor color) {
+    final safeVal = _sanitizeValue(value);
     return pw.Container(
       width: 150,
       padding: const pw.EdgeInsets.all(10),
@@ -983,7 +1000,7 @@ class PDFExporter {
           ),
           pw.SizedBox(height: 5),
           pw.Text(
-            "\$${value.toStringAsFixed(2)}",
+            _safeMoneyFormat(safeVal),
             style: pw.TextStyle(
               fontSize: 18,
               fontWeight: pw.FontWeight.bold,
