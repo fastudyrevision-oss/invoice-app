@@ -7,12 +7,12 @@ class SummaryCard extends StatelessWidget {
   final double? growthPercentage; // Optional: for trend indication
 
   const SummaryCard({
-    Key? key,
+    super.key,
     required this.title,
     required this.value,
     required this.color,
     this.growthPercentage,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

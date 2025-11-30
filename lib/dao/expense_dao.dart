@@ -1,19 +1,98 @@
 import '../db/database_helper.dart';
 import '../models/expense.dart';
 
-class ExpenseDao {
-  final dbHelper = DatabaseHelper();
+import 'package:sqflite/sqflite.dart';
+import '../core/services/audit_logger.dart';
 
-  Future<int> insert(Expense expense) async =>
-      await dbHelper.insert("expenses", expense.toMap());
+class ExpenseDao {
+  final DatabaseExecutor? db;
+
+  ExpenseDao([this.db]);
+
+  Future<DatabaseExecutor> get _db async =>
+      db ?? await DatabaseHelper.instance.db;
+
+  Future<int> insert(Expense expense) async {
+    final dbClient = await _db;
+    final id = await dbClient.insert("expenses", expense.toMap());
+
+    await AuditLogger.log(
+      'CREATE',
+      'expenses',
+      recordId: expense.id,
+      userId: 'system',
+      newData: expense.toMap(),
+      txn: dbClient,
+    );
+
+    return id;
+  }
 
   Future<List<Expense>> getAll() async {
-    final data = await dbHelper.queryAll("expenses");
+    final dbClient = await _db;
+    final data = await dbClient.query("expenses");
     return data.map((e) => Expense.fromMap(e)).toList();
   }
 
-  Future<int> update(Expense expense) async =>
-      await dbHelper.update("expenses", expense.toMap(), expense.id);
+  Future<int> update(Expense expense) async {
+    final dbClient = await _db;
 
-  Future<int> delete(String id) async => await dbHelper.delete("expenses", id);
+    // Fetch old data
+    final oldDataList = await dbClient.query(
+      "expenses",
+      where: "id = ?",
+      whereArgs: [expense.id],
+    );
+    final oldData = oldDataList.isNotEmpty ? oldDataList.first : null;
+
+    final count = await dbClient.update(
+      "expenses",
+      expense.toMap(),
+      where: "id = ?",
+      whereArgs: [expense.id],
+    );
+
+    await AuditLogger.log(
+      'UPDATE',
+      'expenses',
+      recordId: expense.id,
+      userId: 'system',
+      oldData: oldData,
+      newData: expense.toMap(),
+      txn: dbClient,
+    );
+
+    return count;
+  }
+
+  Future<int> delete(String id) async {
+    final dbClient = await _db;
+
+    // Fetch old data
+    final oldDataList = await dbClient.query(
+      "expenses",
+      where: "id = ?",
+      whereArgs: [id],
+    );
+    final oldData = oldDataList.isNotEmpty ? oldDataList.first : null;
+
+    final count = await dbClient.delete(
+      "expenses",
+      where: "id = ?",
+      whereArgs: [id],
+    );
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'DELETE',
+        'expenses',
+        recordId: id,
+        userId: 'system',
+        oldData: oldData,
+        txn: dbClient,
+      );
+    }
+
+    return count;
+  }
 }

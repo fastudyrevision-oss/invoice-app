@@ -1,17 +1,38 @@
 import '../db/database_helper.dart';
 import '../models/supplier.dart';
 
+import 'package:sqflite/sqflite.dart';
+import '../core/services/audit_logger.dart';
+
 class SupplierDao {
-  final dbHelper = DatabaseHelper();
+  final DatabaseExecutor? db;
+
+  SupplierDao([this.db]);
+
+  Future<DatabaseExecutor> get _db async =>
+      db ?? await DatabaseHelper.instance.db;
 
   /// Insert a new supplier
   Future<int> insertSupplier(Supplier supplier) async {
-    return await dbHelper.insert("suppliers", supplier.toMap());
+    final dbClient = await _db;
+    final id = await dbClient.insert("suppliers", supplier.toMap());
+
+    await AuditLogger.log(
+      'CREATE',
+      'suppliers',
+      recordId: supplier.id,
+      userId: 'system',
+      newData: supplier.toMap(),
+      txn: dbClient,
+    );
+
+    return id;
   }
 
   /// Get all suppliers, optionally including deleted ones
   Future<List<Supplier>> getAllSuppliers({bool showDeleted = false}) async {
-    final data = await dbHelper.queryAll("suppliers");
+    final dbClient = await _db;
+    final data = await dbClient.query("suppliers");
     final filtered = showDeleted
         ? data
         : data.where((e) => (e['deleted'] ?? 0) == 0).toList();
@@ -24,7 +45,7 @@ class SupplierDao {
     bool showDeleted = false,
     String? keyword,
   }) async {
-    final db = await dbHelper.db;
+    final dbClient = await _db;
     final whereClauses = <String>[];
     final args = <dynamic>[];
 
@@ -41,7 +62,7 @@ class SupplierDao {
         ? 'WHERE ${whereClauses.join(' AND ')}'
         : '';
 
-    final List<Map<String, dynamic>> result = await db.rawQuery(
+    final List<Map<String, dynamic>> result = await dbClient.rawQuery(
       'SELECT * FROM suppliers $whereString ORDER BY name ASC LIMIT ? OFFSET ?',
       [...args, limit, offset],
     );
@@ -56,24 +77,91 @@ class SupplierDao {
 
   /// Get a supplier by ID (ignore deleted)
   Future<Supplier?> getSupplierById(String id) async {
-    final data = await dbHelper.queryById("suppliers", id);
-    if (data == null) return null;
+    final dbClient = await _db;
+    final dataList = await dbClient.query(
+      "suppliers",
+      where: "id = ?",
+      whereArgs: [id],
+    );
+    if (dataList.isEmpty) return null;
+    final data = dataList.first;
     if ((data['deleted'] ?? 0) == 1) return null; // ignore deleted
     return Supplier.fromMap(data);
   }
 
   /// Update a supplier
   Future<int> updateSupplier(Supplier supplier) async {
-    return await dbHelper.update("suppliers", supplier.toMap(), supplier.id);
+    final dbClient = await _db;
+
+    // Fetch old data
+    final oldDataList = await dbClient.query(
+      "suppliers",
+      where: "id = ?",
+      whereArgs: [supplier.id],
+    );
+    final oldData = oldDataList.isNotEmpty ? oldDataList.first : null;
+
+    final count = await dbClient.update(
+      "suppliers",
+      supplier.toMap(),
+      where: "id = ?",
+      whereArgs: [supplier.id],
+    );
+
+    await AuditLogger.log(
+      'UPDATE',
+      'suppliers',
+      recordId: supplier.id,
+      userId: 'system',
+      oldData: oldData,
+      newData: supplier.toMap(),
+      txn: dbClient,
+    );
+
+    return count;
   }
 
   /// Soft delete a supplier
   Future<int> deleteSupplier(String id) async {
-    return await dbHelper.update("suppliers", {"deleted": 1}, id);
+    final dbClient = await _db;
+
+    // Fetch old data
+    final oldDataList = await dbClient.query(
+      "suppliers",
+      where: "id = ?",
+      whereArgs: [id],
+    );
+    final oldData = oldDataList.isNotEmpty ? oldDataList.first : null;
+
+    final count = await dbClient.update(
+      "suppliers",
+      {"deleted": 1},
+      where: "id = ?",
+      whereArgs: [id],
+    );
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'DELETE',
+        'suppliers',
+        recordId: id,
+        userId: 'system',
+        oldData: oldData,
+        txn: dbClient,
+      );
+    }
+
+    return count;
   }
 
   /// Restore a previously deleted supplier
   Future<int> restoreSupplier(String id) async {
-    return await dbHelper.update("suppliers", {"deleted": 0}, id);
+    final dbClient = await _db;
+    return await dbClient.update(
+      "suppliers",
+      {"deleted": 0},
+      where: "id = ?",
+      whereArgs: [id],
+    );
   }
 }

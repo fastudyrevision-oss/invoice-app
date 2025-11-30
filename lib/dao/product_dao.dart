@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../db/database_helper.dart';
 import '../models/product.dart';
+import '../core/services/audit_logger.dart';
 
 class ProductDao {
   final DatabaseExecutor db;
@@ -18,11 +19,22 @@ class ProductDao {
     if (p.categoryId == null) {
       p = p.copyWith(categoryId: 'cat-001');
     }
-    return await db.insert(
+    final id = await db.insert(
       "products",
       p.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    await AuditLogger.log(
+      'CREATE',
+      'products',
+      recordId: p.id,
+      userId: 'system',
+      newData: p.toMap(),
+      txn: db,
+    );
+
+    return id;
   }
 
   /// Get all active (non-deleted) products
@@ -90,22 +102,53 @@ class ProductDao {
 
   /// Update an existing product
   Future<int> update(Product p) async {
-    return await db.update(
+    // Fetch old data
+    final oldData = await getById(p.id, includeDeleted: true);
+
+    final count = await db.update(
       "products",
       p.toMap(),
       where: "id = ?",
       whereArgs: [p.id],
     );
+
+    await AuditLogger.log(
+      'UPDATE',
+      'products',
+      recordId: p.id,
+      userId: 'system',
+      oldData: oldData?.toMap(),
+      newData: p.toMap(),
+      txn: db,
+    );
+
+    return count;
   }
 
   /// Soft delete (mark as deleted)
   Future<int> delete(String id) async {
-    return await db.update(
+    // Fetch old data
+    final oldData = await getById(id, includeDeleted: true);
+
+    final count = await db.update(
       "products",
       {"is_deleted": 1, "updated_at": DateTime.now().toIso8601String()},
       where: "id = ?",
       whereArgs: [id],
     );
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'DELETE',
+        'products',
+        recordId: id,
+        userId: 'system',
+        oldData: oldData.toMap(),
+        txn: db,
+      );
+    }
+
+    return count;
   }
 
   /// Update product quantity safely

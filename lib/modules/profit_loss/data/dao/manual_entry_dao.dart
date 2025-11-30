@@ -1,11 +1,20 @@
 import '../../../../db/database_helper.dart';
 import '../models/manual_entry.dart';
+import '../../../../core/services/audit_logger.dart';
 
 class ManualEntryDao {
   final db = DatabaseHelper.instance;
 
   Future<int> insert(ManualEntry entry) async {
-    return await db.insert('manual_entries', entry.toMap());
+    final id = await db.insert('manual_entries', entry.toMap());
+    await AuditLogger.log(
+      'CREATE',
+      'manual_entries',
+      recordId: entry.id,
+      userId: 'system', // TODO: Get actual user ID
+      newData: entry.toMap(),
+    );
+    return id;
   }
 
   Future<List<ManualEntry>> getAll() async {
@@ -38,10 +47,37 @@ class ManualEntryDao {
   }
 
   Future<int> update(ManualEntry entry) async {
-    return await db.update('manual_entries', entry.toMap(), entry.id);
+    // Fetch old data for audit
+    final oldData = await db.queryById('manual_entries', entry.id);
+
+    final count = await db.update('manual_entries', entry.toMap(), entry.id);
+
+    await AuditLogger.log(
+      'UPDATE',
+      'manual_entries',
+      recordId: entry.id,
+      userId: 'system',
+      oldData: oldData,
+      newData: entry.toMap(),
+    );
+    return count;
   }
 
   Future<int> delete(String id) async {
-    return await db.delete('manual_entries', id);
+    // Fetch old data for audit
+    final oldData = await db.queryById('manual_entries', id);
+
+    final count = await db.delete('manual_entries', id);
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'DELETE',
+        'manual_entries',
+        recordId: id,
+        userId: 'system',
+        oldData: oldData,
+      );
+    }
+    return count;
   }
 }

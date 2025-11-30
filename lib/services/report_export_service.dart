@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart'; // Fix for PdfColors
 import 'package:printing/printing.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
@@ -11,6 +12,7 @@ import 'package:invoice_app/models/reports/product_report.dart';
 import 'package:invoice_app/models/reports/expense_report.dart';
 import 'package:invoice_app/models/reports/expiry_report.dart';
 import 'package:invoice_app/models/reports/payment_report.dart';
+import 'package:invoice_app/models/reports/combined_payment_entry.dart';
 
 class ReportExportService {
   final _dateFmt = DateFormat('yyyy-MM-dd');
@@ -25,7 +27,7 @@ class ReportExportService {
     pdf.addPage(
       pw.Page(
         build: (context) {
-          return pw.Table.fromTextArray(
+          return pw.TableHelper.fromTextArray(
             headers: ['Supplier', 'Total Purchases', 'Paid', 'Balance'],
             data: reports
                 .map(
@@ -50,7 +52,7 @@ class ReportExportService {
     pdf.addPage(
       pw.Page(
         build: (context) {
-          return pw.Table.fromTextArray(
+          return pw.TableHelper.fromTextArray(
             headers: ['Product', 'Qty Purchased', 'Total Spent'],
             data: reports
                 .map(
@@ -73,7 +75,7 @@ class ReportExportService {
     pdf.addPage(
       pw.Page(
         build: (context) {
-          return pw.Table.fromTextArray(
+          return pw.TableHelper.fromTextArray(
             headers: ['Category', 'Total Spent'],
             data: reports
                 .map((r) => [r.category, r.totalSpent.toStringAsFixed(2)])
@@ -90,7 +92,7 @@ class ReportExportService {
     pdf.addPage(
       pw.Page(
         build: (context) {
-          return pw.Table.fromTextArray(
+          return pw.TableHelper.fromTextArray(
             headers: ['Product', 'Batch', 'Expiry Date', 'Qty'],
             data: reports
                 .map(
@@ -114,7 +116,7 @@ class ReportExportService {
     pdf.addPage(
       pw.Page(
         build: (context) {
-          return pw.Table.fromTextArray(
+          return pw.TableHelper.fromTextArray(
             headers: ['Supplier', 'Reference', 'Debit', 'Credit', 'Date'],
             data: reports
                 .map(
@@ -128,6 +130,99 @@ class ReportExportService {
                 )
                 .toList(),
           );
+        },
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+  }
+
+  Future<void> exportCombinedCashFlowPdf(
+    List<CombinedPaymentEntry> entries,
+  ) async {
+    final pdf = pw.Document();
+
+    // Calculate totals
+    double totalIn = 0;
+    double totalOut = 0;
+
+    for (var e in entries) {
+      totalIn += e.moneyIn;
+      totalOut += e.moneyOut;
+    }
+    final net = totalIn - totalOut;
+
+    pdf.addPage(
+      pw.MultiPage(
+        build: (context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Cash Flow Report',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(_dateFmt.format(DateTime.now())),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            // Summary Table
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: ['Total Money In', 'Total Money Out', 'Net Cash Flow'],
+              data: [
+                [
+                  totalIn.toStringAsFixed(2),
+                  totalOut.toStringAsFixed(2),
+                  net.toStringAsFixed(2),
+                ],
+              ],
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            // Detailed Table
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: [
+                'Date',
+                'Type',
+                'Name',
+                'Reference',
+                'Money Out',
+                'Money In',
+              ],
+              data: entries
+                  .map(
+                    (e) => [
+                      _dateFmt.format(e.date),
+                      e.type.toUpperCase(),
+                      e.entityName,
+                      e.reference,
+                      e.moneyOut > 0 ? e.moneyOut.toStringAsFixed(2) : '-',
+                      e.moneyIn > 0 ? e.moneyIn.toStringAsFixed(2) : '-',
+                    ],
+                  )
+                  .toList(),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+              ),
+            ),
+          ];
         },
       ),
     );

@@ -9,6 +9,8 @@ import 'ui/reports/reports_dashboard.dart';
 import 'ui/order/order_list_screen.dart'; // ✅ Added this import
 import 'ui/category/category_list_frame.dart';
 import 'ui/backup/backup_frame.dart';
+import 'modules/audit_log/presentation/audit_log_screen.dart';
+import 'ui/customer_payment/customer_payment_screen.dart';
 
 import '../repositories/purchase_repo.dart';
 import '../repositories/supplier_repo.dart';
@@ -41,8 +43,8 @@ class _MainFrameState extends State<MainFrame>
 
   Database? _db;
   int _expiringCount = 0;
-   late SqlAgentService _sqlAgent;
-late GeminiService _gemini;
+  late SqlAgentService _sqlAgent;
+  late GeminiService _gemini;
 
   @override
   void initState() {
@@ -50,23 +52,18 @@ late GeminiService _gemini;
     _buildTabs();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _initRepos();
-   
- _initAI();    // ---- ADD THIS
-  
 
+    _initAI(); // ---- ADD THIS
   }
+
   void _initAI() {
-  _gemini = GeminiService(
-    apiKey: GEMINI_API_KEY,
-    apiUrl: GEMINI_API_URL,
-  );
+    _gemini = GeminiService(apiKey: GEMINI_API_KEY, apiUrl: GEMINI_API_URL);
 
-  _sqlAgent = SqlAgentService(
-    gemini: _gemini,
-    dbHelper: DatabaseHelper.instance,
-  );
-}
-
+    _sqlAgent = SqlAgentService(
+      gemini: _gemini,
+      dbHelper: DatabaseHelper.instance,
+    );
+  }
 
   void _buildTabs() {
     _tabs = [
@@ -78,7 +75,9 @@ late GeminiService _gemini;
       const Tab(text: "Purchases"),
       const Tab(text: "Orders"), // ✅ New Orders Tab added here
       const Tab(text: "Categories"), // <-- NEW TAB
+      const Tab(text: "Customer Payments"), // <-- NEW TAB
       const Tab(text: "BackUp/Restore"), // <-- NEW TAB
+      const Tab(text: "Audit Logs"), // <-- NEW TAB
       Tab(
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -125,7 +124,6 @@ late GeminiService _gemini;
 
     await _refreshExpiringCount();
   }
-  
 
   Future<void> _refreshExpiringCount({int days = 30}) async {
     if (_purchaseRepo == null) return;
@@ -175,7 +173,9 @@ late GeminiService _gemini;
                 ),
           const OrderListScreen(), // ✅ Inserted here as the new tab view
           const CategoryListFrame(), // <-- NEW TAB VIEW
+          const CustomerPaymentScreen(), // <-- NEW TAB VIEW
           const BackupRestoreScreen(), // <-- NEW TAB VIEW
+          const AuditLogScreen(), // <-- NEW TAB VIEW
           _purchaseRepo == null || _db == null
               ? const Center(child: CircularProgressIndicator())
               : ExpiringProductsFrame(

@@ -1,5 +1,6 @@
 import '../models/invoice.dart';
 import 'package:sqflite/sqflite.dart';
+import '../core/services/audit_logger.dart';
 
 class InvoiceDao {
   final DatabaseExecutor db;
@@ -9,7 +10,7 @@ class InvoiceDao {
   // INSERT
   // =========================
   Future<int> insert(Invoice invoice, String customerName) async {
-    return await db.insert("invoices", {
+    final id = await db.insert("invoices", {
       "id": invoice.id,
       "customer_id": invoice.customerId,
       "customer_name": customerName, // <-- provide the name here
@@ -21,6 +22,17 @@ class InvoiceDao {
       "created_at": invoice.createdAt,
       "updated_at": invoice.updatedAt,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+    await AuditLogger.log(
+      'CREATE',
+      'invoices',
+      recordId: invoice.id,
+      userId: 'system',
+      newData: invoice.toMap(),
+      txn: db,
+    );
+
+    return id;
   }
 
   // =========================
@@ -81,12 +93,27 @@ class InvoiceDao {
   // UPDATE
   // =========================
   Future<int> update(Invoice invoice) async {
-    return await db.update(
+    // Fetch old data
+    final oldData = await getById(invoice.id);
+
+    final count = await db.update(
       'invoices',
       invoice.toMap(),
       where: 'id = ?',
       whereArgs: [invoice.id],
     );
+
+    await AuditLogger.log(
+      'UPDATE',
+      'invoices',
+      recordId: invoice.id,
+      userId: 'system',
+      oldData: oldData?.toMap(),
+      newData: invoice.toMap(),
+      txn: db,
+    );
+
+    return count;
   }
 
   // =========================
@@ -107,6 +134,22 @@ class InvoiceDao {
   // DELETE
   // =========================
   Future<int> delete(String id) async {
-    return await db.delete('invoices', where: 'id = ?', whereArgs: [id]);
+    // Fetch old data
+    final oldData = await getById(id);
+
+    final count = await db.delete('invoices', where: 'id = ?', whereArgs: [id]);
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'DELETE',
+        'invoices',
+        recordId: id,
+        userId: 'system',
+        oldData: oldData.toMap(),
+        txn: db,
+      );
+    }
+
+    return count;
   }
 }

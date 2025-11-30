@@ -79,6 +79,56 @@ class SupplierPaymentRepository {
 
   /// Update an existing payment
   Future<void> updatePayment(SupplierPayment payment) async {
+    // Get the old payment to compare amounts
+    final oldPayments = await _paymentDao.getPayments(payment.supplierId);
+    final oldPayment = oldPayments.firstWhere((p) => p.id == payment.id);
+
+    // If amount or purchaseId changed, we need to update purchase balances
+    if (oldPayment.amount != payment.amount ||
+        oldPayment.purchaseId != payment.purchaseId) {
+      // 1️⃣ Revert the old payment from old purchase
+      if (oldPayment.purchaseId != null) {
+        final oldPurchase = await _purchaseRepo.getPurchaseById(
+          oldPayment.purchaseId!,
+        );
+        if (oldPurchase != null) {
+          final newPaid = _toDouble(oldPurchase.paid) - oldPayment.amount;
+          final newPending = _toDouble(oldPurchase.pending) + oldPayment.amount;
+          await _purchaseRepo.updatePurchase(
+            oldPurchase.copyWith(
+              paid: newPaid.clamp(0.0, double.infinity),
+              pending: newPending,
+            ),
+          );
+        }
+      }
+
+      // 2️⃣ Apply the new payment to new purchase
+      if (payment.purchaseId != null) {
+        final newPurchase = await _purchaseRepo.getPurchaseById(
+          payment.purchaseId!,
+        );
+        if (newPurchase != null) {
+          final oldPaid = _toDouble(newPurchase.paid);
+          final oldPending = _toDouble(newPurchase.pending);
+
+          final paymentApplied = payment.amount > oldPending
+              ? oldPending
+              : payment.amount;
+          final newPaid = oldPaid + paymentApplied;
+          final newPending = oldPending - paymentApplied;
+
+          await _purchaseRepo.updatePurchase(
+            newPurchase.copyWith(paid: newPaid, pending: newPending),
+          );
+        }
+      }
+
+      // 3️⃣ Recalculate supplier pending
+      await _recalculateSupplierPending(payment.supplierId);
+    }
+
+    // 4️⃣ Update the payment record
     final updatedPayment = payment.copyWith(
       updatedAt: DateTime.now().toIso8601String(),
     );
@@ -197,18 +247,29 @@ class SupplierPaymentRepository {
   // Private helper methods
   // -----------------------------
 
-  /// Recalculate supplier.pending from all purchases
+  /// Recalculate supplier.pending from all purchases and payments
   Future<void> _recalculateSupplierPending(String supplierId) async {
+    // 1. Get total purchases
     final allPurchases = await _purchaseRepo.getPurchasesForSupplier(
       supplierId,
     );
-    final totalPending = allPurchases
-        .map((p) => _toDouble(p.pending))
+    final totalPurchases = allPurchases
+        .map((p) => _toDouble(p.total))
         .fold(0.0, (a, b) => a + b);
+
+    // 2. Get total active payments
+    final allPayments = await _paymentDao.getPayments(supplierId);
+    final totalPaid = allPayments
+        .where((p) => p.deleted == 0)
+        .map((p) => p.amount)
+        .fold(0.0, (a, b) => a + b);
+
+    // 3. Calculate pending (Purchases - Payments)
+    final pendingAmount = totalPurchases - totalPaid;
 
     final supplier = await _supplierDao.getSupplierById(supplierId);
     if (supplier != null) {
-      final updated = supplier.copyWith(pendingAmount: totalPending);
+      final updated = supplier.copyWith(pendingAmount: pendingAmount);
       await _supplierDao.updateSupplier(updated);
     }
   }

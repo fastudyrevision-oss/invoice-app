@@ -14,7 +14,7 @@ class CustomerRepository {
 
   CustomerRepository(this.db) {
     _customerDao = CustomerDao(db);
-    _paymentDao = CustomerPaymentDao();
+    _paymentDao = CustomerPaymentDao(db);
   }
 
   /// Helper to create repository outside of a transaction
@@ -37,20 +37,19 @@ class CustomerRepository {
   /// Add payment + update customer's pending balance
   Future<int> addPayment(CustomerPayment payment) async {
     // Run all DB changes in a single transaction so they are atomic
-    final res = await DatabaseHelper.instance.runInTransaction<int>((txn) async {
+    final res = await DatabaseHelper.instance.runInTransaction<int>((
+      txn,
+    ) async {
       // `txn` is a DatabaseExecutor (sqflite Transaction or Database)
       final exec = txn as DatabaseExecutor;
 
-      // Insert payment using the transaction executor
-      final insertResult = await exec.insert(
-        'customer_payments',
-        payment.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-
       // Use DAOs bound to the transaction executor so all reads/writes are consistent
+      final txnPaymentDao = CustomerPaymentDao(exec);
       final txnCustomerDao = CustomerDao(exec);
       final txnInvoiceDao = InvoiceDao(exec);
+
+      // Insert payment using the transaction executor
+      final insertResult = await txnPaymentDao.insert(payment);
 
       final customer = await txnCustomerDao.getCustomerById(payment.customerId);
       if (customer != null) {
@@ -61,7 +60,9 @@ class CustomerRepository {
       // Apply payment amount to customer's pending invoices (oldest first)
       var remaining = payment.amount;
       if (remaining > 0) {
-        final invoices = await txnInvoiceDao.getPendingByCustomerId(payment.customerId);
+        final invoices = await txnInvoiceDao.getPendingByCustomerId(
+          payment.customerId,
+        );
         for (final inv in invoices) {
           if (remaining <= 0) break;
           final toApply = remaining <= inv.pending ? remaining : inv.pending;

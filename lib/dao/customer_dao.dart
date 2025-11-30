@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../db/database_helper.dart';
 import '../models/customer.dart';
+import '../core/services/audit_logger.dart';
 
 class CustomerDao {
   final DatabaseExecutor db; // Can be either Database or Transaction
@@ -15,7 +16,18 @@ class CustomerDao {
 
   /// Insert a new customer
   Future<int> insertCustomer(Customer customer) async {
-    return await db.insert("customers", customer.toMap());
+    final id = await db.insert("customers", customer.toMap());
+
+    await AuditLogger.log(
+      'CREATE',
+      'customers',
+      recordId: customer.id,
+      userId: 'system',
+      newData: customer.toMap(),
+      txn: db,
+    );
+
+    return id;
   }
 
   /// Get all customers with proper typing
@@ -32,17 +44,52 @@ class CustomerDao {
 
   /// Update a customer
   Future<int> updateCustomer(Customer customer) async {
-    return await db.update(
+    // Fetch old data
+    final oldData = await getCustomerById(customer.id);
+
+    final count = await db.update(
       "customers",
       customer.toMap(),
       where: "id = ?",
       whereArgs: [customer.id],
     );
+
+    await AuditLogger.log(
+      'UPDATE',
+      'customers',
+      recordId: customer.id,
+      userId: 'system',
+      oldData: oldData?.toMap(),
+      newData: customer.toMap(),
+      txn: db,
+    );
+
+    return count;
   }
 
   /// Delete a customer
   Future<int> deleteCustomer(String id) async {
-    return await db.delete("customers", where: "id = ?", whereArgs: [id]);
+    // Fetch old data
+    final oldData = await getCustomerById(id);
+
+    final count = await db.delete(
+      "customers",
+      where: "id = ?",
+      whereArgs: [id],
+    );
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'DELETE',
+        'customers',
+        recordId: id,
+        userId: 'system',
+        oldData: oldData.toMap(),
+        txn: db,
+      );
+    }
+
+    return count;
   }
 
   /// Safely update a customer's pending amount
