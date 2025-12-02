@@ -11,6 +11,8 @@ import '../models/supplier.dart';
 import 'purchase_detail_frame.dart';
 import 'purchase_form.dart';
 import 'purchase_insights_card.dart';
+import 'common/unified_search_bar.dart';
+import '../services/purchase_export_service.dart';
 
 class PurchaseFrame extends StatefulWidget {
   final PurchaseRepository repo;
@@ -29,23 +31,32 @@ class PurchaseFrame extends StatefulWidget {
 }
 
 class _PurchaseFrameState extends State<PurchaseFrame> {
+  final PurchaseExportService _exportService = PurchaseExportService();
   List<Purchase> _allPurchases = [];
   List<Purchase> _displayedPurchases = [];
   List<Supplier> _suppliers = [];
 
   int _currentPage = 1;
-  final int _pageSize = 20;
+  final int _pageSize = 50; // Optimized for 2000+ purchases
   bool _isLoadingMore = false;
   bool _hasMore = true;
 
   String _searchQuery = "";
   String? _selectedSupplierId;
   final String _sortBy = "date_desc";
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _searchController.text = _searchQuery;
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -65,12 +76,16 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
     // Search
     if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((p) => p.invoiceNo.contains(_searchQuery)).toList();
+      filtered = filtered
+          .where((p) => p.invoiceNo.contains(_searchQuery))
+          .toList();
     }
 
     // Filter by supplier
     if (_selectedSupplierId != null) {
-      filtered = filtered.where((p) => p.supplierId == _selectedSupplierId).toList();
+      filtered = filtered
+          .where((p) => p.supplierId == _selectedSupplierId)
+          .toList();
     }
 
     // Sorting
@@ -112,33 +127,139 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
   List<Purchase> _getFilteredList() {
     List<Purchase> list = [..._allPurchases];
-    if (_searchQuery.isNotEmpty) list = list.where((p) => p.invoiceNo.contains(_searchQuery)).toList();
-    if (_selectedSupplierId != null) list = list.where((p) => p.supplierId == _selectedSupplierId).toList();
+    if (_searchQuery.isNotEmpty) {
+      list = list.where((p) => p.invoiceNo.contains(_searchQuery)).toList();
+    }
+    if (_selectedSupplierId != null) {
+      list = list.where((p) => p.supplierId == _selectedSupplierId).toList();
+    }
     return list;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text("Purchases"),
+        elevation: 0,
         actions: [
+          const SizedBox(width: 10),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Export to PDF',
+            onPressed: () => _exportService.exportToPDF(_displayedPurchases),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadInitialData,
-          )
+            tooltip: 'Refresh',
+          ),
+          const SizedBox(width: 10),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(140),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).primaryColor.withOpacity(0.1),
+                  Theme.of(context).primaryColor.withOpacity(0.05),
+                ],
+              ),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: UnifiedSearchBar(
+                    hintText: "Search invoice...",
+                    controller: _searchController,
+                    onChanged: (value) {
+                      _searchQuery = value;
+                      _applyFilters();
+                    },
+                    onClear: () {
+                      setState(() {
+                        _searchQuery = "";
+                        _applyFilters();
+                      });
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: DropdownSearch<String?>(
+                    selectedItem: _selectedSupplierId,
+                    compareFn: (a, b) => a == b,
+                    items: (items, props) => [
+                      null,
+                      ..._suppliers.map((s) => s.id),
+                    ],
+                    itemAsString: (id) => id == null
+                        ? "All Suppliers"
+                        : _suppliers
+                              .firstWhere(
+                                (s) => s.id == id,
+                                orElse: () => Supplier(
+                                  id: '',
+                                  name: 'Unknown',
+                                  createdAt: DateTime.now().toIso8601String(),
+                                  updatedAt: DateTime.now().toIso8601String(),
+                                ),
+                              )
+                              .name,
+                    decoratorProps: DropDownDecoratorProps(
+                      decoration: InputDecoration(
+                        labelText: "Filter by Supplier",
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      _selectedSupplierId = value;
+                      _applyFilters();
+                    },
+                    popupProps: const PopupProps.menu(
+                      showSearchBox: true,
+                      constraints: BoxConstraints(maxHeight: 300),
+                      searchFieldProps: TextFieldProps(
+                        decoration: InputDecoration(
+                          hintText: "Search supplier...",
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
       ),
       body: Column(
         children: [
-          PurchaseInsightCard(purchases: _displayedPurchases, loading: _allPurchases.isEmpty, lastUpdated: DateTime.now()),
-          _buildSearchBar(),
-          _buildFilters(),
-          _buildSortingDropdown(),
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: PurchaseInsightCard(
+              purchases: _displayedPurchases,
+              loading: false,
+              lastUpdated: DateTime.now(),
+            ),
+          ),
           Expanded(child: _buildPurchaseList()),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final added = await Navigator.push(
             context,
@@ -152,77 +273,9 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
           );
           if (added == true) _loadInitialData();
         },
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add_shopping_cart),
+        label: const Text("New Purchase"),
       ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: TextField(
-        decoration: const InputDecoration(
-          hintText: "Search invoice...",
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(),
-        ),
-        onChanged: (value) {
-          _searchQuery = value;
-          _applyFilters();
-        },
-      ),
-    );
-  }
-
-  Widget _buildFilters() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: DropdownButtonFormField<String?>(
-        initialValue: _selectedSupplierId,
-        decoration: const InputDecoration(
-          labelText: "Filter by Supplier",
-          border: OutlineInputBorder(),
-        ),
-        items: [
-          const DropdownMenuItem(value: null, child: Text("All Suppliers")),
-          ..._suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
-        ],
-        onChanged: (value) {
-          _selectedSupplierId = value;
-          _applyFilters();
-        },
-      ),
-    );
-  }
-
-  Widget _buildSortingDropdown() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child:  DropdownSearch<String?>(
-  selectedItem: _selectedSupplierId,
-  compareFn: (a, b) => a == b,
-
-  items: (items , props)=> _suppliers.map((s) => s.id).toList(),
-  itemAsString: (id) => id == null
-      ? "All Suppliers"
-      : _suppliers.firstWhere((s) => s.id == id).name,
-  decoratorProps: const DropDownDecoratorProps(
-    decoration: InputDecoration(
-      labelText: "Filter by Supplier",
-      border: OutlineInputBorder(),
-    ),
-  ),
-  onChanged: (value) {
-    _selectedSupplierId = value;
-    _applyFilters();
-  },
-  popupProps: const PopupProps.menu(
-    showSearchBox: true,
-    searchFieldProps: TextFieldProps(
-      decoration: InputDecoration(hintText: "Search supplier..."),
-    ),
-  ),
-)
     );
   }
 
@@ -235,11 +288,12 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
         return false;
       },
       child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 80),
         itemCount: _displayedPurchases.length + (_isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _displayedPurchases.length) {
             return const Padding(
-              padding: EdgeInsets.all(8.0),
+              padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
@@ -251,28 +305,255 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
             builder: (context, supSnap) {
               if (!supSnap.hasData) return const SizedBox.shrink();
               final supplier = supSnap.data!;
+              final hasPending = purchase.pending > 0;
+              final isPaid = purchase.pending <= 0;
+              final date = DateTime.tryParse(purchase.date) ?? DateTime.now();
 
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: ListTile(
-                  title: Text("Invoice: ${purchase.invoiceNo}"),
-                  subtitle: Text(
-                    "Supplier: ${supplier.name}\n"
-                    "Total: ${purchase.total} | Paid: ${purchase.paid} | Pending: ${purchase.pending}",
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white,
+                      isPaid
+                          ? Colors.green.withOpacity(0.05)
+                          : Colors.orange.withOpacity(0.05),
+                    ],
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PurchaseDetailFrame(
-                          repo: widget.repo,
-                          purchase: purchase,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isPaid ? Colors.green : Colors.orange)
+                          .withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: (isPaid ? Colors.green : Colors.orange).withOpacity(
+                      0.3,
+                    ),
+                    width: 1.5,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Status Strip
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isPaid
+                                ? [Colors.green.shade600, Colors.green.shade400]
+                                : [
+                                    Colors.orange.shade600,
+                                    Colors.orange.shade400,
+                                  ],
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isPaid
+                                  ? Icons.check_circle
+                                  : Icons.pending_actions,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isPaid ? "Fully Paid" : "Pending Payment",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    );
-                    _loadInitialData();
-                  },
+
+                      InkWell(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PurchaseDetailFrame(
+                                repo: widget.repo,
+                                purchase: purchase,
+                              ),
+                            ),
+                          );
+                          _loadInitialData();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header Row
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Invoice Badge
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.indigo.shade600,
+                                          Colors.indigo.shade400,
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.indigo.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.receipt_long,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+
+                                  // Invoice Info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Invoice #${purchase.invoiceNo}",
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.blue.shade200,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.business,
+                                                size: 14,
+                                                color: Colors.blue.shade700,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                supplier.name,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.blue.shade900,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Date Badge
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          date.day.toString(),
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey.shade800,
+                                          ),
+                                        ),
+                                        Text(
+                                          _getMonthName(date.month),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 16),
+                              const Divider(),
+                              const SizedBox(height: 12),
+
+                              // Metrics Row
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _buildMetric(
+                                    "TOTAL",
+                                    "Rs ${purchase.total.toStringAsFixed(0)}",
+                                    Colors.blue,
+                                  ),
+                                  _buildMetric(
+                                    "PAID",
+                                    "Rs ${purchase.paid.toStringAsFixed(0)}",
+                                    Colors.green,
+                                  ),
+                                  _buildMetric(
+                                    "PENDING",
+                                    "Rs ${purchase.pending.toStringAsFixed(0)}",
+                                    hasPending ? Colors.red : Colors.green,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -280,5 +561,48 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
         },
       ),
     );
+  }
+
+  Widget _buildMetric(String label, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey.shade500,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[month - 1];
   }
 }

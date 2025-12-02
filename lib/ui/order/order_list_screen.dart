@@ -558,48 +558,100 @@ class _OrderListScreenState extends State<OrderListScreen>
     super.build(context); // required for AutomaticKeepAliveClientMixin
 
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text("Orders"),
+        elevation: 0,
         actions: [
+          const SizedBox(width: 10),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: _openFilterSheet,
+            tooltip: 'Filters',
           ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadOrders),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadOrders,
+            tooltip: 'Refresh',
+          ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: _exportAllOrders,
+            tooltip: 'Export PDF',
           ),
+          const SizedBox(width: 10),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(140),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).primaryColor.withOpacity(0.1),
+                  Theme.of(context).primaryColor.withOpacity(0.05),
+                ],
+              ),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: "Search invoices or customers...",
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _applyFilters();
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildQuickFilterChip('Today', 'today'),
+                      _buildQuickFilterChip('This Week', 'week'),
+                      _buildQuickFilterChip('This Month', 'month'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
       ),
       body: Column(
         children: [
-          OrderInsightCard(
-            orders: _filtered,
-            loading: _loading,
-            lastUpdated: _lastUpdated,
-          ),
-          // Search
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: "Search invoices or customers...",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
+            padding: const EdgeInsets.all(12.0),
+            child: OrderInsightCard(
+              orders: _filtered,
+              loading: false,
+              lastUpdated: _lastUpdated,
             ),
           ),
-
-          // quick filters
-          _buildQuickFilters(),
-          const SizedBox(height: 8),
 
           // list area
           Expanded(
@@ -610,140 +662,314 @@ class _OrderListScreenState extends State<OrderListScreen>
                     onRefresh: _loadOrders,
                     child: _filtered.isEmpty
                         ? _emptyState()
-                        : ListView.separated(
+                        : ListView.builder(
                             controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
+                            padding: const EdgeInsets.only(
+                              left: 16,
+                              right: 16,
+                              bottom: 80,
                             ),
                             itemCount: _filtered.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 6),
                             itemBuilder: (context, index) {
                               final o = _filtered[index];
                               final isPending = _safeDouble(o.pending) > 0;
-                              final bgColors = [
-                                Colors.blue.shade50,
-                                Colors.purple.shade50,
-                                Colors.teal.shade50,
-                                Colors.green.shade50,
-                              ];
-                              final bgColor = bgColors[index % bgColors.length];
+                              final date =
+                                  _safeParseDate(o.date) ?? DateTime.now();
 
-                              return FadeTransition(
-                                opacity: _animController,
-                                child: AnimatedBuilder(
-                                  animation: _animController,
-                                  builder: (context, child) {
-                                    final currentColors = _getGradientColors(
-                                      index,
-                                    );
-                                    final nextColors = _getNextGradientColors(
-                                      index,
-                                    );
-
-                                    final animatedColors = [
-                                      Color.lerp(
-                                        currentColors[0],
-                                        nextColors[0],
-                                        _animController.value,
-                                      )!,
-                                      Color.lerp(
-                                        currentColors[1],
-                                        nextColors[1],
-                                        _animController.value,
-                                      )!,
-                                    ];
-
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.lerp(
-                                            Alignment.topLeft,
-                                            Alignment.bottomRight,
-                                            _animController.value,
-                                          )!,
-                                          end: Alignment.lerp(
-                                            Alignment.bottomRight,
-                                            Alignment.topLeft,
-                                            _animController.value,
-                                          )!,
-
-                                          stops: const [0.1, 0.9],
-                                          colors: animatedColors,
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white,
+                                      isPending
+                                          ? Colors.orange.withOpacity(0.05)
+                                          : Colors.green.withOpacity(0.05),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          (isPending
+                                                  ? Colors.orange
+                                                  : Colors.green)
+                                              .withOpacity(0.2),
+                                      spreadRadius: 1,
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                  border: Border.all(
+                                    color:
+                                        (isPending
+                                                ? Colors.orange
+                                                : Colors.green)
+                                            .withOpacity(0.3),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Status Strip
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                          horizontal: 12,
                                         ),
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.15,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: isPending
+                                                ? [
+                                                    Colors.orange.shade600,
+                                                    Colors.orange.shade400,
+                                                  ]
+                                                : [
+                                                    Colors.green.shade600,
+                                                    Colors.green.shade400,
+                                                  ],
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              isPending
+                                                  ? Icons.pending_actions
+                                                  : Icons.check_circle,
+                                              size: 16,
+                                              color: Colors.white,
                                             ),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ],
-                                      ),
-                                      child: child,
-                                    );
-                                  },
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.all(14),
-                                    title: Text(
-                                      o.customerName ?? "Unknown Customer",
-                                      style: const TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Padding(
-                                      padding: const EdgeInsets.only(top: 6),
-                                      child: Text(
-                                        "Invoice #${o.id}\n${_formatDate(o.date)}",
-                                        style: const TextStyle(
-                                          fontSize: 13.5,
-                                          color: Colors.white70,
-                                          height: 1.3,
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              isPending
+                                                  ? "Payment Pending"
+                                                  : "Fully Paid",
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ),
-                                    trailing: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          "Total: ${_safeDouble(o.total).toStringAsFixed(2)}",
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          isPending
-                                              ? "Due: ${_safeDouble(o.pending).toStringAsFixed(2)}"
-                                              : "Paid",
-                                          style: TextStyle(
-                                            color: isPending
-                                                ? Colors.amberAccent
-                                                : Colors.lightGreenAccent,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
 
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            OrderDetailScreen(invoice: o),
+                                      InkWell(
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                OrderDetailScreen(invoice: o),
+                                          ),
+                                        ),
+                                        onLongPress: () => _showOrderActions(o),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Header Row
+                                              Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  // Invoice Badge
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          12,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(
+                                                        begin:
+                                                            Alignment.topLeft,
+                                                        end: Alignment
+                                                            .bottomRight,
+                                                        colors: [
+                                                          Colors.blue.shade600,
+                                                          Colors.blue.shade400,
+                                                        ],
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.blue
+                                                              .withOpacity(0.3),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(
+                                                            0,
+                                                            2,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.receipt_long,
+                                                      color: Colors.white,
+                                                      size: 28,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 16),
+
+                                                  // Customer & Invoice Info
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          o.customerName ??
+                                                              "Unknown Customer",
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 18,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Colors
+                                                                    .black87,
+                                                              ),
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 4,
+                                                        ),
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 8,
+                                                                vertical: 4,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors
+                                                                .purple
+                                                                .shade50,
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  6,
+                                                                ),
+                                                            border: Border.all(
+                                                              color: Colors
+                                                                  .purple
+                                                                  .shade200,
+                                                            ),
+                                                          ),
+                                                          child: Text(
+                                                            "Invoice #${o.id}",
+                                                            style: TextStyle(
+                                                              fontSize: 12,
+                                                              color: Colors
+                                                                  .purple
+                                                                  .shade900,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+
+                                                  // Date Badge
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          10,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          Colors.grey.shade100,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            10,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade300,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    child: Column(
+                                                      children: [
+                                                        Text(
+                                                          date.day.toString(),
+                                                          style: TextStyle(
+                                                            fontSize: 20,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors
+                                                                .grey
+                                                                .shade800,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          _getMonthName(
+                                                            date.month,
+                                                          ),
+                                                          style: TextStyle(
+                                                            fontSize: 10,
+                                                            color: Colors
+                                                                .grey
+                                                                .shade600,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+
+                                              const SizedBox(height: 16),
+                                              const Divider(),
+                                              const SizedBox(height: 12),
+
+                                              // Metrics Row
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  _buildMetric(
+                                                    "TOTAL",
+                                                    "Rs ${_safeDouble(o.total).toStringAsFixed(0)}",
+                                                    Colors.blue,
+                                                  ),
+                                                  _buildMetric(
+                                                    "PAID",
+                                                    "Rs ${_safeDouble(o.paid).toStringAsFixed(0)}",
+                                                    Colors.green,
+                                                  ),
+                                                  _buildMetric(
+                                                    "PENDING",
+                                                    "Rs ${_safeDouble(o.pending).toStringAsFixed(0)}",
+                                                    isPending
+                                                        ? Colors.red
+                                                        : Colors.green,
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    onLongPress: () => _showOrderActions(o),
+                                    ],
                                   ),
                                 ),
                               );
@@ -773,11 +999,91 @@ class _OrderListScreenState extends State<OrderListScreen>
           FloatingActionButton.extended(
             heroTag: 'newOrder',
             onPressed: _navigateToForm,
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.add_shopping_cart),
             label: const Text("New Order"),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildQuickFilterChip(String label, String filterKey) {
+    final isActive = _quickFilter == filterKey;
+    Color chipColor;
+    IconData chipIcon;
+
+    switch (filterKey) {
+      case 'today':
+        chipColor = Colors.orange;
+        chipIcon = Icons.today;
+        break;
+      case 'week':
+        chipColor = Colors.blue;
+        chipIcon = Icons.calendar_view_week;
+        break;
+      case 'month':
+        chipColor = Colors.purple;
+        chipIcon = Icons.calendar_month;
+        break;
+      default:
+        chipColor = Colors.grey;
+        chipIcon = Icons.all_inclusive;
+    }
+
+    return FilterChip(
+      avatar: Icon(chipIcon, size: 16),
+      label: Text(label),
+      selected: isActive,
+      onSelected: (val) {
+        setState(() => _quickFilter = val ? filterKey : null);
+        _applyFilters();
+      },
+      selectedColor: chipColor.withOpacity(0.2),
+      checkmarkColor: chipColor,
+      backgroundColor: Colors.white,
+    );
+  }
+
+  Widget _buildMetric(String label, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey.shade500,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[month - 1];
   }
 }

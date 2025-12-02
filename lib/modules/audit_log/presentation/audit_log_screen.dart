@@ -7,7 +7,7 @@ import '../data/repository/audit_log_repository.dart';
 import 'widgets/audit_log_card.dart';
 
 class AuditLogScreen extends StatefulWidget {
-  const AuditLogScreen({Key? key}) : super(key: key);
+  const AuditLogScreen({super.key});
 
   @override
   State<AuditLogScreen> createState() => _AuditLogScreenState();

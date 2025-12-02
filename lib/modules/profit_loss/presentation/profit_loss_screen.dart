@@ -43,8 +43,18 @@ class ProfitLossUIController {
         rangeEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
       case PLFilterType.weekly:
-        rangeStart = now.subtract(Duration(days: now.weekday - 1));
-        rangeEnd = now;
+        // Start of week (Monday at 00:00:00)
+        final weekStart = now.subtract(Duration(days: now.weekday - 1));
+        rangeStart = DateTime(
+          weekStart.year,
+          weekStart.month,
+          weekStart.day,
+          0,
+          0,
+          0,
+        );
+        // End of today (23:59:59)
+        rangeEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
       case PLFilterType.monthly:
         rangeStart = DateTime(now.year, now.month, 1);
@@ -97,18 +107,37 @@ class ProfitLossUIController {
       case PLFilterType.weekly:
         // Previous week
         final currentWeekStart = now.subtract(Duration(days: now.weekday - 1));
-        rangeStart = currentWeekStart.subtract(const Duration(days: 7));
-        rangeEnd = currentWeekStart.subtract(const Duration(seconds: 1));
+        final prevWeekStart = currentWeekStart.subtract(
+          const Duration(days: 7),
+        );
+        rangeStart = DateTime(
+          prevWeekStart.year,
+          prevWeekStart.month,
+          prevWeekStart.day,
+          0,
+          0,
+          0,
+        );
+        final prevWeekEnd = prevWeekStart.add(const Duration(days: 6));
+        rangeEnd = DateTime(
+          prevWeekEnd.year,
+          prevWeekEnd.month,
+          prevWeekEnd.day,
+          23,
+          59,
+          59,
+        );
         break;
       case PLFilterType.monthly:
         // Previous month
-        rangeStart = DateTime(now.year, now.month - 1, 1);
-        rangeEnd = DateTime(now.year, now.month, 0); // Last day of prev month
+        rangeStart = DateTime(now.year, now.month - 1, 1, 0, 0, 0);
+        // Last day of prev month at 23:59:59
+        rangeEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
         break;
       case PLFilterType.yearly:
         // Previous year
-        rangeStart = DateTime(now.year - 1, 1, 1);
-        rangeEnd = DateTime(now.year - 1, 12, 31);
+        rangeStart = DateTime(now.year - 1, 1, 1, 0, 0, 0);
+        rangeEnd = DateTime(now.year - 1, 12, 31, 23, 59, 59);
         break;
       case PLFilterType.custom:
         if (start == null || end == null) return null;

@@ -459,7 +459,8 @@ class DatabaseHelper {
     )
   ''');
 
-    // Indexes
+    // ==================== COMPREHENSIVE INDEXES ====================
+    // Core name indexes (existing)
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)',
     );
@@ -469,9 +470,45 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)',
     );
+
+    // Date-based indexes for time-series queries (NEW)
     await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)',
+      'CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(date)',
     );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customer_payments_date ON customer_payments(date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_supplier_payments_date ON supplier_payments(date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)',
+    );
+
+    // Search optimization indexes (NEW)
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoices_invoice_no ON invoices(invoice_no)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_suppliers_phone ON suppliers(phone)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email)',
+    );
+
+    // Foreign key indexes for joins (existing + new)
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)',
     );
@@ -479,10 +516,61 @@ class DatabaseHelper {
       'CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id)',
     );
     await db.execute(
-      'CREATE INDEX idx_batches_product_id ON product_batches(product_id);',
+      'CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id)',
     );
     await db.execute(
-      'CREATE INDEX idx_batches_supplier_id ON product_batches(supplier_id);',
+      'CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON products(supplier_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_batches_product_id ON product_batches(product_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_batches_supplier_id ON product_batches(supplier_id)',
+    );
+
+    // Status and filter indexes (NEW)
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_track_expiry ON products(track_expiry)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_suppliers_deleted ON suppliers(deleted)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_is_deleted ON products(is_deleted)',
+    );
+
+    // Inventory and stock management indexes (NEW)
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_quantity ON products(quantity)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_min_stock ON products(min_stock)',
+    );
+
+    // Composite indexes for common query patterns (NEW)
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoices_customer_date ON invoices(customer_id, date DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_purchases_supplier_date ON purchases(supplier_id, date DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_batches_product_expiry ON product_batches(product_id, expiry_date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_products_supplier_deleted ON products(supplier_id, is_deleted)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_suppliers_company_deleted ON suppliers(company_id, deleted)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoices_status_date ON invoices(status, date DESC)',
     );
 
     // Products extra column

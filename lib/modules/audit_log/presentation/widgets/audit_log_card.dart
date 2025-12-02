@@ -6,8 +6,7 @@ class AuditLogCard extends StatelessWidget {
   final AuditLogEntry entry;
   final VoidCallback onTap;
 
-  const AuditLogCard({Key? key, required this.entry, required this.onTap})
-    : super(key: key);
+  const AuditLogCard({super.key, required this.entry, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

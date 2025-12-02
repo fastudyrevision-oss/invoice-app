@@ -24,6 +24,21 @@ class CustomerRepository {
   }
 
   Future<List<Customer>> getAllCustomers() => _customerDao.getAllCustomers();
+
+  Future<List<Customer>> getCustomersPage({
+    int page = 0,
+    int pageSize = 50,
+    String query = "",
+    String sortField = "name",
+    bool sortAsc = true,
+  }) => _customerDao.getCustomersPage(
+    page: page,
+    pageSize: pageSize,
+    query: query,
+    sortField: sortField,
+    sortAsc: sortAsc,
+  );
+
   Future<Customer?> getCustomer(String id) => _customerDao.getCustomerById(id);
   Future<int> addCustomer(Customer customer) =>
       _customerDao.insertCustomer(customer);

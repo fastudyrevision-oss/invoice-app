@@ -149,15 +149,27 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_filteredCategories.isEmpty) {
-      return const Center(child: Text('No categories found'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.category_outlined, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'No categories found',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      );
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.all(16),
       itemCount: _filteredCategories.length + (_hasMoreData ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= _filteredCategories.length) {
           // Trigger next page load
-          // Schedule lazy load after the current frame
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _loadNextPage();
           });
@@ -168,36 +180,241 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
         }
 
         final c = _filteredCategories[index];
-        return ListTile(
-          leading: c.icon != null
-              ? CircleAvatar(child: Text(c.name.substring(0, 1)))
-              : null,
-          title: Text(c.name),
-          subtitle: Text(
-            'Order: ${c.sortOrder} • ${c.isActive ? "Active" : "Inactive"}${c.isDeleted ? " • Deleted" : ""}',
+        final isDeleted = c.isDeleted;
+        final isActive = c.isActive;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white,
+                isDeleted
+                    ? Colors.grey.withOpacity(0.1)
+                    : isActive
+                        ? Colors.green.withOpacity(0.05)
+                        : Colors.orange.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: (isDeleted
+                        ? Colors.grey
+                        : isActive
+                            ? Colors.green
+                            : Colors.orange)
+                    .withOpacity(0.2),
+                spreadRadius: 1,
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+              color: (isDeleted
+                      ? Colors.grey
+                      : isActive
+                          ? Colors.green
+                          : Colors.orange)
+                  .withOpacity(0.3),
+              width: 1.5,
+            ),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: c.isDeleted
-                ? [
-                    IconButton(
-                      icon: const Icon(Icons.restore, color: Colors.green),
-                      onPressed: () => _restoreCategory(c),
-                      tooltip: 'Restore',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Status Strip
+                if (isDeleted)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 12,
                     ),
-                  ]
-                : [
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () => _openForm(category: c),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.grey.shade600, Colors.grey.shade400],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _confirmDelete(c),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 16, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          "Deleted Category",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  )
+                else if (!isActive)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.orange.shade600, Colors.orange.shade400],
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.pause_circle_outline, size: 16, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          "Inactive Category",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                InkWell(
+                  onTap: () => _openForm(category: c),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Category Icon
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.purple.shade600,
+                                Colors.purple.shade400,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.purple.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            c.icon != null ? Icons.category : Icons.label,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // Category Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                c.name,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: Colors.blue.shade200,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "Order: ${c.sortOrder}",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.blue.shade900,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (c.description?.isNotEmpty ?? false) ...[
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        c.description!,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Actions
+                        if (isDeleted)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.restore,
+                              color: Colors.orange,
+                            ),
+                            onPressed: () => _restoreCategory(c),
+                            tooltip: 'Restore',
+                          )
+                        else
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () => _openForm(category: c),
+                                tooltip: 'Edit',
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _confirmDelete(c),
+                                tooltip: 'Delete',
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          onTap: () => _openForm(category: c),
         );
       },
     );
@@ -206,9 +423,12 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Categories'),
+        elevation: 0,
         actions: [
+          const SizedBox(width: 10),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refreshCategories,
@@ -259,27 +479,50 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
               ),
             ],
           ),
+          const SizedBox(width: 10),
         ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search categories...',
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(70),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).primaryColor.withOpacity(0.1),
+                  Theme.of(context).primaryColor.withOpacity(0.05),
+                ],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Search categories...',
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
               ),
             ),
           ),
-          Expanded(child: _buildList()),
-        ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
+      body: _buildList(),
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         tooltip: 'Add Category',
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('New Category'),
       ),
     );
   }

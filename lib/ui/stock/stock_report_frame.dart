@@ -21,11 +21,14 @@ class _StockReportFrameState extends State<StockReportFrame> {
   final FilePrintService _printService = FilePrintService(); // 🆕
 
   List<StockReport> _report = [];
+  List<StockReport> _filteredReport = [];
   bool _loading = true;
   bool _includePrice = true;
   bool _onlyLowStock = false;
   bool _showExpiry = false;
   bool _detailedView = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   // 🆕 Summary values
   double _totalCost = 0;
@@ -36,6 +39,12 @@ class _StockReportFrameState extends State<StockReportFrame> {
   void initState() {
     super.initState();
     _loadReport();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadReport() async {
@@ -52,6 +61,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
 
     setState(() {
       _report = data;
+      _filteredReport = data;
       _totalCost = summary['totalCostValue'] ?? 0;
       _totalSell = summary['totalSellValue'] ?? 0;
       _totalProfit = summary['totalProfit'] ?? 0;
@@ -81,48 +91,172 @@ class _StockReportFrameState extends State<StockReportFrame> {
     }
   }
 
-  // 🆕 Summary widget
+  // Enhanced Summary widget with modern design
   Widget _buildSummaryCard() {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.grey.shade100,
-      margin: const EdgeInsets.only(bottom: 16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _modernSummaryCard(
+              title: "Total Cost",
+              value: _totalCost,
+              icon: Icons.shopping_cart,
+              gradientColors: [Colors.blue.shade400, Colors.blue.shade600],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _modernSummaryCard(
+              title: "Total Sell Value",
+              value: _totalSell,
+              icon: Icons.attach_money,
+              gradientColors: [Colors.orange.shade400, Colors.orange.shade600],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _modernSummaryCard(
+              title: "Profit",
+              value: _totalProfit,
+              icon: Icons.trending_up,
+              gradientColors: [Colors.green.shade400, Colors.green.shade600],
+              isProfit: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernSummaryCard({
+    required String title,
+    required double value,
+    required IconData icon,
+    required List<Color> gradientColors,
+    bool isProfit = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors[1].withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _summaryTile("Total Cost", _totalCost),
-            _summaryTile("Total Sell", _totalSell),
-            _summaryTile("Profit", _totalProfit, isProfit: true),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: Colors.white.withOpacity(0.9), size: 32),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    isProfit ? Icons.arrow_upward : Icons.inventory,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.white.withOpacity(0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Rs ${value.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _summaryTile(String label, double value, {bool isProfit = false}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, color: Colors.black54),
+  void _filterReport(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredReport = _report;
+      } else {
+        _filteredReport = _report.where((item) {
+          return item.productName.toLowerCase().contains(query.toLowerCase()) ||
+              (item.batchNo?.toLowerCase().contains(query.toLowerCase()) ??
+                  false) ||
+              (item.supplierName?.toLowerCase().contains(query.toLowerCase()) ??
+                  false);
+        }).toList();
+      }
+    });
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search by product, batch, or supplier...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _filterReport('');
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          filled: true,
+          fillColor: Colors.grey.shade50,
         ),
-        Text(
-          value.toStringAsFixed(2),
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: isProfit ? Colors.green.shade700 : Colors.blueGrey.shade800,
-          ),
-        ),
-      ],
+        onChanged: _filterReport,
+      ),
     );
   }
 
   Widget _buildDataTable() {
-    if (_report.isEmpty) {
-      return const Center(child: Text("No data available"));
+    if (_filteredReport.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              _searchQuery.isEmpty ? "No data available" : "No results found",
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      );
     }
 
     final columns = <String>[
@@ -146,35 +280,66 @@ class _StockReportFrameState extends State<StockReportFrame> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        headingRowColor: WidgetStateProperty.all(Colors.grey.shade300),
-        columnSpacing: 24,
+        headingRowColor: WidgetStateProperty.all(Colors.blue.shade50),
+        headingRowHeight: 56,
+        dataRowMinHeight: 48,
+        dataRowMaxHeight: 56,
+        columnSpacing: 20,
+        horizontalMargin: 16,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(12),
+        ),
         columns: columns
             .map(
               (col) => DataColumn(
                 label: Text(
                   col,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.blue.shade900,
+                  ),
                 ),
               ),
             )
             .toList(),
-        rows: _report.map((r) {
+        rows: _filteredReport.asMap().entries.map((entry) {
+          final index = entry.key;
+          final r = entry.value;
           final isLow =
               r.reorderLevel != null &&
               r.reorderLevel! > 0 &&
               r.remainingQty <= r.reorderLevel!;
-          final rowColor = isLow ? Colors.red.shade50 : Colors.white;
+          final rowColor = isLow
+              ? Colors.red.shade50
+              : (index % 2 == 0 ? Colors.white : Colors.grey.shade50);
 
           return DataRow(
             color: WidgetStateProperty.all(rowColor),
             cells: [
               DataCell(
-                Text(
-                  r.productName,
-                  style: TextStyle(
-                    color: isLow ? Colors.red : Colors.black,
-                    fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
-                  ),
+                Row(
+                  children: [
+                    if (isLow)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red.shade700,
+                          size: 20,
+                        ),
+                      ),
+                    Expanded(
+                      child: Text(
+                        r.productName,
+                        style: TextStyle(
+                          color: isLow ? Colors.red.shade900 : Colors.black87,
+                          fontWeight: isLow ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               DataCell(Text(r.batchNo ?? '-')), // ✅ NEW DATA CELL for Batch No
@@ -267,8 +432,16 @@ class _StockReportFrameState extends State<StockReportFrame> {
                       barRods: [
                         BarChartRodData(
                           toY: (e['remaining'] ?? 0).toDouble(),
-                          width: 16,
-                          borderRadius: BorderRadius.circular(4),
+                          width: 20,
+                          borderRadius: BorderRadius.circular(6),
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.blue.shade300,
+                              Colors.blue.shade600,
+                            ],
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                          ),
                         ),
                       ],
                     );
@@ -294,7 +467,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
         const SizedBox(width: 10),
         ElevatedButton.icon(
           onPressed: () => _exportService.exportToPDF(
-            _report,
+            _filteredReport, // Use filtered data
             includePrice: _includePrice,
             showExpiry: _showExpiry,
             detailedView: _detailedView,
@@ -305,7 +478,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
         const SizedBox(width: 10),
         ElevatedButton.icon(
           onPressed: () => _exportService.exportToExcel(
-            _report,
+            _filteredReport, // Use filtered data
             includePrice: _includePrice,
             showExpiry: _showExpiry,
             detailedView: _detailedView,
@@ -315,7 +488,9 @@ class _StockReportFrameState extends State<StockReportFrame> {
         ),
         const SizedBox(width: 10),
         ElevatedButton.icon(
-          onPressed: () => _printService.printStockReport(_report),
+          onPressed: () => _printService.printStockReport(
+            _filteredReport,
+          ), // Use filtered data
           icon: const Icon(Icons.print),
           label: const Text("Print"),
         ),
@@ -341,6 +516,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
                   _buildTopButtons(),
                   const SizedBox(height: 16),
                   _buildSummaryCard(),
+                  _buildSearchBar(),
                   Expanded(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.vertical,

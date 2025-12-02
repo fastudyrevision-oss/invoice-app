@@ -313,7 +313,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
             SizedBox(
               width: 200,
               child: DropdownButtonFormField<PaymentType>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Payment Type',
                   border: OutlineInputBorder(),
@@ -466,7 +466,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
                   scrollDirection: Axis.horizontal,
                   child: SingleChildScrollView(
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(
+                      headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade200,
                       ),
                       columns: const [
@@ -534,7 +534,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
       runningCashFlow += (entry.moneyIn - entry.moneyOut);
 
       return DataRow(
-        color: MaterialStateProperty.all(
+        color: WidgetStateProperty.all(
           entry.type == 'customer' ? Colors.green.shade50 : Colors.red.shade50,
         ),
         cells: [

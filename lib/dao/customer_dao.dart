@@ -36,6 +36,37 @@ class CustomerDao {
     return data.map<Customer>((e) => Customer.fromMap(e)).toList();
   }
 
+  /// Get customers with pagination, sorting, and filtering
+  Future<List<Customer>> getCustomersPage({
+    required int page,
+    required int pageSize,
+    String query = "",
+    String sortField = "name",
+    bool sortAsc = true,
+  }) async {
+    final offset = page * pageSize;
+    final orderBy = "$sortField ${sortAsc ? 'ASC' : 'DESC'}";
+
+    String? whereClause;
+    List<Object?>? whereArgs;
+
+    if (query.isNotEmpty) {
+      whereClause = "name LIKE ? OR phone LIKE ? OR email LIKE ?";
+      whereArgs = ['%$query%', '%$query%', '%$query%'];
+    }
+
+    final data = await db.query(
+      "customers",
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: orderBy,
+      limit: pageSize,
+      offset: offset,
+    );
+
+    return data.map<Customer>((e) => Customer.fromMap(e)).toList();
+  }
+
   /// Get customer by ID
   Future<Customer?> getCustomerById(String id) async {
     final data = await db.query("customers", where: "id = ?", whereArgs: [id]);

@@ -121,7 +121,7 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
 
                 // Payment method dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedMethod,
+                  initialValue: selectedMethod,
                   decoration: const InputDecoration(
                     labelText: "Payment Method *",
                     border: OutlineInputBorder(),
