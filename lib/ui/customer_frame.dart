@@ -276,6 +276,11 @@ class _CustomerFrameState extends State<CustomerFrame> {
             onPressed: () => _exportService.exportToPDF(_customers),
           ),
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _resetPagination,
+          ),
+          IconButton(
             onPressed: _showAddCustomerDialog,
             icon: const Icon(Icons.add_circle, size: 28),
             tooltip: 'Add Customer',

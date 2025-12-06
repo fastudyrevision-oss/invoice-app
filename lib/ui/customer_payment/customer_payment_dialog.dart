@@ -330,7 +330,7 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
 
                     // Transaction reference (Invoice Selection)
                     DropdownButtonFormField<String>(
-                      value:
+                      initialValue:
                           _pendingInvoices.any((i) => i.id == _transactionRef)
                           ? _transactionRef
                           : null,

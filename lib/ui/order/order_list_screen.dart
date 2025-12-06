@@ -131,7 +131,13 @@ class _OrderListScreenState extends State<OrderListScreen>
       return;
     }
 
-    final file = await generateAllOrdersPdf(_filtered);
+    final file = await generateAllOrdersPdf(
+      _filtered,
+      searchQuery: _searchController.text.trim(),
+      showPendingOnly: _showPendingOnly,
+      dateRange: _selectedDateRange,
+      quickFilter: _quickFilter,
+    );
     if (file != null) {
       await shareOrPrintPdf(file);
     }

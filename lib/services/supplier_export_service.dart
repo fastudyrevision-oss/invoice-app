@@ -4,15 +4,52 @@ import 'package:printing/printing.dart';
 import '../models/supplier.dart';
 
 class SupplierExportService {
-  /// Export supplier list to beautiful PDF with multi-page support
-  Future<void> exportToPDF(List<Supplier> suppliers) async {
+  /// Export supplier list to beautiful PDF with multi-page support and filter metadata
+  Future<void> exportToPDF(
+    List<Supplier> suppliers, {
+    String? searchKeyword,
+    String? companyName,
+    bool? pendingFilter, // null=all, true=pending, false=paid
+    double? minCredit,
+    double? maxCredit,
+    double? minPending,
+    double? maxPending,
+    bool showDeleted = false,
+  }) async {
     if (suppliers.isEmpty) {
-      print('⚠️ No suppliers to export.');
+      print('No suppliers to export.');
       return;
     }
 
     final pdf = pw.Document();
     final now = DateTime.now();
+
+    // Build filter summary
+    final List<String> activeFilters = [];
+    if (searchKeyword != null && searchKeyword.isNotEmpty) {
+      activeFilters.add('Search: "$searchKeyword"');
+    }
+    if (companyName != null && companyName != 'All Companies') {
+      activeFilters.add('Company: $companyName');
+    }
+    if (pendingFilter != null) {
+      activeFilters.add(
+        'Payment Status: ${pendingFilter ? "Pending Only" : "Paid Only"}',
+      );
+    }
+    if (minCredit != null || maxCredit != null) {
+      final min = minCredit?.toStringAsFixed(0) ?? '0';
+      final max = maxCredit?.toStringAsFixed(0) ?? '∞';
+      activeFilters.add('Credit Limit: Rs $min - Rs $max');
+    }
+    if (minPending != null || maxPending != null) {
+      final min = minPending?.toStringAsFixed(0) ?? '0';
+      final max = maxPending?.toStringAsFixed(0) ?? '∞';
+      activeFilters.add('Pending Amount: Rs $min - Rs $max');
+    }
+    if (showDeleted) {
+      activeFilters.add('Including Deleted Records');
+    }
 
     // Calculate summary statistics
     final totalPending = suppliers.fold<double>(
@@ -40,9 +77,7 @@ class SupplierExportService {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(24),
           build: (context) => [
-            // ═══════════════════════════════════════
-            // 🎨 BEAUTIFUL HEADER
-            // ═══════════════════════════════════════
+            // Header
             pw.Container(
               padding: const pw.EdgeInsets.all(16),
               decoration: pw.BoxDecoration(
@@ -58,7 +93,9 @@ class SupplierExportService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        '🏭 Supplier Report',
+                        activeFilters.isEmpty
+                            ? 'Supplier Report'
+                            : 'Filtered Supplier Report',
                         style: pw.TextStyle(
                           fontSize: 24,
                           fontWeight: pw.FontWeight.bold,
@@ -102,9 +139,59 @@ class SupplierExportService {
 
             pw.SizedBox(height: 20),
 
-            // ═══════════════════════════════════════
-            // 📊 SUMMARY CARDS (Only on first page)
-            // ═══════════════════════════════════════
+            // Active Filters Section (only on first page)
+            if (pageIndex == 0 && activeFilters.isNotEmpty) ...[
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.purple50,
+                  borderRadius: pw.BorderRadius.circular(8),
+                  border: pw.Border.all(color: PdfColors.purple200),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Active Filters',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.purple900,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    ...activeFilters.map(
+                      (filter) => pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 2),
+                        child: pw.Row(
+                          children: [
+                            pw.Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const pw.BoxDecoration(
+                                color: PdfColors.purple700,
+                                shape: pw.BoxShape.circle,
+                              ),
+                            ),
+                            pw.SizedBox(width: 6),
+                            pw.Text(
+                              filter,
+                              style: const pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.purple900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 20),
+            ],
+
+            // Summary Cards (Only on first page)
             if (pageIndex == 0) ...[
               pw.Row(
                 children: [
@@ -130,9 +217,7 @@ class SupplierExportService {
               pw.SizedBox(height: 24),
             ],
 
-            // ═══════════════════════════════════════
-            // 📋 BEAUTIFUL DATA TABLE
-            // ═══════════════════════════════════════
+            // Data Table
             pw.Table(
               border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
               columnWidths: {
@@ -173,15 +258,13 @@ class SupplierExportService {
                       _buildDataCell((index + 1).toString()),
                       _buildDataCell(supplier.name, bold: hasPending),
                       _buildDataCell(supplier.phone ?? '-'),
-                      _buildDataCell(supplier.companyId.toString() ?? '-'),
+                      _buildDataCell(supplier.companyId.toString()),
                       _buildDataCell(
                         supplier.pendingAmount.toStringAsFixed(2),
                         bold: hasPending,
                         color: hasPending ? PdfColors.deepOrange900 : null,
                       ),
-                      _buildDataCell(
-                        supplier.creditLimit.toStringAsFixed(2) ?? '-',
-                      ),
+                      _buildDataCell(supplier.creditLimit.toStringAsFixed(2)),
                     ],
                   );
                 }),
@@ -190,9 +273,7 @@ class SupplierExportService {
 
             pw.SizedBox(height: 20),
 
-            // ═══════════════════════════════════════
-            // 📌 FOOTER (Only on last page)
-            // ═══════════════════════════════════════
+            // Footer (Only on last page)
             if (pageIndex == totalPages - 1) ...[
               pw.Container(
                 padding: const pw.EdgeInsets.all(12),
@@ -254,17 +335,20 @@ class SupplierExportService {
       );
     }
 
-    // ═══════════════════════════════════════
-    // 🖨️ SHARE PDF
-    // ═══════════════════════════════════════
+    // Share PDF
     final bytes = await pdf.save();
+    final filterSuffix = pendingFilter == true
+        ? '_Pending'
+        : pendingFilter == false
+        ? '_Paid'
+        : '';
     await Printing.sharePdf(
       bytes: bytes,
-      filename: 'Supplier_Report_${_formatDate(now)}.pdf',
+      filename: 'Supplier_Report$filterSuffix\_${_formatDate(now)}.pdf',
     );
 
     print(
-      '✅ Supplier Report PDF exported successfully (${suppliers.length} records, $totalPages pages).',
+      'Supplier Report PDF exported successfully (${suppliers.length} records, $totalPages pages).',
     );
   }
 

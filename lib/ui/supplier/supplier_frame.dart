@@ -4,6 +4,7 @@ import '../../repositories/supplier_repo.dart';
 import '../../repositories/supplier_payment_repo.dart';
 import '../../models/supplier.dart';
 import '../../models/supplier_company.dart';
+import '../../services/supplier_export_service.dart';
 import 'supplier_detail_frame.dart';
 import 'supplier_form_frame.dart';
 import 'supplier_company_frame.dart';
@@ -174,6 +175,34 @@ class _SupplierFrameState extends State<SupplierFrame> {
   Future<void> _restoreSupplier(Supplier supplier) async {
     await widget.repo.restoreSupplier(supplier.id);
     _resetAndLoad();
+  }
+
+  Future<void> _exportToPDF() async {
+    if (_suppliers.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No suppliers to export')));
+      return;
+    }
+
+    final exportService = SupplierExportService();
+    await exportService.exportToPDF(
+      _suppliers,
+      searchKeyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+      companyName: _selectedCompany?.name,
+      pendingFilter: _pendingFilter,
+      minCredit: double.tryParse(_minCreditCtrl.text),
+      maxCredit: double.tryParse(_maxCreditCtrl.text),
+      minPending: double.tryParse(_minPendingCtrl.text),
+      maxPending: double.tryParse(_maxPendingCtrl.text),
+      showDeleted: _showDeleted,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF exported successfully!')),
+      );
+    }
   }
 
   // --- Credit Limit Range Filter ---
@@ -364,6 +393,11 @@ class _SupplierFrameState extends State<SupplierFrame> {
             ],
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Export to PDF',
+              onPressed: _exportToPDF,
+            ),
             const SizedBox(width: 10),
             IconButton(
               icon: Icon(

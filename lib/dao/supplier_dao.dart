@@ -15,14 +15,22 @@ class SupplierDao {
   /// Insert a new supplier
   Future<int> insertSupplier(Supplier supplier) async {
     final dbClient = await _db;
-    final id = await dbClient.insert("suppliers", supplier.toMap());
+
+    // ✅ Ensure numeric fields are properly typed to prevent string concatenation
+    final supplierMap = supplier.toMap();
+    supplierMap['pending_amount'] = (supplierMap['pending_amount'] as num)
+        .toDouble();
+    supplierMap['credit_limit'] = (supplierMap['credit_limit'] as num)
+        .toDouble();
+
+    final id = await dbClient.insert("suppliers", supplierMap);
 
     await AuditLogger.log(
       'CREATE',
       'suppliers',
       recordId: supplier.id,
       userId: 'system',
-      newData: supplier.toMap(),
+      newData: supplierMap,
       txn: dbClient,
     );
 
@@ -101,9 +109,16 @@ class SupplierDao {
     );
     final oldData = oldDataList.isNotEmpty ? oldDataList.first : null;
 
+    // ✅ Ensure numeric fields are properly typed to prevent string concatenation
+    final supplierMap = supplier.toMap();
+    supplierMap['pending_amount'] = (supplierMap['pending_amount'] as num)
+        .toDouble();
+    supplierMap['credit_limit'] = (supplierMap['credit_limit'] as num)
+        .toDouble();
+
     final count = await dbClient.update(
       "suppliers",
-      supplier.toMap(),
+      supplierMap,
       where: "id = ?",
       whereArgs: [supplier.id],
     );
@@ -114,7 +129,7 @@ class SupplierDao {
       recordId: supplier.id,
       userId: 'system',
       oldData: oldData,
-      newData: supplier.toMap(),
+      newData: supplierMap,
       txn: dbClient,
     );
 

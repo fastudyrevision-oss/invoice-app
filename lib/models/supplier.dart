@@ -82,12 +82,27 @@ class Supplier {
       address: map["address"],
       contactPerson: map["contact_person"],
       companyId: map["company_id"],
-      pendingAmount: (map["pending_amount"] ?? 0.0).toDouble(),
-      creditLimit: (map["credit_limit"] ?? 0.0).toDouble(),
+      pendingAmount: _toDouble(map["pending_amount"]),
+      creditLimit: _toDouble(map["credit_limit"]),
       createdAt: map["created_at"],
       updatedAt: map["updated_at"],
       isSynced: map["is_synced"] == 1,
       deleted: map["deleted"] ?? 0, // parse deleted
     );
+  }
+
+  /// Safely convert dynamic to double to prevent string concatenation bugs
+  static double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      // Handle string values that might come from database
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed;
+      return 0.0;
+    }
+    return 0.0;
   }
 }

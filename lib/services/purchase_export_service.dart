@@ -62,7 +62,7 @@ class PurchaseExportService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        '🛍️ Purchase Report',
+                        'Purchase Report',
                         style: pw.TextStyle(
                           fontSize: 24,
                           fontWeight: pw.FontWeight.bold,
@@ -175,7 +175,9 @@ class PurchaseExportService {
                     ),
                     children: [
                       _buildDataCell((index + 1).toString()),
-                      _buildDataCell(_formatDate(DateTime.parse(purchase.createdAt))),
+                      _buildDataCell(
+                        _formatDate(DateTime.parse(purchase.createdAt)),
+                      ),
                       _buildDataCell(purchase.invoiceNo ?? '-'),
                       _buildDataCell(purchase.supplierId ?? '-'),
                       _buildDataCell(

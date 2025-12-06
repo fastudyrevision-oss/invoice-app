@@ -412,16 +412,29 @@ class _ProductFrameState extends State<ProductFrame> {
             onPressed: () => _exportService.exportToPDF(displayedProducts),
           ),
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () {
+              setState(() {
+                _products.clear();
+                _currentPage = 0;
+                _hasMore = true;
+              });
+              _loadInitialData();
+            },
+          ),
+          IconButton(
             onPressed: () => _showAddEditProductDialog(),
             icon: const Icon(Icons.add_circle, size: 28),
             tooltip: 'Add Product',
           ),
-          const SizedBox(width: 10 , height: 10,),
-          const SizedBox(height: 10),
+          const SizedBox(width: 10),
         ],
-        
+
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(150), // Increased height
+          preferredSize: const Size.fromHeight(
+            160,
+          ), // Adjusted for proper spacing
           child: Container(
             color: Theme.of(context).primaryColor.withOpacity(0.05),
             child: Column(

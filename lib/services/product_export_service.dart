@@ -58,7 +58,7 @@ class ProductExportService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        '📦 Product Inventory Report',
+                        'Product Inventory Report',
                         style: pw.TextStyle(
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
@@ -165,8 +165,7 @@ class ProductExportService {
                   final index = startIndex + entry.key;
                   final product = entry.value;
                   final isEven = index % 2 == 0;
-                  final isLowStock =
-                      product.quantity <= product.minStock;
+                  final isLowStock = product.quantity <= product.minStock;
                   final profit = product.sellPrice - product.costPrice;
 
                   return pw.TableRow(

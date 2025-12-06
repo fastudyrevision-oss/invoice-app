@@ -289,17 +289,21 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
   IconData _getCategoryIcon(String category) {
     final cat = category.toLowerCase();
     if (cat.contains('food') || cat.contains('meal')) return Icons.restaurant;
-    if (cat.contains('transport') || cat.contains('fuel'))
+    if (cat.contains('transport') || cat.contains('fuel')) {
       return Icons.directions_car;
-    if (cat.contains('utility') || cat.contains('bill'))
+    }
+    if (cat.contains('utility') || cat.contains('bill')) {
       return Icons.receipt_long;
+    }
     if (cat.contains('salary') || cat.contains('wage')) return Icons.payments;
-    if (cat.contains('office') || cat.contains('supply'))
+    if (cat.contains('office') || cat.contains('supply')) {
       return Icons.business_center;
+    }
     if (cat.contains('rent')) return Icons.home;
     if (cat.contains('entertain')) return Icons.movie;
-    if (cat.contains('health') || cat.contains('medical'))
+    if (cat.contains('health') || cat.contains('medical')) {
       return Icons.local_hospital;
+    }
     if (cat.contains('education')) return Icons.school;
     return Icons.category;
   }
@@ -333,14 +337,26 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
             onPressed: () => _exportService.exportToPDF(_filteredExpenses),
           ),
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () {
+              setState(() {
+                _currentMax = _pageSize;
+              });
+              _loadExpenses();
+            },
+          ),
+          IconButton(
             onPressed: () => _showAddEditExpenseDialog(),
             icon: const Icon(Icons.add_circle, size: 28),
-            tooltip: 'Add Expense',
+            tooltip: 'Add Product',
           ),
           const SizedBox(width: 10),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(180),
+          preferredSize: const Size.fromHeight(
+            190,
+          ), // Adjusted for proper spacing
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
