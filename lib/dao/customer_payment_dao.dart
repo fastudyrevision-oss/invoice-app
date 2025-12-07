@@ -3,6 +3,7 @@ import '../models/customer_payment.dart';
 
 import 'package:sqflite/sqflite.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class CustomerPaymentDao {
   final DatabaseExecutor? db; // Optional for transaction support
@@ -20,7 +21,7 @@ class CustomerPaymentDao {
       'CREATE',
       'customer_payments',
       recordId: payment.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: payment.toMap(),
       txn: dbClient,
     );
@@ -142,7 +143,7 @@ class CustomerPaymentDao {
       'UPDATE',
       'customer_payments',
       recordId: payment.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData,
       newData: payment.toMap(),
       txn: dbClient,
@@ -173,7 +174,7 @@ class CustomerPaymentDao {
         'DELETE',
         'customer_payments',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData,
         txn: dbClient,
       );

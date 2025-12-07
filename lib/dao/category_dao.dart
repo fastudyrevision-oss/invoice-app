@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database_helper.dart';
 import '../models/category.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class CategoryDao {
   final DatabaseExecutor db;
@@ -23,7 +24,7 @@ class CategoryDao {
       'CREATE',
       'categories',
       recordId: c.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: c.toMap(),
       txn: db,
     );
@@ -46,7 +47,7 @@ class CategoryDao {
       'UPDATE',
       'categories',
       recordId: c.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData?.toMap(),
       newData: c.toMap(),
       txn: db,
@@ -71,7 +72,7 @@ class CategoryDao {
         'DELETE',
         'categories',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData.toMap(),
         txn: db,
       );

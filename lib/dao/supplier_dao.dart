@@ -3,6 +3,7 @@ import '../models/supplier.dart';
 
 import 'package:sqflite/sqflite.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class SupplierDao {
   final DatabaseExecutor? db;
@@ -29,7 +30,7 @@ class SupplierDao {
       'CREATE',
       'suppliers',
       recordId: supplier.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: supplierMap,
       txn: dbClient,
     );
@@ -127,7 +128,7 @@ class SupplierDao {
       'UPDATE',
       'suppliers',
       recordId: supplier.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData,
       newData: supplierMap,
       txn: dbClient,
@@ -160,7 +161,7 @@ class SupplierDao {
         'DELETE',
         'suppliers',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData,
         txn: dbClient,
       );

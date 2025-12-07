@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'package:invoice_app/repositories/supplier_payment_repo.dart';
 import '../../repositories/supplier_repo.dart';
 import '../../models/supplier.dart';
@@ -18,25 +19,29 @@ class SupplierDetailFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(supplier.name),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: "Info"),
-              Tab(text: "Payments"),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(supplier.name),
+              bottom: const TabBar(
+                tabs: [
+                  Tab(text: "Info"),
+                  Tab(text: "Payments"),
+                ],
+              ),
+            ),
+            body: TabBarView(
+              children: [
+                _buildInfoTab(),
+                SupplierPaymentFrame(repo: repo2, supplier: supplier),
+              ],
+            ),
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildInfoTab(),
-            SupplierPaymentFrame(repo: repo2, supplier: supplier),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 

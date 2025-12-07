@@ -3,6 +3,7 @@ import '../models/supplier_payment.dart';
 
 import 'package:sqflite/sqflite.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class SupplierPaymentDao {
   final DatabaseExecutor? db;
@@ -21,7 +22,7 @@ class SupplierPaymentDao {
       'CREATE',
       'supplier_payments',
       recordId: payment.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: payment.toMap(),
       txn: dbClient,
     );
@@ -92,7 +93,7 @@ class SupplierPaymentDao {
       'UPDATE',
       'supplier_payments',
       recordId: payment.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData,
       newData: payment.toMap(),
       txn: dbClient,
@@ -125,7 +126,7 @@ class SupplierPaymentDao {
         'DELETE',
         'supplier_payments',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData,
         txn: dbClient,
       );
@@ -168,7 +169,7 @@ class SupplierPaymentDao {
         'DELETE',
         'supplier_payments',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData,
         txn: dbClient,
       );

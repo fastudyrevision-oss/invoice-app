@@ -5,8 +5,14 @@ import '../../data/models/audit_log_entry.dart';
 class AuditLogCard extends StatelessWidget {
   final AuditLogEntry entry;
   final VoidCallback onTap;
+  final String? username;
 
-  const AuditLogCard({super.key, required this.entry, required this.onTap});
+  const AuditLogCard({
+    super.key,
+    required this.entry,
+    required this.onTap,
+    this.username,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +52,14 @@ class AuditLogCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Record ID: ${entry.recordId}"),
+            Text(
+              "User: ${username ?? entry.userId}",
+              style: TextStyle(
+                color: Colors.grey[800],
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             Text(
               DateFormat('dd MMM yyyy HH:mm').format(entry.timestamp),
               style: TextStyle(color: Colors.grey[600], fontSize: 12),

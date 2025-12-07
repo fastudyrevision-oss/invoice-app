@@ -10,6 +10,7 @@ import 'supplier_form_frame.dart';
 import 'supplier_company_frame.dart';
 import 'supplier_insights_card.dart';
 import '../common/unified_search_bar.dart';
+import '../../utils/responsive_utils.dart';
 
 class SupplierFrame extends StatefulWidget {
   final SupplierRepository repo;
@@ -88,45 +89,58 @@ class _SupplierFrameState extends State<SupplierFrame> {
 
     setState(() => _isLoading = true);
 
-    final nextPage = await widget.repo.getSuppliersPaged(
-      page: _currentPage,
-      pageSize: _pageSize,
-      keyword: _searchKeyword,
-      showDeleted: _showDeleted,
-    );
+    try {
+      final nextPage = await widget.repo.getSuppliersPaged(
+        page: _currentPage,
+        pageSize: _pageSize,
+        keyword: _searchKeyword,
+        showDeleted: _showDeleted,
+      );
 
-    // Apply filters
-    final filtered = nextPage.where((s) {
-      final minCredit =
-          double.tryParse(_minCreditCtrl.text) ?? double.negativeInfinity;
-      final maxCredit = double.tryParse(_maxCreditCtrl.text) ?? double.infinity;
-      if (s.creditLimit < minCredit || s.creditLimit > maxCredit) return false;
+      // Apply filters
+      final filtered = nextPage.where((s) {
+        final minCredit =
+            double.tryParse(_minCreditCtrl.text) ?? double.negativeInfinity;
+        final maxCredit =
+            double.tryParse(_maxCreditCtrl.text) ?? double.infinity;
+        if (s.creditLimit < minCredit || s.creditLimit > maxCredit) {
+          return false;
+        }
 
-      final minPending =
-          double.tryParse(_minPendingCtrl.text) ?? double.negativeInfinity;
-      final maxPending =
-          double.tryParse(_maxPendingCtrl.text) ?? double.infinity;
-      if (s.pendingAmount < minPending || s.pendingAmount > maxPending) {
-        return false;
+        final minPending =
+            double.tryParse(_minPendingCtrl.text) ?? double.negativeInfinity;
+        final maxPending =
+            double.tryParse(_maxPendingCtrl.text) ?? double.infinity;
+        if (s.pendingAmount < minPending || s.pendingAmount > maxPending) {
+          return false;
+        }
+
+        // Company filter
+        if (_selectedCompany != null && _selectedCompany!.id != "-1") {
+          if (s.companyId != _selectedCompany!.id) return false;
+        }
+        if (_pendingFilter != null) {
+          if (_pendingFilter == true && s.pendingAmount <= 0) return false;
+          if (_pendingFilter == false && s.pendingAmount > 0) return false;
+        }
+        return true;
+      }).toList();
+
+      setState(() {
+        _suppliers.addAll(filtered);
+        _isLoading = false;
+        _currentPage++;
+        if (nextPage.length < _pageSize) _hasMore = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading suppliers: $e");
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error loading suppliers: $e")));
       }
-
-      // Company filter
-      if (_selectedCompany != null && _selectedCompany!.id != "-1") {
-        if (s.companyId != _selectedCompany!.id) return false;
-      }
-      if (_pendingFilter != null) {
-        if (_pendingFilter == true && s.pendingAmount <= 0) return false;
-        if (_pendingFilter == false && s.pendingAmount > 0) return false;
-      }
-      return true;
-    }).toList();
-
-    setState(() {
-      _suppliers.addAll(filtered);
-      _isLoading = false;
-      _currentPage++;
-      if (nextPage.length < _pageSize) _hasMore = false;
-    });
+    }
   }
 
   Future<void> _loadCompanies() async {
@@ -329,47 +343,50 @@ class _SupplierFrameState extends State<SupplierFrame> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Row(
-              children: [
-                FilterChip(
-                  label: const Text("All"),
-                  selected: _pendingFilter == null,
-                  onSelected: (selected) {
-                    setState(() {
-                      _pendingFilter = null;
-                      _resetAndLoad();
-                    });
-                  },
-                  selectedColor: Colors.blue.shade100,
-                  checkmarkColor: Colors.blue,
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text("Pending"),
-                  selected: _pendingFilter == true,
-                  onSelected: (selected) {
-                    setState(() {
-                      _pendingFilter = true;
-                      _resetAndLoad();
-                    });
-                  },
-                  selectedColor: Colors.red.shade100,
-                  checkmarkColor: Colors.red,
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text("Paid"),
-                  selected: _pendingFilter == false,
-                  onSelected: (selected) {
-                    setState(() {
-                      _pendingFilter = false;
-                      _resetAndLoad();
-                    });
-                  },
-                  selectedColor: Colors.green.shade100,
-                  checkmarkColor: Colors.green,
-                ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text("All"),
+                    selected: _pendingFilter == null,
+                    onSelected: (selected) {
+                      setState(() {
+                        _pendingFilter = null;
+                        _resetAndLoad();
+                      });
+                    },
+                    selectedColor: Colors.blue.shade100,
+                    checkmarkColor: Colors.blue,
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text("Pending"),
+                    selected: _pendingFilter == true,
+                    onSelected: (selected) {
+                      setState(() {
+                        _pendingFilter = true;
+                        _resetAndLoad();
+                      });
+                    },
+                    selectedColor: Colors.red.shade100,
+                    checkmarkColor: Colors.red,
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text("Paid"),
+                    selected: _pendingFilter == false,
+                    onSelected: (selected) {
+                      setState(() {
+                        _pendingFilter = false;
+                        _resetAndLoad();
+                      });
+                    },
+                    selectedColor: Colors.green.shade100,
+                    checkmarkColor: Colors.green,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -379,392 +396,527 @@ class _SupplierFrameState extends State<SupplierFrame> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: Colors.grey[100],
-        appBar: AppBar(
-          title: const Text("Suppliers & Companies"),
-          elevation: 0,
-          bottom: const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.person), text: "Suppliers"),
-              Tab(icon: Icon(Icons.business), text: "Companies"),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Export to PDF',
-              onPressed: _exportToPDF,
-            ),
-            const SizedBox(width: 10),
-            IconButton(
-              icon: Icon(
-                _showDeleted ? Icons.visibility_off : Icons.visibility,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: Colors.grey[100],
+            appBar: AppBar(
+              title: const Text("Suppliers & Companies"),
+              elevation: 0,
+              bottom: const TabBar(
+                tabs: [
+                  Tab(icon: Icon(Icons.person), text: "Suppliers"),
+                  Tab(icon: Icon(Icons.business), text: "Companies"),
+                ],
               ),
-              tooltip: _showDeleted ? "Hide Deleted" : "Show Deleted",
-              onPressed: () {
-                setState(() {
-                  _showDeleted = !_showDeleted;
-                  _resetAndLoad();
-                });
-              },
-            ),
-            const SizedBox(width: 10),
-          ],
-        ),
-        body: TabBarView(
-          children: [
-            // --- SUPPLIERS TAB ---
-            Column(
-              children: [
-                _buildFilterBar(),
-
-                // Supplier Insights Card
-                Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: SupplierInsightsCard(
-                    suppliers: _suppliers,
-                    loading: false,
-                    lastUpdated: DateTime.now(),
-                    companiesCount: _companies
-                        .where((c) => c.id != '-1')
-                        .length,
-                  ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf),
+                  tooltip: 'Export to PDF',
+                  onPressed: _exportToPDF,
                 ),
+                const SizedBox(width: 10),
+                IconButton(
+                  icon: Icon(
+                    _showDeleted ? Icons.visibility_off : Icons.visibility,
+                  ),
+                  tooltip: _showDeleted ? "Hide Deleted" : "Show Deleted",
+                  onPressed: () {
+                    setState(() {
+                      _showDeleted = !_showDeleted;
+                      _resetAndLoad();
+                    });
+                  },
+                ),
+                const SizedBox(width: 10),
+              ],
+            ),
+            body: TabBarView(
+              children: [
+                // --- SUPPLIERS TAB ---
+                Column(
+                  children: [
+                    _buildFilterBar(),
 
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: _suppliers.length + (_hasMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= _suppliers.length) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
+                    // Supplier Insights Card
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: SupplierInsightsCard(
+                        suppliers: _suppliers,
+                        loading: false,
+                        lastUpdated: DateTime.now(),
+                        companiesCount: _companies
+                            .where((c) => c.id != '-1')
+                            .length,
+                      ),
+                    ),
 
-                      final supplier = _suppliers[index];
-                      final isDeleted = supplier.deleted == 1;
-                      final hasPending = supplier.pendingAmount > 0;
-                      final company = _companies.firstWhere(
-                        (c) => c.id == supplier.companyId,
-                        orElse: () => SupplierCompany(
-                          id: "0",
-                          name: "No Company",
-                          createdAt: DateTime.now().toIso8601String(),
-                          updatedAt: DateTime.now().toIso8601String(),
-                        ),
-                      );
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: _suppliers.length + (_hasMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index >= _suppliers.length) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
 
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isDeleted
-                              ? Colors.grey.shade300
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              spreadRadius: 1,
-                              blurRadius: 6,
-                              offset: const Offset(0, 3),
+                          final supplier = _suppliers[index];
+                          final isDeleted = supplier.deleted == 1;
+                          final hasPending = supplier.pendingAmount > 0;
+                          final company = _companies.firstWhere(
+                            (c) => c.id == supplier.companyId,
+                            orElse: () => SupplierCompany(
+                              id: "0",
+                              name: "No Company",
+                              createdAt: DateTime.now().toIso8601String(),
+                              updatedAt: DateTime.now().toIso8601String(),
                             ),
-                          ],
-                          border: Border.all(
-                            color: isDeleted
-                                ? Colors.grey.shade400
-                                : hasPending
-                                ? Colors.red.shade200
-                                : Colors.transparent,
-                            width: isDeleted || hasPending ? 1.5 : 0,
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Status Strip
-                              if (isDeleted)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                    horizontal: 12,
-                                  ),
-                                  color: Colors.grey.shade400,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.delete_outline,
-                                        size: 16,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        "Deleted Supplier",
-                                        style: TextStyle(
-                                          color: Colors.grey.shade900,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else if (hasPending)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                    horizontal: 12,
-                                  ),
-                                  color: Colors.red.shade50,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.account_balance_wallet,
-                                        size: 16,
-                                        color: Colors.red.shade700,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        "Pending Payment",
-                                        style: TextStyle(
-                                          color: Colors.red.shade900,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                          );
 
-                              InkWell(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => SupplierDetailFrame(
-                                        repo: widget.repo,
-                                        repo2: widget.repo2,
-                                        supplier: supplier,
+                          return Container(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDeleted
+                                  ? Colors.grey.shade300
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  spreadRadius: 1,
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                              border: Border.all(
+                                color: isDeleted
+                                    ? Colors.grey.shade400
+                                    : hasPending
+                                    ? Colors.red.shade200
+                                    : Colors.transparent,
+                                width: isDeleted || hasPending ? 1.5 : 0,
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Status Strip
+                                  if (isDeleted)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                        horizontal: 12,
+                                      ),
+                                      color: Colors.grey.shade400,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete_outline,
+                                            size: 16,
+                                            color: Colors.grey.shade700,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "Deleted Supplier",
+                                            style: TextStyle(
+                                              color: Colors.grey.shade900,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  else if (hasPending)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                        horizontal: 12,
+                                      ),
+                                      color: Colors.red.shade50,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.account_balance_wallet,
+                                            size: 16,
+                                            color: Colors.red.shade700,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "Pending Payment",
+                                            style: TextStyle(
+                                              color: Colors.red.shade900,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // Header: Name & Actions
-                                      Row(
+
+                                  InkWell(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SupplierDetailFrame(
+                                            repo: widget.repo,
+                                            repo2: widget.repo2,
+                                            supplier: supplier,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  supplier.name,
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: isDeleted
-                                                        ? Colors.grey.shade700
-                                                        : Colors.black87,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                if (supplier.phone != null)
-                                                  Row(
-                                                    children: [
-                                                      Icon(
-                                                        Icons.phone,
-                                                        size: 14,
-                                                        color: Colors.grey[600],
-                                                      ),
-                                                      const SizedBox(width: 4),
-                                                      Text(
-                                                        supplier.phone!,
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                          color:
-                                                              Colors.grey[700],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                          // Actions
-                                          if (!isDeleted)
-                                            Row(
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    color: Colors.blue,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _editSupplier(supplier),
-                                                  tooltip: 'Edit',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    color: Colors.red,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _deleteSupplier(supplier),
-                                                  tooltip: 'Delete',
-                                                ),
-                                              ],
-                                            )
-                                          else
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons.restore,
-                                                color: Colors.orange,
-                                              ),
-                                              onPressed: () =>
-                                                  _restoreSupplier(supplier),
-                                              tooltip: 'Restore',
-                                            ),
-                                        ],
-                                      ),
-
-                                      const SizedBox(height: 12),
-
-                                      // Company Chip
-                                      if (company.id != "0")
-                                        Chip(
-                                          avatar: const Icon(
-                                            Icons.business,
-                                            size: 16,
-                                          ),
-                                          label: Text(company.name),
-                                          backgroundColor: Colors.blue.shade50,
-                                          labelStyle: TextStyle(
-                                            color: Colors.blue.shade900,
-                                            fontSize: 12,
-                                          ),
-                                          padding: const EdgeInsets.all(0),
-                                          visualDensity: VisualDensity.compact,
-                                        ),
-
-                                      const SizedBox(height: 16),
-                                      const Divider(),
-                                      const SizedBox(height: 8),
-
-                                      // Metrics Row
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Column(
+                                          // Header: Name & Actions
+                                          Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                "PENDING AMOUNT",
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey.shade500,
-                                                  fontWeight: FontWeight.w600,
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      supplier.name,
+                                                      style: TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: isDeleted
+                                                            ? Colors
+                                                                  .grey
+                                                                  .shade700
+                                                            : Colors.black87,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    if (supplier.phone != null)
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons.phone,
+                                                            size: 14,
+                                                            color: Colors
+                                                                .grey[600],
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 4,
+                                                          ),
+                                                          Text(
+                                                            supplier.phone!,
+                                                            style: TextStyle(
+                                                              fontSize: 13,
+                                                              color: Colors
+                                                                  .grey[700],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                  ],
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                "Rs ${supplier.pendingAmount.toStringAsFixed(0)}",
-                                                style: TextStyle(
-                                                  fontSize: 20,
-                                                  color: hasPending
-                                                      ? Colors.red.shade700
-                                                      : Colors.green.shade700,
-                                                  fontWeight: FontWeight.bold,
+                                              // Actions
+                                              if (!isDeleted)
+                                                Row(
+                                                  children: [
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.edit_outlined,
+                                                        color: Colors.blue,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _editSupplier(
+                                                            supplier,
+                                                          ),
+                                                      tooltip: 'Edit',
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.delete_outline,
+                                                        color: Colors.red,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _deleteSupplier(
+                                                            supplier,
+                                                          ),
+                                                      tooltip: 'Delete',
+                                                    ),
+                                                  ],
+                                                )
+                                              else
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.restore,
+                                                    color: Colors.orange,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _restoreSupplier(
+                                                        supplier,
+                                                      ),
+                                                  tooltip: 'Restore',
                                                 ),
-                                              ),
                                             ],
                                           ),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                "CREDIT LIMIT",
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey.shade500,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
+
+                                          const SizedBox(height: 12),
+
+                                          // Company Chip
+                                          if (company.id != "0")
+                                            Chip(
+                                              avatar: const Icon(
+                                                Icons.business,
+                                                size: 16,
                                               ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                "Rs ${supplier.creditLimit.toStringAsFixed(0)}",
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: Colors.blue.shade700,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                              label: Text(company.name),
+                                              backgroundColor:
+                                                  Colors.blue.shade50,
+                                              labelStyle: TextStyle(
+                                                color: Colors.blue.shade900,
+                                                fontSize: 12,
                                               ),
-                                            ],
-                                          ),
+                                              padding: const EdgeInsets.all(0),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+
+                                          const SizedBox(height: 16),
+                                          const Divider(),
+                                          const SizedBox(height: 8),
+
+                                          // Metrics Row
+                                          // Metrics Row
+                                          isMobile
+                                              ? Column(
+                                                  children: [
+                                                    Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              "PENDING AMOUNT",
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                color: Colors
+                                                                    .grey
+                                                                    .shade500,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 2,
+                                                            ),
+                                                            Text(
+                                                              "Rs ${supplier.pendingAmount.toStringAsFixed(0)}",
+                                                              style: TextStyle(
+                                                                fontSize: 20,
+                                                                color:
+                                                                    hasPending
+                                                                    ? Colors
+                                                                          .red
+                                                                          .shade700
+                                                                    : Colors
+                                                                          .green
+                                                                          .shade700,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              "CREDIT LIMIT",
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                color: Colors
+                                                                    .grey
+                                                                    .shade500,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 2,
+                                                            ),
+                                                            Text(
+                                                              "Rs ${supplier.creditLimit.toStringAsFixed(0)}",
+                                                              style: TextStyle(
+                                                                fontSize: 16,
+                                                                color: Colors
+                                                                    .blue
+                                                                    .shade700,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                )
+                                              : Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          "PENDING AMOUNT",
+                                                          style: TextStyle(
+                                                            fontSize: 10,
+                                                            color: Colors
+                                                                .grey
+                                                                .shade500,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 2,
+                                                        ),
+                                                        Text(
+                                                          "Rs ${supplier.pendingAmount.toStringAsFixed(0)}",
+                                                          style: TextStyle(
+                                                            fontSize: 20,
+                                                            color: hasPending
+                                                                ? Colors
+                                                                      .red
+                                                                      .shade700
+                                                                : Colors
+                                                                      .green
+                                                                      .shade700,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .end,
+                                                      children: [
+                                                        Text(
+                                                          "CREDIT LIMIT",
+                                                          style: TextStyle(
+                                                            fontSize: 10,
+                                                            color: Colors
+                                                                .grey
+                                                                .shade500,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 2,
+                                                        ),
+                                                        Text(
+                                                          "Rs ${supplier.creditLimit.toStringAsFixed(0)}",
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            color: Colors
+                                                                .blue
+                                                                .shade700,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
                                         ],
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
+                // --- COMPANIES TAB ---
+                SupplierCompanyFrame(repo: widget.repo),
               ],
             ),
-            // --- COMPANIES TAB ---
-            SupplierCompanyFrame(repo: widget.repo),
-          ],
-        ),
-        floatingActionButton: Builder(
-          builder: (context) {
-            final tabIndex = DefaultTabController.of(context).index;
-            if (tabIndex == 0) {
-              return FloatingActionButton(
-                heroTag: null,
-                onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SupplierFormFrame(repo: widget.repo),
-                    ),
+            floatingActionButton: Builder(
+              builder: (context) {
+                final tabIndex = DefaultTabController.of(context).index;
+                if (tabIndex == 0) {
+                  return FloatingActionButton(
+                    heroTag: null,
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SupplierFormFrame(repo: widget.repo),
+                        ),
+                      );
+                      if (result == true) _resetAndLoad();
+                    },
+                    child: const Icon(Icons.person_add),
                   );
-                  if (result == true) _resetAndLoad();
-                },
-                child: const Icon(Icons.person_add),
-              );
-            } else {
-              return const SizedBox.shrink();
-            }
-          },
-        ),
-      ),
+                } else {
+                  return const SizedBox.shrink();
+                }
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }

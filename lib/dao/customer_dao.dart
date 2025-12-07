@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database_helper.dart';
 import '../models/customer.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class CustomerDao {
   final DatabaseExecutor db; // Can be either Database or Transaction
@@ -22,7 +23,7 @@ class CustomerDao {
       'CREATE',
       'customers',
       recordId: customer.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: customer.toMap(),
       txn: db,
     );
@@ -89,7 +90,7 @@ class CustomerDao {
       'UPDATE',
       'customers',
       recordId: customer.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData?.toMap(),
       newData: customer.toMap(),
       txn: db,
@@ -114,7 +115,7 @@ class CustomerDao {
         'DELETE',
         'customers',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData.toMap(),
         txn: db,
       );

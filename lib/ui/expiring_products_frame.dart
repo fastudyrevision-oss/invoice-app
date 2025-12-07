@@ -6,8 +6,9 @@ import 'expiring_batch_detail_frame.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'dart:io';
-import 'package:pdf/widgets.dart' as pw;
+
 import 'package:file_picker/file_picker.dart';
+import '../services/expiring_export_service.dart';
 
 class ExpiringProductsFrame extends StatefulWidget {
   final Database db;
@@ -176,48 +177,15 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
   }
 
   Future<void> _exportPDF() async {
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.Page(
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              "Expiring Products Report",
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 10),
-            pw.Table.fromTextArray(
-              headers: ["Product", "Batch", "Qty", "Expiry"],
-              data: _batches
-                  .map(
-                    (b) => [
-                      b.productName,
-                      b.batchNo,
-                      b.qty.toString(),
-                      DateFormat('yyyy-MM-dd').format(b.expiryDate),
-                    ],
-                  )
-                  .toList(),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final suggestedFileName = 'expiring_products_$timestamp.pdf';
-
-    final path = await _pickSavePath(suggestedFileName);
-    if (path == null) return; // user cancelled
-
-    final file = File(path);
-    await file.writeAsBytes(await pdf.save());
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('PDF saved successfully:\n$path')));
+    try {
+      final service = ExpiringExportService();
+      await service.exportToPDF(_batches);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export PDF: $e')));
+    }
   }
 
   Widget _buildLegend() {
@@ -261,193 +229,347 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      children: [
-        // FILTER BAR
-        Container(
-          color: isDark ? Colors.grey.shade900 : Theme.of(context).cardColor,
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search),
-                        hintText: "Search by product or batch...",
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: (_) => _loadExpiring(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.picture_as_pdf),
-                    tooltip: "Export PDF",
-                    onPressed: _exportPDF,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.table_chart),
-                    tooltip: "Export CSV",
-                    onPressed: _exportCSV,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 100,
-                    child: TextField(
-                      controller: _daysController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Days",
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final enteredDays = int.tryParse(_daysController.text);
-                      if (enteredDays != null && enteredDays > 0) {
-                        _loadExpiring(days: enteredDays);
-                      }
-                    },
-                    child: const Text("Apply"),
-                  ),
-                  const SizedBox(width: 8),
-                  ..._quickFilters.map((d) {
-                    final active = _filterDays == d;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                      child: ChoiceChip(
-                        label: Text("$d days"),
-                        selected: active,
-                        onSelected: (_) => _loadExpiring(days: d),
-                      ),
-                    );
-                  }),
-                  const Spacer(),
-                  DropdownButton<String>(
-                    value: _sortBy,
-                    items: const [
-                      DropdownMenuItem(
-                        value: "Expiry",
-                        child: Text("Sort: Expiry"),
-                      ),
-                      DropdownMenuItem(
-                        value: "Quantity",
-                        child: Text("Sort: Quantity"),
-                      ),
-                      DropdownMenuItem(
-                        value: "Name",
-                        child: Text("Sort: Name"),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _sortBy = val);
-                        _loadExpiring();
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  FilterChip(
-                    label: const Text("Only in-stock"),
-                    selected: _onlyInStock,
-                    onSelected: (v) => _loadExpiring(inStockOnly: v),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text("Show expired"),
-                    selected: _showExpired,
-                    onSelected: (v) =>
-                        _loadExpiring(showExpired: v, showAll: false),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text("Show all"),
-                    selected: _showAll,
-                    onSelected: (v) =>
-                        _loadExpiring(showAll: v, showExpired: false),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
 
-        _buildLegend(),
-        const Divider(height: 1),
-
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _batches.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+        return Column(
+          children: [
+            // FILTER BAR
+            Container(
+              color: isDark
+                  ? Colors.grey.shade900
+                  : Theme.of(context).cardColor,
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      Icon(Icons.hourglass_empty, size: 40, color: Colors.grey),
-                      SizedBox(height: 8),
-                      Text("No matching products found."),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: "Search by product or batch...",
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          onChanged: (_) => _loadExpiring(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Actions
+                      if (!isMobile) ...[
+                        IconButton(
+                          icon: const Icon(Icons.picture_as_pdf),
+                          tooltip: "Export PDF",
+                          onPressed: _exportPDF,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.table_chart),
+                          tooltip: "Export CSV",
+                          onPressed: _exportCSV,
+                        ),
+                      ] else
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert),
+                          onSelected: (v) {
+                            if (v == 'pdf') _exportPDF();
+                            if (v == 'csv') _exportCSV();
+                          },
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(
+                              value: 'pdf',
+                              child: Text('Export PDF'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'csv',
+                              child: Text('Export CSV'),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
-                )
-              : ListView.builder(
-                  itemCount: _batches.length,
-                  itemBuilder: (context, i) {
-                    final b = _batches[i];
-                    final exp = b.expiryDate;
-                    final diff = exp.difference(DateTime.now()).inDays;
-                    final expired = diff < 0;
-                    return Card(
-                      color: _getTileColor(exp, context),
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(
-                        leading: expired
-                            ? const Icon(Icons.warning_amber, color: Colors.red)
-                            : const Icon(Icons.inventory_2_outlined),
-                        title: Text(
-                          b.productName,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                  const SizedBox(height: 8),
+
+                  // Mobile stack or Row
+                  if (isMobile)
+                    Column(
+                      children: [
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 80,
+                              child: TextField(
+                                controller: _daysController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: "Days",
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.filter_list_alt),
+                              onPressed: () {
+                                final enteredDays = int.tryParse(
+                                  _daysController.text,
+                                );
+                                if (enteredDays != null && enteredDays > 0) {
+                                  _loadExpiring(days: enteredDays);
+                                }
+                              },
+                            ),
+                            Expanded(
+                              child: Wrap(
+                                spacing: 4,
+                                children: _quickFilters.map((d) {
+                                  final active = _filterDays == d;
+                                  return ChoiceChip(
+                                    label: Text("$d"),
+                                    selected: active,
+                                    onSelected: (_) => _loadExpiring(days: d),
+                                    visualDensity: VisualDensity.compact,
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
                         ),
-                        subtitle: Text(
-                          "Batch: ${b.batchNo}, Qty: ${b.qty}, Expiry: ${DateFormat('yyyy-MM-dd').format(exp)}"
-                          "\n${expired ? 'Expired ${-diff} days ago' : 'Expires in $diff days'}",
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              FilterChip(
+                                label: const Text("In-stock"),
+                                selected: _onlyInStock,
+                                onSelected: (v) =>
+                                    _loadExpiring(inStockOnly: v),
+                              ),
+                              const SizedBox(width: 8),
+                              FilterChip(
+                                label: const Text("Expired"),
+                                selected: _showExpired,
+                                onSelected: (v) => _loadExpiring(
+                                  showExpired: v,
+                                  showAll: false,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              FilterChip(
+                                label: const Text("All"),
+                                selected: _showAll,
+                                onSelected: (v) => _loadExpiring(
+                                  showAll: v,
+                                  showExpired: false,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Sort dropdown small
+                              DropdownButton<String>(
+                                value: _sortBy,
+                                underline: Container(),
+                                icon: const Icon(Icons.sort),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: "Expiry",
+                                    child: Text("Expiry"),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: "Quantity",
+                                    child: Text("Qty"),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: "Name",
+                                    child: Text("Name"),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _sortBy = val);
+                                    _loadExpiring();
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
                         ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  BatchDetailFrame(batch: b, db: widget.db),
+                      ],
+                    )
+                  else
+                    // Desktop Row
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 100,
+                          child: TextField(
+                            controller: _daysController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "Days",
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            final enteredDays = int.tryParse(
+                              _daysController.text,
+                            );
+                            if (enteredDays != null && enteredDays > 0) {
+                              _loadExpiring(days: enteredDays);
+                            }
+                          },
+                          child: const Text("Apply"),
+                        ),
+                        const SizedBox(width: 8),
+                        ..._quickFilters.map((d) {
+                          final active = _filterDays == d;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2.0,
+                            ),
+                            child: ChoiceChip(
+                              label: Text("$d days"),
+                              selected: active,
+                              onSelected: (_) => _loadExpiring(days: d),
                             ),
                           );
-                        },
+                        }),
+                        const Spacer(),
+                        DropdownButton<String>(
+                          value: _sortBy,
+                          items: const [
+                            DropdownMenuItem(
+                              value: "Expiry",
+                              child: Text("Sort: Expiry"),
+                            ),
+                            DropdownMenuItem(
+                              value: "Quantity",
+                              child: Text("Sort: Quantity"),
+                            ),
+                            DropdownMenuItem(
+                              value: "Name",
+                              child: Text("Sort: Name"),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _sortBy = val);
+                              _loadExpiring();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+
+                  if (!isMobile) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        FilterChip(
+                          label: const Text("Only in-stock"),
+                          selected: _onlyInStock,
+                          onSelected: (v) => _loadExpiring(inStockOnly: v),
+                        ),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: const Text("Show expired"),
+                          selected: _showExpired,
+                          onSelected: (v) =>
+                              _loadExpiring(showExpired: v, showAll: false),
+                        ),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: const Text("Show all"),
+                          selected: _showAll,
+                          onSelected: (v) =>
+                              _loadExpiring(showAll: v, showExpired: false),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // LEGEND & LIST
+            _buildLegend(),
+            const Divider(height: 1),
+
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _batches.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.hourglass_empty,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 8),
+                          Text("No matching products found."),
+                        ],
                       ),
-                    );
-                  },
-                ),
-        ),
-      ],
+                    )
+                  : ListView.builder(
+                      itemCount: _batches.length,
+                      itemBuilder: (context, i) {
+                        final b = _batches[i];
+                        final exp = b.expiryDate;
+                        final diff = exp.difference(DateTime.now()).inDays;
+                        final expired = diff < 0;
+                        return Card(
+                          color: _getTileColor(exp, context),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            leading: expired
+                                ? const Icon(
+                                    Icons.warning_amber,
+                                    color: Colors.red,
+                                  )
+                                : const Icon(Icons.inventory_2_outlined),
+                            title: Text(
+                              b.productName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              "Batch: ${b.batchNo}, Qty: ${b.qty}, Expiry: ${DateFormat('yyyy-MM-dd').format(exp)}"
+                              "\n${expired ? 'Expired ${-diff} days ago' : 'Expires in $diff days'}",
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      BatchDetailFrame(batch: b, db: widget.db),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

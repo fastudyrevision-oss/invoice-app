@@ -6,6 +6,7 @@ import '../../services/stock_export_service.dart';
 import '../../services/chart_service.dart';
 import '../../services/file_print_service.dart'; // 🆕 Add this helper (handles file_picker + print)
 import 'stock_filter_dialog.dart';
+import '../../utils/responsive_utils.dart';
 
 class StockReportFrame extends StatefulWidget {
   const StockReportFrame({super.key});
@@ -50,23 +51,33 @@ class _StockReportFrameState extends State<StockReportFrame> {
   Future<void> _loadReport() async {
     setState(() => _loading = true);
 
-    List<StockReport> data;
-    if (_onlyLowStock) {
-      data = await _repo.getLowStockReport();
-    } else {
-      data = await _repo.getStockReport();
+    try {
+      List<StockReport> data;
+      if (_onlyLowStock) {
+        data = await _repo.getLowStockReport();
+      } else {
+        data = await _repo.getStockReport();
+      }
+
+      final summary = await _repo.getStockSummary();
+
+      setState(() {
+        _report = data;
+        _filteredReport = data;
+        _totalCost = summary['totalCostValue'] ?? 0;
+        _totalSell = summary['totalSellValue'] ?? 0;
+        _totalProfit = summary['totalProfit'] ?? 0;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading stock report: $e");
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error loading report: $e")));
+      }
     }
-
-    final summary = await _repo.getStockSummary();
-
-    setState(() {
-      _report = data;
-      _filteredReport = data;
-      _totalCost = summary['totalCostValue'] ?? 0;
-      _totalSell = summary['totalSellValue'] ?? 0;
-      _totalProfit = summary['totalProfit'] ?? 0;
-      _loading = false;
-    });
   }
 
   void _openFilterDialog() async {
@@ -92,7 +103,38 @@ class _StockReportFrameState extends State<StockReportFrame> {
   }
 
   // Enhanced Summary widget with modern design
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(bool isMobile) {
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          children: [
+            _modernSummaryCard(
+              title: "Total Cost",
+              value: _totalCost,
+              icon: Icons.shopping_cart,
+              gradientColors: [Colors.blue.shade400, Colors.blue.shade600],
+            ),
+            const SizedBox(height: 12),
+            _modernSummaryCard(
+              title: "Total Sell Value",
+              value: _totalSell,
+              icon: Icons.attach_money,
+              gradientColors: [Colors.orange.shade400, Colors.orange.shade600],
+            ),
+            const SizedBox(height: 12),
+            _modernSummaryCard(
+              title: "Profit",
+              value: _totalProfit,
+              icon: Icons.trending_up,
+              gradientColors: [Colors.green.shade400, Colors.green.shade600],
+              isProfit: true,
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -456,8 +498,10 @@ class _StockReportFrameState extends State<StockReportFrame> {
   }
 
   Widget _buildTopButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 10,
+      runSpacing: 10,
       children: [
         ElevatedButton.icon(
           onPressed: _openFilterDialog,
@@ -507,27 +551,33 @@ class _StockReportFrameState extends State<StockReportFrame> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadReport),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildTopButtons(),
-                  const SizedBox(height: 16),
-                  _buildSummaryCard(),
-                  _buildSearchBar(),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: Column(
-                        children: [_buildDataTable(), _buildChart()],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = ResponsiveUtils.isMobile(context);
+
+          return _loading
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _buildTopButtons(),
+                      const SizedBox(height: 16),
+                      _buildSummaryCard(isMobile),
+                      _buildSearchBar(),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: Column(
+                            children: [_buildDataTable(), _buildChart()],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                );
+        },
+      ),
     );
   }
 }

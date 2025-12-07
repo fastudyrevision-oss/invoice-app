@@ -6,11 +6,12 @@ import 'ui/supplier/supplier_frame.dart';
 import 'ui/purchase_frame.dart';
 import 'ui/expiring_products_frame.dart';
 import 'ui/reports/reports_dashboard.dart';
-import 'ui/order/order_list_screen.dart'; // ✅ Added this import
+import 'ui/order/order_list_screen.dart';
 import 'ui/category/category_list_frame.dart';
 import 'ui/backup/backup_frame.dart';
 import 'modules/audit_log/presentation/audit_log_screen.dart';
 import 'ui/customer_payment/customer_payment_screen.dart';
+import 'ui/settings/user_management_screen.dart';
 
 import '../repositories/purchase_repo.dart';
 import '../repositories/supplier_repo.dart';
@@ -23,6 +24,9 @@ import '../dao/supplier_payment_dao.dart';
 import '../dao/supplier_company_dao.dart';
 import '../agent/flutter_sql_agent_ai.dart';
 import 'package:sqflite/sqflite.dart';
+import '../utils/responsive_utils.dart';
+
+import '../services/auth_service.dart';
 
 class MainFrame extends StatefulWidget {
   const MainFrame({super.key});
@@ -31,10 +35,13 @@ class MainFrame extends StatefulWidget {
   State<MainFrame> createState() => _MainFrameState();
 }
 
-class _MainFrameState extends State<MainFrame>
-    with SingleTickerProviderStateMixin {
+class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
   late TabController _tabController;
-  late List<Tab> _tabs;
+
+  // We keep parallel lists for Tab widgets and their content body
+  // to ensuring indices always match.
+  List<Tab> _tabs = [];
+  List<Widget> _tabViews = [];
 
   PurchaseRepository? _purchaseRepo;
   ProductRepository? _productRepo;
@@ -46,16 +53,6 @@ class _MainFrameState extends State<MainFrame>
   late SqlAgentService _sqlAgent;
   late GeminiService _gemini;
 
-  @override
-  void initState() {
-    super.initState();
-    _buildTabs();
-    _tabController = TabController(length: _tabs.length, vsync: this);
-    _initRepos();
-
-    _initAI(); // ---- ADD THIS
-  }
-
   void _initAI() {
     _gemini = GeminiService(apiKey: GEMINI_API_KEY, apiUrl: GEMINI_API_URL);
 
@@ -65,46 +62,165 @@ class _MainFrameState extends State<MainFrame>
     );
   }
 
-  void _buildTabs() {
-    _tabs = [
-      const Tab(text: "Reports"),
-      const Tab(text: "Customers"),
-      const Tab(text: "Products"),
-      const Tab(text: "Expenses"),
-      const Tab(text: "Suppliers"),
-      const Tab(text: "Purchases"),
-      const Tab(text: "Orders"), // ✅ New Orders Tab added here
-      const Tab(text: "Categories"), // <-- NEW TAB
-      const Tab(text: "Customer Payments"), // <-- NEW TAB
-      const Tab(text: "BackUp/Restore"), // <-- NEW TAB
-      const Tab(text: "Audit Logs"), // <-- NEW TAB
-      Tab(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("Expiring"),
-            if (_expiringCount > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '$_expiringCount',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
+  void _updateTabs() {
+    final auth = AuthService.instance;
+    final allTabs = [
+      _TabDef(
+        tab: const Tab(text: "Reports"),
+        view: ReportsDashboard(sqlAgent: _sqlAgent),
+        perm: 'reports_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Customers"),
+        view: const CustomerFrame(),
+        perm: 'customers_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Products"),
+        view: const ProductFrame(),
+        perm: 'products_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Expenses"),
+        view: const ExpenseFrame(),
+        perm: 'expenses_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Suppliers"),
+        view: _supplierRepo == null || _supplierPaymentRepo == null
+            ? const Center(child: CircularProgressIndicator())
+            : SupplierFrame(repo: _supplierRepo!, repo2: _supplierPaymentRepo!),
+        perm: 'suppliers_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Purchases"),
+        view:
+            _purchaseRepo == null ||
+                _productRepo == null ||
+                _supplierRepo == null
+            ? const Center(child: CircularProgressIndicator())
+            : PurchaseFrame(
+                repo: _purchaseRepo!,
+                productRepo: _productRepo!,
+                supplierRepo: _supplierRepo!,
               ),
-            ],
-          ],
+        perm: 'purchases_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Orders"),
+        view: const OrderListScreen(),
+        perm: 'orders',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Categories"),
+        view: const CategoryListFrame(),
+        perm: 'categories_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Customer Payments"),
+        view: const CustomerPaymentScreen(),
+        perm: 'payments_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "BackUp/Restore"),
+        view: BackupRestoreScreen(
+          onRestoreSuccess: () async {
+            await _initRepos();
+          },
         ),
+        perm: 'backup',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Users"),
+        view: const UserManagementScreen(),
+        perm: 'all', // Only admins/devs
+      ),
+      _TabDef(
+        tab: const Tab(text: "Audit Logs"),
+        view: const AuditLogScreen(),
+        perm: 'audit_logs',
+      ),
+      _TabDef(
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Expiring"),
+              if (_expiringCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$_expiringCount',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        view: _purchaseRepo == null || _db == null
+            ? const Center(child: CircularProgressIndicator())
+            : ExpiringProductsFrame(
+                db: _db!,
+                onDataChanged: () => _refreshExpiringCount(),
+              ),
+        perm: 'expiring_view',
       ),
     ];
+
+    final newTabs = <Tab>[];
+    final newTabViews = <Widget>[];
+
+    for (final def in allTabs) {
+      bool allowed = false;
+      if (def.perm == null) {
+        allowed = true;
+      } else {
+        allowed = auth.canAccess(def.perm!);
+      }
+
+      if (allowed) {
+        newTabs.add(def.tab);
+        newTabViews.add(def.view);
+      }
+    }
+
+    _tabs = newTabs;
+    _tabViews = newTabViews;
+  }
+
+  void _ensureController() {
+    // If controller length doesn't match tabs, recreate it.
+    // Also handle initial creation if needed (though initState does that).
+    // We check safety logic here.
+
+    // safe check: if _tabController is initialized (late variable can throw on access if not init)
+    // We assume it IS initialized in initState.
+
+    if (_tabController.length != _tabs.length) {
+      _tabController.dispose();
+      _tabController = TabController(
+        length: _tabs.length > 0 ? _tabs.length : 1,
+        vsync: this,
+      );
+      _tabController.addListener(_handleTabSelection);
+
+      // If no tabs, maybe disable index?
+      if (_tabs.isEmpty) {
+        _tabController.index = 0; // dummy
+      }
+    }
   }
 
   Future<void> _initRepos() async {
     _db = await DatabaseHelper.instance.db;
+
+    if (!mounted) return;
 
     setState(() {
       _purchaseRepo = PurchaseRepository(_db!);
@@ -120,6 +236,9 @@ class _MainFrameState extends State<MainFrame>
         SupplierDao(),
         _purchaseRepo!,
       );
+
+      _updateTabs();
+      _ensureController();
     });
 
     await _refreshExpiringCount();
@@ -128,64 +247,176 @@ class _MainFrameState extends State<MainFrame>
   Future<void> _refreshExpiringCount({int days = 30}) async {
     if (_purchaseRepo == null) return;
     final expiring = await _purchaseRepo!.getExpiringBatches(days);
+    if (!mounted) return;
     setState(() {
       _expiringCount = expiring.length;
-      _buildTabs();
+      _updateTabs();
+      _ensureController();
     });
+  }
+
+  void _handleTabSelection() {
+    if (_tabController.indexIsChanging ||
+        _tabController.animation == null ||
+        _tabController.animation!.isCompleted) {
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initAI();
+
+    // Initial build of tabs
+    _updateTabs();
+
+    // Initialize controller immediately
+    // If _tabs is empty, we must provide length >= 0. TabController length 0 throws?
+    // TabController assertion: length >= 0.
+    // However, if length is 0, TabBar might throw if rendered?
+    // Let's use 1 if empty to avoid crashes, and handle UI separately.
+    int initialLength = _tabs.isNotEmpty ? _tabs.length : 1;
+
+    _tabController = TabController(length: initialLength, vsync: this);
+    _tabController.addListener(_handleTabSelection);
+
+    _initRepos();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
     super.dispose();
   }
 
+  void _logout() {
+    AuthService.instance.logout();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Invoice App"),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: _tabs,
+    // Safety check for empty tabs
+    if (_tabs.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("Access Denied"),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: "Logout",
+              onPressed: _logout,
+            ),
+          ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          ReportsDashboard(sqlAgent: _sqlAgent),
-          const CustomerFrame(),
-          const ProductFrame(),
-          const ExpenseFrame(),
-          _supplierRepo == null || _supplierPaymentRepo == null
-              ? const Center(child: CircularProgressIndicator())
-              : SupplierFrame(
-                  repo: _supplierRepo!,
-                  repo2: _supplierPaymentRepo!,
-                ),
-          _purchaseRepo == null || _productRepo == null || _supplierRepo == null
-              ? const Center(child: CircularProgressIndicator())
-              : PurchaseFrame(
-                  repo: _purchaseRepo!,
-                  productRepo: _productRepo!,
-                  supplierRepo: _supplierRepo!,
-                ),
-          const OrderListScreen(), // ✅ Inserted here as the new tab view
-          const CategoryListFrame(), // <-- NEW TAB VIEW
-          const CustomerPaymentScreen(), // <-- NEW TAB VIEW
-          const BackupRestoreScreen(), // <-- NEW TAB VIEW
-          const AuditLogScreen(), // <-- NEW TAB VIEW
-          _purchaseRepo == null || _db == null
-              ? const Center(child: CircularProgressIndicator())
-              : ExpiringProductsFrame(
-                  db: _db!,
-                  onDataChanged: () {
-                    _refreshExpiringCount();
-                  },
-                ),
-        ],
-      ),
+        body: const Center(
+          child: Text("You do not have permission to view any content."),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+
+        final safeIndex = _tabController.index < _tabs.length
+            ? _tabController.index
+            : 0;
+        final title = safeIndex < _tabs.length
+            ? (_tabs[safeIndex].text ?? "Invoice App")
+            : "Invoice App";
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(isMobile ? title : "Invoice App"),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout),
+                tooltip: "Logout",
+                onPressed: _logout,
+              ),
+            ],
+            bottom: isMobile
+                ? null
+                : TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabs: _tabs,
+                  ),
+          ),
+          drawer: isMobile
+              ? Drawer(
+                  child: Column(
+                    children: [
+                      UserAccountsDrawerHeader(
+                        accountName: Text(
+                          AuthService.instance.currentUser?.username ?? "User",
+                        ),
+                        accountEmail: Text(
+                          AuthService.instance.currentUser?.role
+                                  .toUpperCase() ??
+                              "",
+                        ),
+                        currentAccountPicture: const CircleAvatar(
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            Icons.person,
+                            size: 32,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _tabs.length,
+                          itemBuilder: (context, index) {
+                            final tab = _tabs[index];
+                            String label = tab.text ?? "";
+                            if (label.isEmpty && tab.child is Row) {
+                              label = "Expiring Products";
+                            }
+
+                            return ListTile(
+                              title: Text(label),
+                              selected: _tabController.index == index,
+                              selectedColor: Theme.of(context).primaryColor,
+                              onTap: () {
+                                _tabController.animateTo(index);
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.logout, color: Colors.red),
+                        title: const Text(
+                          "Logout",
+                          style: TextStyle(color: Colors.red),
+                        ),
+                        onTap: _logout,
+                      ),
+                    ],
+                  ),
+                )
+              : null,
+          body: TabBarView(
+            controller: _tabController,
+            physics: isMobile ? const NeverScrollableScrollPhysics() : null,
+            children: _tabViews,
+          ),
+        );
+      },
     );
   }
+}
+
+class _TabDef {
+  final Tab tab;
+  final Widget view;
+  final String? perm;
+
+  _TabDef({required this.tab, required this.view, this.perm});
 }

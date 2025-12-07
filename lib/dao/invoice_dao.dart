@@ -1,6 +1,7 @@
 import '../models/invoice.dart';
 import 'package:sqflite/sqflite.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class InvoiceDao {
   final DatabaseExecutor db;
@@ -27,7 +28,7 @@ class InvoiceDao {
       'CREATE',
       'invoices',
       recordId: invoice.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: invoice.toMap(),
       txn: db,
     );
@@ -107,7 +108,7 @@ class InvoiceDao {
       'UPDATE',
       'invoices',
       recordId: invoice.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData?.toMap(),
       newData: invoice.toMap(),
       txn: db,
@@ -144,7 +145,7 @@ class InvoiceDao {
         'DELETE',
         'invoices',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData.toMap(),
         txn: db,
       );

@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/purchase.dart';
 import '../core/services/audit_logger.dart';
 import '../db/database_helper.dart';
+import '../services/auth_service.dart';
 
 class PurchaseDao {
   final DatabaseExecutor? db;
@@ -22,7 +23,7 @@ class PurchaseDao {
       'CREATE',
       'purchases',
       recordId: purchase.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: purchase.toMap(),
       txn: dbClient,
     );
@@ -65,7 +66,7 @@ class PurchaseDao {
       'UPDATE',
       'purchases',
       recordId: purchase.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData?.toMap(),
       newData: purchase.toMap(),
       txn: dbClient,
@@ -90,7 +91,7 @@ class PurchaseDao {
         'DELETE',
         'purchases',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData.toMap(),
         txn: dbClient,
       );

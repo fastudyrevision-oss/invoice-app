@@ -3,6 +3,7 @@ import '../models/expense.dart';
 
 import 'package:sqflite/sqflite.dart';
 import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class ExpenseDao {
   final DatabaseExecutor? db;
@@ -20,7 +21,7 @@ class ExpenseDao {
       'CREATE',
       'expenses',
       recordId: expense.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: expense.toMap(),
       txn: dbClient,
     );
@@ -56,7 +57,7 @@ class ExpenseDao {
       'UPDATE',
       'expenses',
       recordId: expense.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData,
       newData: expense.toMap(),
       txn: dbClient,
@@ -87,7 +88,7 @@ class ExpenseDao {
         'DELETE',
         'expenses',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData,
         txn: dbClient,
       );

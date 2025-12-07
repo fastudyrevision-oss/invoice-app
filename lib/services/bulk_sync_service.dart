@@ -22,4 +22,18 @@ class BulkSyncService {
 
     return jsonEncode(cleanedRows);
   }
+
+  /// Get list of tables that need syncing
+  List<String> getSyncableTables() {
+    return [
+      'customers',
+      'suppliers',
+      'products',
+      'categories',
+      'invoices',
+      'purchases',
+      'purchase_items', // if exists
+      'invoice_items', // if exists
+    ];
+  }
 }

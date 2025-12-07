@@ -5,6 +5,7 @@ import '../../repositories/purchase_repo.dart';
 import '../../models/supplier.dart';
 import '../../models/supplier_payment.dart';
 import '../../db/database_helper.dart';
+import '../../utils/responsive_utils.dart';
 
 class SupplierPaymentFrame extends StatefulWidget {
   final SupplierPaymentRepository repo;
@@ -404,41 +405,65 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
             );
             final paymentCount = activePayments.length;
 
-            return Card(
-              margin: const EdgeInsets.all(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Total Paid',
-                        'Rs ${totalPaid.toStringAsFixed(2)}',
-                        Icons.payment,
-                        Colors.green.shade100,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Pending Balance',
-                        'Rs ${widget.supplier.pendingAmount.toStringAsFixed(2)}',
-                        Icons.pending_actions,
-                        Colors.orange.shade100,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Payment Count',
-                        paymentCount.toString(),
-                        Icons.receipt_long,
-                        Colors.blue.shade100,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = ResponsiveUtils.isMobile(context);
+                final summaryCards = [
+                  _buildSummaryCard(
+                    'Total Paid',
+                    'Rs ${totalPaid.toStringAsFixed(2)}',
+                    Icons.payment,
+                    Colors.green.shade100,
+                  ),
+                  _buildSummaryCard(
+                    'Pending Balance',
+                    'Rs ${widget.supplier.pendingAmount.toStringAsFixed(2)}',
+                    Icons.pending_actions,
+                    Colors.orange.shade100,
+                  ),
+                  _buildSummaryCard(
+                    'Payment Count',
+                    paymentCount.toString(),
+                    Icons.receipt_long,
+                    Colors.blue.shade100,
+                  ),
+                ];
+
+                return Card(
+                  margin: const EdgeInsets.all(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: isMobile
+                        ? Column(
+                            children: summaryCards
+                                .map(
+                                  (card) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: SizedBox(
+                                      width: double.infinity,
+                                      child: card,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          )
+                        : Row(
+                            children: summaryCards
+                                .map(
+                                  (card) => Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                      child: card,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                  ),
+                );
+              },
             );
           },
         ),

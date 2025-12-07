@@ -15,6 +15,7 @@ import 'profit_loss_chart.dart';
 import 'manual_entry_dialog.dart';
 import '../data/models/manual_entry.dart';
 import 'widgets/summary_card.dart'; // Import the new widget
+import '../../../../utils/responsive_utils.dart';
 
 // ---------------------- ENUM ----------------------
 enum PLFilterType { daily, weekly, monthly, yearly, custom }
@@ -292,59 +293,96 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Profit & Loss Dashboard"),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: summaryData != null ? _exportPDF : null,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("Profit & Loss Dashboard"),
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf),
+                onPressed: summaryData != null ? _exportPDF : null,
+              ),
+            ],
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilters(),
-          if (selected == PLFilterType.custom) _buildCustomRange(),
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: fetchAll,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildModeToggle(),
-                          const SizedBox(height: 12),
-                          if (summaryData != null) _buildSummaryCards(),
-                          const SizedBox(height: 16),
-                          if (summaryData != null) _buildDetailedCards(),
-                          const SizedBox(height: 16),
-                          if (summaryData != null)
-                            ProfitLossSummaryChart(
-                              data: summaryData!,
-                              isCogsBased: isCogsBased,
-                            ),
-                          const SizedBox(height: 16),
-                          _buildChartsGrid(),
-                          const SizedBox(height: 16),
-                          _buildManualEntriesSection(),
-                          const SizedBox(height: 80),
-                        ],
+          body: Column(
+            children: [
+              _buildFilters(),
+              if (selected == PLFilterType.custom) _buildCustomRange(isMobile),
+              Expanded(
+                child: loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : RefreshIndicator(
+                        onRefresh: fetchAll,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildModeToggle(isMobile),
+                              const SizedBox(height: 12),
+                              if (summaryData != null) _buildSummaryCards(),
+                              const SizedBox(height: 16),
+                              if (summaryData != null) _buildDetailedCards(),
+                              const SizedBox(height: 16),
+                              if (summaryData != null)
+                                ProfitLossSummaryChart(
+                                  data: summaryData!,
+                                  isCogsBased: isCogsBased,
+                                ),
+                              const SizedBox(height: 16),
+                              _buildChartsGrid(isMobile),
+                              const SizedBox(height: 16),
+                              _buildManualEntriesSection(),
+                              const SizedBox(height: 80),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildModeToggle() {
+  Widget _buildModeToggle(bool isMobile) {
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          const Text(
+            "Profit Mode: ",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          ToggleButtons(
+            borderRadius: BorderRadius.circular(8),
+            isSelected: [isCogsBased, !isCogsBased],
+            onPressed: (index) {
+              setState(() {
+                isCogsBased = index == 0;
+              });
+            },
+            children: const [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text("Accrual (COGS)"),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text("Cash Flow"),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -515,14 +553,14 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
-  Widget _buildChartsGrid() {
+  Widget _buildChartsGrid(bool isMobile) {
     return GridView.count(
-      crossAxisCount: 2,
+      crossAxisCount: isMobile ? 1 : 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 8,
       mainAxisSpacing: 8,
-      childAspectRatio: 0.9, // Adjust for card height
+      childAspectRatio: isMobile ? 1.5 : 0.9,
       children: [
         if (categories.isNotEmpty) CategoryProfitChart(categories: categories),
         if (products.isNotEmpty) ProductProfitChart(products: products),
@@ -687,7 +725,39 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
-  Widget _buildCustomRange() {
+  Widget _buildCustomRange(bool isMobile) {
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton(
+              onPressed: () async {
+                final picked = await _pickDate();
+                if (picked != null) {
+                  setState(() => customStart = picked);
+                }
+              },
+              child: Text("Start: ${_fmtOrDash(customStart)}"),
+            ),
+            TextButton(
+              onPressed: () async {
+                final picked = await _pickDate();
+                if (picked != null) setState(() => customEnd = picked);
+              },
+              child: Text("End: ${_fmtOrDash(customEnd)}"),
+            ),
+            ElevatedButton(
+              onPressed: () => fetchAll(),
+              child: const Text("Apply"),
+            ),
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6),
       child: Row(

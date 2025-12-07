@@ -13,6 +13,7 @@ import 'purchase_form.dart';
 import 'purchase_insights_card.dart';
 import 'common/unified_search_bar.dart';
 import '../services/purchase_export_service.dart';
+import '../utils/responsive_utils.dart';
 
 class PurchaseFrame extends StatefulWidget {
   final PurchaseRepository repo;
@@ -138,148 +139,184 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text("Purchases"),
-        elevation: 0,
-        actions: [
-          const SizedBox(width: 10),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            tooltip: 'Export to PDF',
-            onPressed: () => _exportService.exportToPDF(_displayedPurchases),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadInitialData,
-            tooltip: 'Refresh',
-          ),
-          const SizedBox(width: 10),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(140),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Theme.of(context).primaryColor.withOpacity(0.1),
-                  Theme.of(context).primaryColor.withOpacity(0.05),
-                ],
-              ),
-            ),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: UnifiedSearchBar(
-                    hintText: "Search invoice...",
-                    controller: _searchController,
-                    onChanged: (value) {
-                      _searchQuery = value;
-                      _applyFilters();
-                    },
-                    onClear: () {
-                      setState(() {
-                        _searchQuery = "";
-                        _applyFilters();
-                      });
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: DropdownSearch<String?>(
-                    selectedItem: _selectedSupplierId,
-                    compareFn: (a, b) => a == b,
-                    items: (items, props) => [
-                      null,
-                      ..._suppliers.map((s) => s.id),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+
+        return Scaffold(
+          backgroundColor: Colors.grey[100],
+          appBar: AppBar(
+            title: const Text("Purchases"),
+            elevation: 0,
+            actions: isMobile
+                ? [
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loadInitialData,
+                      tooltip: 'Refresh',
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'pdf') {
+                          _exportService.exportToPDF(_displayedPurchases);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'pdf',
+                          child: Row(
+                            children: [
+                              Icon(Icons.picture_as_pdf),
+                              SizedBox(width: 8),
+                              Text('Export PDF'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ]
+                : [
+                    const SizedBox(width: 10),
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf),
+                      tooltip: 'Export to PDF',
+                      onPressed: () =>
+                          _exportService.exportToPDF(_displayedPurchases),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loadInitialData,
+                      tooltip: 'Refresh',
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(140),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).primaryColor.withOpacity(0.1),
+                      Theme.of(context).primaryColor.withOpacity(0.05),
                     ],
-                    itemAsString: (id) => id == null
-                        ? "All Suppliers"
-                        : _suppliers
-                              .firstWhere(
-                                (s) => s.id == id,
-                                orElse: () => Supplier(
-                                  id: '',
-                                  name: 'Unknown',
-                                  createdAt: DateTime.now().toIso8601String(),
-                                  updatedAt: DateTime.now().toIso8601String(),
-                                ),
-                              )
-                              .name,
-                    decoratorProps: DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        labelText: "Filter by Supplier",
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                    ),
-                    onChanged: (value) {
-                      _selectedSupplierId = value;
-                      _applyFilters();
-                    },
-                    popupProps: const PopupProps.menu(
-                      showSearchBox: true,
-                      constraints: BoxConstraints(maxHeight: 300),
-                      searchFieldProps: TextFieldProps(
-                        decoration: InputDecoration(
-                          hintText: "Search supplier...",
-                        ),
-                      ),
-                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: PurchaseInsightCard(
-              purchases: _displayedPurchases,
-              loading: false,
-              lastUpdated: DateTime.now(),
-            ),
-          ),
-          Expanded(child: _buildPurchaseList()),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final added = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PurchaseForm(
-                repo: widget.repo,
-                productRepo: widget.productRepo,
-                supplierRepo: widget.supplierRepo,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: UnifiedSearchBar(
+                        hintText: "Search invoice...",
+                        controller: _searchController,
+                        onChanged: (value) {
+                          _searchQuery = value;
+                          _applyFilters();
+                        },
+                        onClear: () {
+                          setState(() {
+                            _searchQuery = "";
+                            _applyFilters();
+                          });
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: DropdownSearch<String?>(
+                        selectedItem: _selectedSupplierId,
+                        compareFn: (a, b) => a == b,
+                        items: (items, props) => [
+                          null,
+                          ..._suppliers.map((s) => s.id),
+                        ],
+                        itemAsString: (id) => id == null
+                            ? "All Suppliers"
+                            : _suppliers
+                                  .firstWhere(
+                                    (s) => s.id == id,
+                                    orElse: () => Supplier(
+                                      id: '',
+                                      name: 'Unknown',
+                                      createdAt: DateTime.now()
+                                          .toIso8601String(),
+                                      updatedAt: DateTime.now()
+                                          .toIso8601String(),
+                                    ),
+                                  )
+                                  .name,
+                        decoratorProps: DropDownDecoratorProps(
+                          decoration: InputDecoration(
+                            labelText: "Filter by Supplier",
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          _selectedSupplierId = value;
+                          _applyFilters();
+                        },
+                        popupProps: const PopupProps.menu(
+                          showSearchBox: true,
+                          constraints: BoxConstraints(maxHeight: 300),
+                          searchFieldProps: TextFieldProps(
+                            decoration: InputDecoration(
+                              hintText: "Search supplier...",
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
-          );
-          if (added == true) _loadInitialData();
-        },
-        icon: const Icon(Icons.add_shopping_cart),
-        label: const Text("New Purchase"),
-      ),
+          ),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: PurchaseInsightCard(
+                  purchases: _displayedPurchases,
+                  loading: false,
+                  lastUpdated: DateTime.now(),
+                ),
+              ),
+              Expanded(child: _buildPurchaseList(isMobile)),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () async {
+              final added = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PurchaseForm(
+                    repo: widget.repo,
+                    productRepo: widget.productRepo,
+                    supplierRepo: widget.supplierRepo,
+                  ),
+                ),
+              );
+              if (added == true) _loadInitialData();
+            },
+            icon: const Icon(Icons.add_shopping_cart),
+            label: const Text("New Purchase"),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildPurchaseList() {
+  Widget _buildPurchaseList(bool isMobile) {
     return NotificationListener<ScrollNotification>(
       onNotification: (scroll) {
         if (scroll.metrics.pixels == scroll.metrics.maxScrollExtent) {
@@ -527,27 +564,62 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                               const SizedBox(height: 12),
 
                               // Metrics Row
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  _buildMetric(
-                                    "TOTAL",
-                                    "Rs ${purchase.total.toStringAsFixed(0)}",
-                                    Colors.blue,
-                                  ),
-                                  _buildMetric(
-                                    "PAID",
-                                    "Rs ${purchase.paid.toStringAsFixed(0)}",
-                                    Colors.green,
-                                  ),
-                                  _buildMetric(
-                                    "PENDING",
-                                    "Rs ${purchase.pending.toStringAsFixed(0)}",
-                                    hasPending ? Colors.red : Colors.green,
-                                  ),
-                                ],
-                              ),
+                              isMobile
+                                  ? Column(
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            _buildMetric(
+                                              "TOTAL",
+                                              "Rs ${purchase.total.toStringAsFixed(0)}",
+                                              Colors.blue,
+                                            ),
+                                            _buildMetric(
+                                              "PAID",
+                                              "Rs ${purchase.paid.toStringAsFixed(0)}",
+                                              Colors.green,
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            _buildMetric(
+                                              "PENDING",
+                                              "Rs ${purchase.pending.toStringAsFixed(0)}",
+                                              hasPending
+                                                  ? Colors.red
+                                                  : Colors.green,
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        _buildMetric(
+                                          "TOTAL",
+                                          "Rs ${purchase.total.toStringAsFixed(0)}",
+                                          Colors.blue,
+                                        ),
+                                        _buildMetric(
+                                          "PAID",
+                                          "Rs ${purchase.paid.toStringAsFixed(0)}",
+                                          Colors.green,
+                                        ),
+                                        _buildMetric(
+                                          "PENDING",
+                                          "Rs ${purchase.pending.toStringAsFixed(0)}",
+                                          hasPending
+                                              ? Colors.red
+                                              : Colors.green,
+                                        ),
+                                      ],
+                                    ),
                             ],
                           ),
                         ),

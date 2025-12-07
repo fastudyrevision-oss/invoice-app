@@ -100,6 +100,29 @@ class DatabaseHelper {
         },
         onCreate: _onCreate,
       );
+
+      // Run migrations manually for existing databases (since version is still 1)
+      if (_db != null) {
+        await addColumnIfNotExists(_db!, "users", "permissions", "TEXT");
+        await addColumnIfNotExists(
+          _db!,
+          "purchase_items",
+          "cost_price",
+          "REAL DEFAULT 0",
+        );
+        await addColumnIfNotExists(
+          _db!,
+          "purchase_items",
+          "product_name",
+          "TEXT",
+        );
+        await addColumnIfNotExists(
+          _db!,
+          "products",
+          "is_deleted",
+          "INTEGER DEFAULT 0",
+        );
+      }
     }
   }
 
@@ -138,6 +161,7 @@ class DatabaseHelper {
         username TEXT UNIQUE,
         password_hash TEXT,
         role TEXT,
+        permissions TEXT, -- ✅ Added permissions
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0
@@ -240,6 +264,7 @@ class DatabaseHelper {
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0,
+        is_deleted INTEGER DEFAULT 0, -- ✅ Added directly to schema
         FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
         FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE SET NULL
       )
@@ -335,6 +360,8 @@ class DatabaseHelper {
         sell_price REAL,
         batch_no TEXT,
         expiry_date TEXT,
+        product_name TEXT,     -- ✅ Added directly
+        cost_price REAL DEFAULT 0, -- ✅ Added directly
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0,
@@ -589,6 +616,9 @@ class DatabaseHelper {
       "cost_price",
       "REAL DEFAULT 0",
     );
+
+    // Users permissions
+    await addColumnIfNotExists(db, "users", "permissions", "TEXT");
   }
 
   /// Safely adds a column if it doesn't exist

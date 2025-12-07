@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../dao/customer_payment_dao.dart';
 import '../../repositories/report_repository.dart';
 import '../../services/report_export_service.dart';
+import '../../utils/responsive_utils.dart';
 import '../../models/reports/combined_payment_entry.dart';
 
 enum PaymentType { all, suppliers, customers }
@@ -140,7 +141,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
     });
   }
 
-  Widget _buildSummaryCards() {
+  Widget _buildSummaryCards(bool isMobile) {
     final totalMoneyOut = _filteredEntries.fold<double>(
       0,
       (sum, e) => sum + e.moneyOut,
@@ -151,40 +152,59 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
     );
     final netCashFlow = totalMoneyIn - totalMoneyOut;
 
+    final cards = [
+      _summaryCard(
+        'Money Out',
+        'Rs ${totalMoneyOut.toStringAsFixed(2)}',
+        Colors.red.shade100,
+        Icons.arrow_upward,
+        'Supplier Payments',
+      ),
+      _summaryCard(
+        'Money In',
+        'Rs ${totalMoneyIn.toStringAsFixed(2)}',
+        Colors.green.shade100,
+        Icons.arrow_downward,
+        'Customer Payments',
+      ),
+      _summaryCard(
+        'Net Cash Flow',
+        'Rs ${netCashFlow.toStringAsFixed(2)}',
+        netCashFlow >= 0 ? Colors.blue.shade100 : Colors.orange.shade100,
+        netCashFlow >= 0 ? Icons.trending_up : Icons.trending_down,
+        netCashFlow >= 0 ? 'Positive' : 'Negative',
+      ),
+    ];
+
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: cards
+              .map(
+                (c) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(width: double.infinity, child: c),
+                ),
+              )
+              .toList(),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
-        children: [
-          Expanded(
-            child: _summaryCard(
-              'Money Out',
-              'Rs ${totalMoneyOut.toStringAsFixed(2)}',
-              Colors.red.shade100,
-              Icons.arrow_upward,
-              'Supplier Payments',
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: _summaryCard(
-              'Money In',
-              'Rs ${totalMoneyIn.toStringAsFixed(2)}',
-              Colors.green.shade100,
-              Icons.arrow_downward,
-              'Customer Payments',
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: _summaryCard(
-              'Net Cash Flow',
-              'Rs ${netCashFlow.toStringAsFixed(2)}',
-              netCashFlow >= 0 ? Colors.blue.shade100 : Colors.orange.shade100,
-              netCashFlow >= 0 ? Icons.trending_up : Icons.trending_down,
-              netCashFlow >= 0 ? 'Positive' : 'Negative',
-            ),
-          ),
-        ],
+        children: cards
+            .map(
+              (c) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: c,
+                ),
+              ),
+            )
+            .toList(),
       ),
     );
   }
@@ -300,7 +320,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
     );
   }
 
-  Widget _buildFilters() {
+  Widget _buildFilters(bool isMobile) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Padding(
@@ -311,7 +331,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
           children: [
             // Type filter
             SizedBox(
-              width: 200,
+              width: isMobile ? double.infinity : 200,
               child: DropdownButtonFormField<PaymentType>(
                 initialValue: _selectedType,
                 decoration: const InputDecoration(
@@ -341,7 +361,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
             ),
             // Search
             SizedBox(
-              width: 300,
+              width: isMobile ? double.infinity : 300,
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -365,7 +385,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
             ),
             // Date range
             SizedBox(
-              width: 250,
+              width: isMobile ? double.infinity : 250,
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.date_range),
                 label: Text(
@@ -446,85 +466,92 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
 
     final dateFmt = DateFormat('dd/MM/yyyy');
 
-    return Column(
-      children: [
-        _buildSummaryCards(),
-        _buildChart(),
-        const SizedBox(height: 8),
-        _buildFilters(),
-        const SizedBox(height: 16),
-        // Data Table
-        Expanded(
-          child: _filteredEntries.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No records match your filters',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                )
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
-                      headingRowColor: WidgetStateProperty.all(
-                        Colors.grey.shade200,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            _buildSummaryCards(isMobile),
+            _buildChart(),
+            const SizedBox(height: 8),
+            _buildFilters(isMobile),
+            const SizedBox(height: 16),
+            // Data Table
+            _filteredEntries.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Text(
+                        'No records match your filters',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
                       ),
-                      columns: const [
-                        DataColumn(
-                          label: Text(
-                            'Date',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        headingRowColor: WidgetStateProperty.all(
+                          Colors.grey.shade200,
                         ),
-                        DataColumn(
-                          label: Text(
-                            'Type',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                        columns: const [
+                          DataColumn(
+                            label: Text(
+                              'Date',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Name',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          DataColumn(
+                            label: Text(
+                              'Type',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Description',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          DataColumn(
+                            label: Text(
+                              'Name',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Reference',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          DataColumn(
+                            label: Text(
+                              'Description',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Money Out',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          DataColumn(
+                            label: Text(
+                              'Reference',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Money In',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          DataColumn(
+                            label: Text(
+                              'Money Out',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Net Cash Flow',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          DataColumn(
+                            label: Text(
+                              'Money In',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                      ],
-                      rows: _buildTableRows(dateFmt),
+                          DataColumn(
+                            label: Text(
+                              'Net Cash Flow',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                        rows: _buildTableRows(dateFmt),
+                      ),
                     ),
                   ),
-                ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 

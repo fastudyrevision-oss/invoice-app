@@ -3,6 +3,8 @@ import '../db/database_helper.dart';
 import '../models/product.dart';
 import '../core/services/audit_logger.dart';
 
+import '../services/auth_service.dart';
+
 class ProductDao {
   final DatabaseExecutor db;
   ProductDao(this.db);
@@ -25,11 +27,12 @@ class ProductDao {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
+    // Use current user from AuthService, fallback to 'system'
     await AuditLogger.log(
       'CREATE',
       'products',
       recordId: p.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: p.toMap(),
       txn: db,
     );
@@ -116,7 +119,7 @@ class ProductDao {
       'UPDATE',
       'products',
       recordId: p.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData?.toMap(),
       newData: p.toMap(),
       txn: db,
@@ -142,7 +145,7 @@ class ProductDao {
         'DELETE',
         'products',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData.toMap(),
         txn: db,
       );

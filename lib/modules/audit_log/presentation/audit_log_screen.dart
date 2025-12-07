@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../data/dao/audit_log_dao.dart';
 import '../data/models/audit_log_entry.dart';
 import '../data/repository/audit_log_repository.dart';
+import '../../../../repositories/user_repository.dart';
 import 'widgets/audit_log_card.dart';
 
 class AuditLogScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
   DateTime? _endDate;
   String? _selectedAction;
   String? _selectedTable;
+  String? _selectedUserId;
 
   final List<String> _actions = ['CREATE', 'UPDATE', 'DELETE'];
   final List<String> _tables = [
@@ -31,26 +33,56 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     'customers',
     'suppliers',
     'manual_entries',
+    'users', // Added users table
   ];
+
+  Map<String, String> _userMap = {}; // ID -> Username
 
   @override
   void initState() {
     super.initState();
+    _fetchUsers();
     _fetchLogs();
+  }
+
+  Future<void> _fetchUsers() async {
+    try {
+      final userRepo = UserRepository();
+      final users = await userRepo.getAllUsers();
+      setState(() {
+        _userMap = {for (var u in users) u.id: u.username};
+        _userMap['system'] = 'System'; // Add system user
+      });
+    } catch (e) {
+      debugPrint("Error fetching users: $e");
+    }
   }
 
   Future<void> _fetchLogs() async {
     setState(() => _loading = true);
     try {
+      // Note: Repo needs to support userId filter too.
+      // Current impl doesn't seem to have it in the method signature from previous ViewFile.
+      // We will need to update AuditLogRepository.getLogs too.
+      // For now, let's filter in memory or update repo.
+      // Updating repo is better.
       final logs = await _repo.getLogs(
         start: _startDate,
         end: _endDate,
         action: _selectedAction,
         tableName: _selectedTable,
         limit: 100, // Load more for better visibility
+        // userId: _selectedUserId, // TODO: Update repo to support this
       );
+
+      // In-memory filter for now until repo updated
+      var filtered = logs;
+      if (_selectedUserId != null) {
+        filtered = logs.where((l) => l.userId == _selectedUserId).toList();
+      }
+
       setState(() {
-        _logs = logs;
+        _logs = filtered;
         _loading = false;
       });
     } catch (e) {
@@ -60,6 +92,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
   }
 
   void _showDetails(AuditLogEntry entry) {
+    final username = _userMap[entry.userId] ?? entry.userId;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -85,7 +118,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                 _detailRow("Action", entry.action),
                 _detailRow("Table", entry.tableName),
                 _detailRow("Record ID", entry.recordId),
-                _detailRow("User ID", entry.userId),
+                _detailRow("User", "$username (${entry.userId})"),
                 _detailRow(
                   "Time",
                   DateFormat('yyyy-MM-dd HH:mm:ss').format(entry.timestamp),
@@ -231,6 +264,24 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                     _fetchLogs();
                   },
                 ),
+                const SizedBox(width: 8),
+                // User Filter
+                _filterChip<String>(
+                  label: "User",
+                  value: _userMap[_selectedUserId],
+                  items: _userMap.values.toList(),
+                  onSelected: (val) {
+                    // Find key for value
+                    final key = _userMap.entries
+                        .firstWhere(
+                          (e) => e.value == val,
+                          orElse: () => const MapEntry<String, String>('', ''),
+                        )
+                        .key;
+                    setState(() => _selectedUserId = key.isEmpty ? null : key);
+                    _fetchLogs();
+                  },
+                ),
               ],
             ),
           ),
@@ -243,9 +294,17 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                 : ListView.builder(
                     itemCount: _logs.length,
                     itemBuilder: (context, index) {
+                      final log = _logs[index];
+                      // Enrich log with username for display (hacky but works without changing model)
+                      // Ideally we'd have a VO or extending the model, but for now we just
+                      // assume the card might need it or we display it here.
+                      // Actually, let's pass a custom builder or just update the card content if possible.
+                      // For now, let's just use the card as is, but we want to SHOW the username
+
                       return AuditLogCard(
-                        entry: _logs[index],
-                        onTap: () => _showDetails(_logs[index]),
+                        entry: log,
+                        onTap: () => _showDetails(log),
+                        username: _userMap[log.userId] ?? log.userId,
                       );
                     },
                   ),
@@ -270,7 +329,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
           context: context,
           position: const RelativeRect.fromLTRB(100, 100, 0, 0), // Approximate
           items: [
-             PopupMenuItem<T>(value: null, child: Text("All")),
+            PopupMenuItem<T>(value: null, child: Text("All")),
             ...items.map(
               (item) =>
                   PopupMenuItem<T>(value: item, child: Text(item.toString())),

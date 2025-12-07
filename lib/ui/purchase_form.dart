@@ -11,6 +11,7 @@ import '../repositories/product_repository.dart';
 import '../repositories/supplier_repo.dart';
 // 🔹 Import ProductDialog from your file
 import 'product_dialogue_frame.dart';
+import '../utils/responsive_utils.dart';
 
 class PurchaseForm extends StatefulWidget {
   final PurchaseRepository repo;
@@ -126,98 +127,104 @@ class _PurchaseFormState extends State<PurchaseForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Add Purchase")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              
-              const SizedBox(height: 10),
-              FutureBuilder<List<Supplier>>(
-                future: widget.repo.getAllSuppliers(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox();
-                  final suppliers = snapshot.data!;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+        return Scaffold(
+          appBar: AppBar(title: const Text("Add Purchase")),
+          body: Padding(
+            padding: EdgeInsets.all(isMobile ? 12 : 16),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                children: [
+                  const SizedBox(height: 10),
+                  FutureBuilder<List<Supplier>>(
+                    future: widget.repo.getAllSuppliers(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox();
+                      final suppliers = snapshot.data!;
 
-                  return DropdownSearch<String>(
-                    items: (items, props) =>
-                        suppliers.map((s) => s.id).toList(),
-                    selectedItem: _selectedSupplierId,
-                    itemAsString: (id) {
-                      final supplier = suppliers.firstWhere((s) => s.id == id);
-                      return supplier.name;
-                    },
-                    popupProps: PopupProps.modalBottomSheet(
-                      showSearchBox: true,
-                      searchFieldProps: TextFieldProps(
-                        decoration: const InputDecoration(
-                          labelText: "Search Supplier",
-                          border: OutlineInputBorder(),
+                      return DropdownSearch<String>(
+                        items: (items, props) =>
+                            suppliers.map((s) => s.id).toList(),
+                        selectedItem: _selectedSupplierId,
+                        itemAsString: (id) {
+                          final supplier = suppliers.firstWhere(
+                            (s) => s.id == id,
+                          );
+                          return supplier.name;
+                        },
+                        popupProps: PopupProps.modalBottomSheet(
+                          showSearchBox: true,
+                          searchFieldProps: TextFieldProps(
+                            decoration: const InputDecoration(
+                              labelText: "Search Supplier",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    decoratorProps: const DropDownDecoratorProps(
-                      decoration: InputDecoration(
-                        labelText: "Supplier",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    onChanged: (val) {
-                      setState(() => _selectedSupplierId = val);
+                        decoratorProps: const DropDownDecoratorProps(
+                          decoration: InputDecoration(
+                            labelText: "Supplier",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() => _selectedSupplierId = val);
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _paidCtrl,
-                decoration: const InputDecoration(labelText: "Paid Amount"),
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 10),
-              Text("Total: $_total"),
-              Text(
-                "Pending: ${(_total - (double.tryParse(_paidCtrl.text) ?? 0)).toStringAsFixed(2)}",
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _addItem,
-                icon: const Icon(Icons.add),
-                label: const Text("Add Item"),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                "Items: ${_items.length}",
-                style: const TextStyle(fontSize: 16),
-              ),
-              for (var item in _items)
-                ListTile(
-                  title: Text("Product: ${item.productId}"),
-                  subtitle: Text(
-                    "Qty: ${item.qty}, Price: ${item.purchasePrice}",
                   ),
-                ),
-              const Divider(),
-              Text(
-                "Total: $_total",
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _paidCtrl,
+                    decoration: const InputDecoration(labelText: "Paid Amount"),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+                  Text("Total: $_total"),
+                  Text(
+                    "Pending: ${(_total - (double.tryParse(_paidCtrl.text) ?? 0)).toStringAsFixed(2)}",
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: _addItem,
+                    icon: const Icon(Icons.add),
+                    label: const Text("Add Item"),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    "Items: ${_items.length}",
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  for (var item in _items)
+                    ListTile(
+                      title: Text("Product: ${item.productId}"),
+                      subtitle: Text(
+                        "Qty: ${item.qty}, Price: ${item.purchasePrice}",
+                      ),
+                    ),
+                  const Divider(),
+                  Text(
+                    "Total: $_total",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _save,
+                    child: const Text("Save Purchase"),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _save,
-                child: const Text("Save Purchase"),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

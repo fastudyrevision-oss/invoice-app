@@ -3,6 +3,7 @@ import '../../dao/category_dao.dart';
 import '../../models/category.dart';
 import '../../repositories/category_repository.dart';
 import 'category_form_screen.dart';
+import '../../utils/responsive_utils.dart';
 
 class CategoryListFrame extends StatefulWidget {
   const CategoryListFrame({super.key});
@@ -153,7 +154,11 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.category_outlined, size: 64, color: Colors.grey.shade400),
+            Icon(
+              Icons.category_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
             const SizedBox(height: 16),
             Text(
               'No categories found',
@@ -194,31 +199,33 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                 isDeleted
                     ? Colors.grey.withOpacity(0.1)
                     : isActive
-                        ? Colors.green.withOpacity(0.05)
-                        : Colors.orange.withOpacity(0.05),
+                    ? Colors.green.withOpacity(0.05)
+                    : Colors.orange.withOpacity(0.05),
               ],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: (isDeleted
-                        ? Colors.grey
-                        : isActive
+                color:
+                    (isDeleted
+                            ? Colors.grey
+                            : isActive
                             ? Colors.green
                             : Colors.orange)
-                    .withOpacity(0.2),
+                        .withOpacity(0.2),
                 spreadRadius: 1,
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
             ],
             border: Border.all(
-              color: (isDeleted
-                      ? Colors.grey
-                      : isActive
+              color:
+                  (isDeleted
+                          ? Colors.grey
+                          : isActive
                           ? Colors.green
                           : Colors.orange)
-                  .withOpacity(0.3),
+                      .withOpacity(0.3),
               width: 1.5,
             ),
           ),
@@ -242,7 +249,11 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.delete_outline, size: 16, color: Colors.white),
+                        Icon(
+                          Icons.delete_outline,
+                          size: 16,
+                          color: Colors.white,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           "Deleted Category",
@@ -264,12 +275,19 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                     ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.orange.shade600, Colors.orange.shade400],
+                        colors: [
+                          Colors.orange.shade600,
+                          Colors.orange.shade400,
+                        ],
                       ),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.pause_circle_outline, size: 16, color: Colors.white),
+                        Icon(
+                          Icons.pause_circle_outline,
+                          size: 16,
+                          color: Colors.white,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           "Inactive Category",
@@ -422,108 +440,113 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text('Categories'),
-        elevation: 0,
-        actions: [
-          const SizedBox(width: 10),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshCategories,
-            tooltip: 'Refresh',
-          ),
-          PopupMenuButton<SortMode>(
-            onSelected: (m) {
-              setState(() {
-                _sortMode = m;
-                _applyFilters();
-              });
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: SortMode.nameAsc,
-                child: Text('Name ↑'),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = ResponsiveUtils.isMobile(context);
+        return Scaffold(
+          backgroundColor: Colors.grey[100],
+          appBar: AppBar(
+            title: const Text('Categories'),
+            elevation: 0,
+            actions: [
+              SizedBox(width: isMobile ? 4 : 10),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _refreshCategories,
+                tooltip: 'Refresh',
               ),
-              const PopupMenuItem(
-                value: SortMode.nameDesc,
-                child: Text('Name ↓'),
+              PopupMenuButton<SortMode>(
+                onSelected: (m) {
+                  setState(() {
+                    _sortMode = m;
+                    _applyFilters();
+                  });
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: SortMode.nameAsc,
+                    child: Text('Name ↑'),
+                  ),
+                  const PopupMenuItem(
+                    value: SortMode.nameDesc,
+                    child: Text('Name ↓'),
+                  ),
+                  const PopupMenuItem(
+                    value: SortMode.orderAsc,
+                    child: Text('Sort Order ↑'),
+                  ),
+                  const PopupMenuItem(
+                    value: SortMode.orderDesc,
+                    child: Text('Sort Order ↓'),
+                  ),
+                  const PopupMenuItem(
+                    value: SortMode.newest,
+                    child: Text('Newest'),
+                  ),
+                ],
+                icon: const Icon(Icons.sort),
               ),
-              const PopupMenuItem(
-                value: SortMode.orderAsc,
-                child: Text('Sort Order ↑'),
-              ),
-              const PopupMenuItem(
-                value: SortMode.orderDesc,
-                child: Text('Sort Order ↓'),
-              ),
-              const PopupMenuItem(
-                value: SortMode.newest,
-                child: Text('Newest'),
-              ),
-            ],
-            icon: const Icon(Icons.sort),
-          ),
-          PopupMenuButton<String>(
-            onSelected: (v) async {
-              if (v == 'toggle_deleted') {
-                setState(() => _showDeleted = !_showDeleted);
-                await _refreshCategories();
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'toggle_deleted',
-                child: Text(_showDeleted ? 'Hide deleted' : 'Show deleted'),
-              ),
-            ],
-          ),
-          const SizedBox(width: 10),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(70),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Theme.of(context).primaryColor.withOpacity(0.1),
-                  Theme.of(context).primaryColor.withOpacity(0.05),
+              PopupMenuButton<String>(
+                onSelected: (v) async {
+                  if (v == 'toggle_deleted') {
+                    setState(() => _showDeleted = !_showDeleted);
+                    await _refreshCategories();
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'toggle_deleted',
+                    child: Text(_showDeleted ? 'Hide deleted' : 'Show deleted'),
+                  ),
                 ],
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: 'Search categories...',
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+              const SizedBox(width: 10),
+            ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(70),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).primaryColor.withOpacity(0.1),
+                      Theme.of(context).primaryColor.withOpacity(0.05),
+                    ],
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: 'Search categories...',
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
-      body: _buildList(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(),
-        tooltip: 'Add Category',
-        icon: const Icon(Icons.add),
-        label: const Text('New Category'),
-      ),
+          body: _buildList(),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => _openForm(),
+            tooltip: 'Add Category',
+            icon: const Icon(Icons.add),
+            label: const Text('New Category'),
+          ),
+        );
+      },
     );
   }
 }

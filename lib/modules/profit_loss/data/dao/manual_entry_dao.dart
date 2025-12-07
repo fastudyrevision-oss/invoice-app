@@ -1,6 +1,7 @@
 import '../../../../db/database_helper.dart';
 import '../models/manual_entry.dart';
 import '../../../../core/services/audit_logger.dart';
+import '../../../../services/auth_service.dart';
 
 class ManualEntryDao {
   final db = DatabaseHelper.instance;
@@ -11,7 +12,7 @@ class ManualEntryDao {
       'CREATE',
       'manual_entries',
       recordId: entry.id,
-      userId: 'system', // TODO: Get actual user ID
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       newData: entry.toMap(),
     );
     return id;
@@ -56,7 +57,7 @@ class ManualEntryDao {
       'UPDATE',
       'manual_entries',
       recordId: entry.id,
-      userId: 'system',
+      userId: AuthService.instance.currentUser?.id ?? 'system',
       oldData: oldData,
       newData: entry.toMap(),
     );
@@ -74,7 +75,7 @@ class ManualEntryDao {
         'DELETE',
         'manual_entries',
         recordId: id,
-        userId: 'system',
+        userId: AuthService.instance.currentUser?.id ?? 'system',
         oldData: oldData,
       );
     }
