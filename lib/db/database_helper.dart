@@ -74,55 +74,85 @@ class DatabaseHelper {
 
   /// Initialize database
   Future<void> init() async {
-    if (kIsWeb) {
-      // Web: Sembast
-      _webDb = await sembast_web.databaseFactoryWeb.openDatabase(
-        'invoice_app.db',
-      );
-      for (var table in _tables) {
-        _stores[table] = sembast.stringMapStoreFactory.store(table);
-      }
-    } else {
-      // Desktop FFI initialization
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        sqflite_ffi.sqfliteFfiInit();
-        sqflite.databaseFactory = sqflite_ffi.databaseFactoryFfi;
-      }
+    try {
+      if (kIsWeb) {
+        // Web: Sembast
+        _webDb = await sembast_web.databaseFactoryWeb.openDatabase(
+          'invoice_app.db',
+        );
+        for (var table in _tables) {
+          _stores[table] = sembast.stringMapStoreFactory.store(table);
+        }
+        debugPrint("✅ Web database initialized");
+      } else {
+        // Desktop FFI initialization
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          sqflite_ffi.sqfliteFfiInit();
+          sqflite.databaseFactory = sqflite_ffi.databaseFactoryFfi;
+        }
 
-      // Mobile/Desktop: SQLite
-      final dbPath = await sqflite.getDatabasesPath();
-      final path = join(dbPath, "invoice_app.db");
-      _db = await sqflite.openDatabase(
-        path,
-        version: 1,
-        onConfigure: (sqflite.Database db) async {
-          await db.execute('PRAGMA foreign_keys = ON');
-        },
-        onCreate: _onCreate,
-      );
+        // Mobile/Desktop: SQLite
+        final dbPath = await sqflite.getDatabasesPath();
+        final path = join(dbPath, "invoice_app.db");
 
-      // Run migrations manually for existing databases (since version is still 1)
-      if (_db != null) {
-        await addColumnIfNotExists(_db!, "users", "permissions", "TEXT");
-        await addColumnIfNotExists(
-          _db!,
-          "purchase_items",
-          "cost_price",
-          "REAL DEFAULT 0",
+        debugPrint("📂 Opening database at: $path");
+
+        _db = await sqflite.openDatabase(
+          path,
+          version: 1,
+          onConfigure: (sqflite.Database db) async {
+            await db.execute('PRAGMA foreign_keys = ON');
+          },
+          onCreate: _onCreate,
         );
-        await addColumnIfNotExists(
-          _db!,
-          "purchase_items",
-          "product_name",
-          "TEXT",
-        );
-        await addColumnIfNotExists(
-          _db!,
-          "products",
-          "is_deleted",
-          "INTEGER DEFAULT 0",
-        );
+
+        debugPrint("✅ Database opened successfully");
+
+        // Run migrations manually for existing databases (since version is still 1)
+        // CRITICAL: Use _db directly, NOT await db (which would cause circular dependency)
+        if (_db != null) {
+          debugPrint("🔄 Running database migrations...");
+          try {
+            await _addColumnIfNotExistsDirect(
+              _db!,
+              "users",
+              "permissions",
+              "TEXT",
+            );
+            await _addColumnIfNotExistsDirect(
+              _db!,
+              "purchase_items",
+              "cost_price",
+              "REAL DEFAULT 0",
+            );
+            await _addColumnIfNotExistsDirect(
+              _db!,
+              "purchase_items",
+              "product_name",
+              "TEXT",
+            );
+            await _addColumnIfNotExistsDirect(
+              _db!,
+              "products",
+              "is_deleted",
+              "INTEGER DEFAULT 0",
+            );
+            debugPrint("✅ Database migrations completed");
+          } catch (e) {
+            debugPrint("⚠️ Migration error (non-fatal): $e");
+            // Continue anyway - migrations might fail if columns already exist
+          }
+        }
+
+        debugPrint("✅ SQLite database fully initialized");
       }
+    } catch (e, stackTrace) {
+      debugPrint("❌ CRITICAL: Database initialization failed: $e");
+      debugPrint("Stack trace: $stackTrace");
+      // Set databases to null to ensure app doesn't try to use them
+      _db = null;
+      _webDb = null;
+      rethrow; // Re-throw to let main.dart handle it
     }
   }
 
@@ -616,12 +646,32 @@ class DatabaseHelper {
       "cost_price",
       "REAL DEFAULT 0",
     );
-
     // Users permissions
     await addColumnIfNotExists(db, "users", "permissions", "TEXT");
   }
 
-  /// Safely adds a column if it doesn't exist
+  /// Helper to add column if it doesn't exist (DIRECT VERSION - for use during init)
+  /// Uses db parameter directly instead of getter to avoid circular dependency
+  Future<void> _addColumnIfNotExistsDirect(
+    sqflite.Database db,
+    String table,
+    String column,
+    String columnType,
+  ) async {
+    try {
+      final result = await db.rawQuery("PRAGMA table_info($table);");
+      final exists = result.any((row) => row['name'] == column);
+      if (!exists) {
+        debugPrint("➕ Adding column $column to $table");
+        await db.execute("ALTER TABLE $table ADD COLUMN $column $columnType;");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Failed to add column $column to $table: $e");
+      // Don't rethrow - column might already exist
+    }
+  }
+
+  /// Helper to add column if it doesn't exist (PUBLIC VERSION - for use after init)
   Future<void> addColumnIfNotExists(
     sqflite.Database db,
     String table,

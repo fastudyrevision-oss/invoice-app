@@ -15,6 +15,7 @@ dependencies:
   fl_chart: ^0.68.0         # charts
   pdf: ^3.11.0              # PDF generation
   printing: ^5.12.6
+  shared_preferences: ^2.2.0 # for printer settings
   sqflite_common_ffi: ^2.3.6
   path: ^1.8.3        # printing/export
   sembast: ^3.2.1
@@ -45,4 +46,22 @@ flutter:
   assets:
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
+    - assets/fonts/NotoSansArabic-Regular.ttf
+    - assets/fonts/NotoSansArabic-Bold.ttf
+    - assets/fonts/SchehrazadeNew-Regular.ttf
     - assets/logo.png
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+    - family: UrduFont
+      fonts:
+        - asset: assets/fonts/NotoSansArabic-Regular.ttf
+        - asset: assets/fonts/NotoSansArabic-Bold.ttf
+          weight: 700
+    - family: Scheherazade
+      fonts:
+        - asset: assets/fonts/SchehrazadeNew-Regular.ttf
+

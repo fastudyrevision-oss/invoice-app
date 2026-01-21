@@ -1,7 +1,10 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../models/expense.dart';
+import '../utils/pdf_font_helper.dart';
 
 class ExpenseExportService {
   /// Export expense list to beautiful PDF with multi-page support
@@ -21,7 +24,7 @@ class ExpenseExportService {
     // Group by category
     final categoryTotals = <String, double>{};
     for (final expense in expenses) {
-      final category = expense.category ?? 'Uncategorized';
+      final category = expense.category;
       categoryTotals[category] =
           (categoryTotals[category] ?? 0) + expense.amount;
     }
@@ -170,7 +173,7 @@ class ExpenseExportService {
                       _buildDataCell((index + 1).toString()),
                       _buildDataCell(_formatDate(DateTime.parse(expense.date))),
                       _buildDataCell(expense.description),
-                      _buildDataCell(expense.category ?? '-'),
+                      _buildDataCell(expense.category),
                       _buildDataCell(
                         expense.amount.toStringAsFixed(2),
                         bold: true,
@@ -268,7 +271,7 @@ class ExpenseExportService {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
                         pw.Text(
-                          'Prepared via Invoice App',
+                          'Prepared via میاں ٹریڈرز',
                           style: const pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,

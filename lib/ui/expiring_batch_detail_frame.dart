@@ -114,7 +114,7 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text("Date: ${_purchase!.date}"),
-                    Text("Invoice No: ${_purchase!.invoiceNo ?? 'N/A'}"),
+                    Text("Invoice No: ${_purchase!.invoiceNo}"),
                   ],
 
                   if (_purchase == null)

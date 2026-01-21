@@ -5,10 +5,9 @@ import '../repositories/purchase_repo.dart';
 import 'expiring_batch_detail_frame.dart';
 import 'package:sqflite/sqflite.dart';
 
-import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import '../services/expiring_export_service.dart';
+import '../utils/platform_file_helper.dart';
 
 class ExpiringProductsFrame extends StatefulWidget {
   final Database db;
@@ -139,19 +138,6 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     return isDark ? color.withOpacity(0.3) : color;
   }
 
-  Future<String?> _pickSavePath(String suggestedFileName) async {
-    return await FilePicker.platform.saveFile(
-      dialogTitle: 'Select where to save',
-      fileName: suggestedFileName,
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'csv'],
-    );
-  }
-
-  String _timestamp() {
-    return DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  }
-
   Future<void> _exportCSV() async {
     final buffer = StringBuffer();
     buffer.writeln("Product,Batch,Qty,Expiry Date");
@@ -164,16 +150,25 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final suggestedFileName = 'expiring_products_$timestamp.csv';
 
-    final path = await _pickSavePath(suggestedFileName);
-    if (path == null) return; // user cancelled
+    try {
+      // Use platform-aware file handling (Android: share, Desktop: file picker)
+      final file = await PlatformFileHelper.saveCsvFile(
+        csvContent: buffer.toString(),
+        suggestedName: suggestedFileName,
+        dialogTitle: 'Save Expiring Products CSV',
+      );
 
-    final file = File(path);
-    await file.writeAsString(buffer.toString());
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('CSV saved successfully:\n$path')));
+      if (file != null && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('CSV exported successfully')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export CSV: $e')));
+    }
   }
 
   Future<void> _exportPDF() async {

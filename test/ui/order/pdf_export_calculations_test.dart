@@ -256,40 +256,34 @@ void main() {
         // Test "today"
         List<String> activeFilters = [];
         String? quickFilter = 'today';
-        if (quickFilter != null) {
-          final label = quickFilter == 'today'
-              ? 'Today'
-              : quickFilter == 'week'
-              ? 'This Week'
-              : 'This Month';
-          activeFilters.add('Quick Filter: $label');
-        }
+        final label = quickFilter == 'today'
+            ? 'Today'
+            : quickFilter == 'week'
+            ? 'This Week'
+            : 'This Month';
+        activeFilters.add('Quick Filter: $label');
         expect(activeFilters, contains('Quick Filter: Today'));
 
         // Test "week"
         activeFilters.clear();
         quickFilter = 'week';
-        if (quickFilter != null) {
-          final label = quickFilter == 'today'
-              ? 'Today'
-              : quickFilter == 'week'
-              ? 'This Week'
-              : 'This Month';
-          activeFilters.add('Quick Filter: $label');
-        }
+        final weekLabel = quickFilter == 'today'
+            ? 'Today'
+            : quickFilter == 'week'
+            ? 'This Week'
+            : 'This Month';
+        activeFilters.add('Quick Filter: $weekLabel');
         expect(activeFilters, contains('Quick Filter: This Week'));
 
         // Test "month"
         activeFilters.clear();
         quickFilter = 'month';
-        if (quickFilter != null) {
-          final label = quickFilter == 'today'
-              ? 'Today'
-              : quickFilter == 'week'
-              ? 'This Week'
-              : 'This Month';
-          activeFilters.add('Quick Filter: $label');
-        }
+        final monthLabel = quickFilter == 'today'
+            ? 'Today'
+            : quickFilter == 'week'
+            ? 'This Week'
+            : 'This Month';
+        activeFilters.add('Quick Filter: $monthLabel');
         expect(activeFilters, contains('Quick Filter: This Month'));
       });
 
@@ -306,14 +300,12 @@ void main() {
         if (showPendingOnly) {
           activeFilters.add('Status: Pending Payments Only');
         }
-        if (quickFilter != null) {
-          final label = quickFilter == 'today'
-              ? 'Today'
-              : quickFilter == 'week'
-              ? 'This Week'
-              : 'This Month';
-          activeFilters.add('Quick Filter: $label');
-        }
+        final label = quickFilter == 'today'
+            ? 'Today'
+            : quickFilter == 'week'
+            ? 'This Week'
+            : 'This Month';
+        activeFilters.add('Quick Filter: $label');
 
         expect(activeFilters.length, equals(3));
         expect(activeFilters, contains('Search: "test"'));

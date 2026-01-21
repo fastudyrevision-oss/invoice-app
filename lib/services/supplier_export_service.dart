@@ -1,7 +1,10 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../models/supplier.dart';
+import '../utils/pdf_font_helper.dart';
 
 class SupplierExportService {
   /// Export supplier list to beautiful PDF with multi-page support and filter metadata
@@ -310,7 +313,7 @@ class SupplierExportService {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
                         pw.Text(
-                          'Prepared via Invoice App',
+                          'Prepared via میاں ٹریڈرز',
                           style: const pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
@@ -344,7 +347,7 @@ class SupplierExportService {
         : '';
     await Printing.sharePdf(
       bytes: bytes,
-      filename: 'Supplier_Report$filterSuffix\_${_formatDate(now)}.pdf',
+      filename: 'Supplier_Report${filterSuffix}_${_formatDate(now)}.pdf',
     );
 
     print(

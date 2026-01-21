@@ -14,6 +14,7 @@ import 'purchase_insights_card.dart';
 import 'common/unified_search_bar.dart';
 import '../services/purchase_export_service.dart';
 import '../utils/responsive_utils.dart';
+import '../services/thermal_printer/index.dart';
 
 class PurchaseFrame extends StatefulWidget {
   final PurchaseRepository repo;
@@ -135,6 +136,60 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
       list = list.where((p) => p.supplierId == _selectedSupplierId).toList();
     }
     return list;
+  }
+
+  void _showPurchaseOptions(Purchase purchase) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text("Print Thermal Receipt"),
+              onTap: () async {
+                Navigator.pop(context);
+                await thermalPrinting.printPurchase(
+                  purchase,
+                  items: const [],
+                  context: context,
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.print),
+              title: const Text("Print Purchase"),
+              onTap: () async {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Print feature coming soon')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: const Text("Share PDF"),
+              onTap: () async {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Share feature coming soon')),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.cancel, color: Colors.redAccent),
+              title: const Text("Cancel"),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -324,7 +379,11 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
         }
         return false;
       },
-      child: ListView.builder(
+      child: RefreshIndicator(
+        onRefresh: () async {
+          await _loadInitialData();
+        },
+        child: ListView.builder(
         padding: const EdgeInsets.only(bottom: 80),
         itemCount: _displayedPurchases.length + (_isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
@@ -433,6 +492,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                           );
                           _loadInitialData();
                         },
+                        onLongPress: () => _showPurchaseOptions(purchase),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -630,9 +690,9 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
               );
             },
           );
-        },
+        }
       ),
-    );
+    ));
   }
 
   Widget _buildMetric(String label, String value, Color color) {

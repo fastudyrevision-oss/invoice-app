@@ -179,19 +179,6 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
     );
   }
 
-  Widget _buildFilterChips() {
-    return Wrap(
-      spacing: 8,
-      children: [
-        _chip("All", ExpenseFilterType.all),
-        _chip("Daily", ExpenseFilterType.daily),
-        _chip("Weekly", ExpenseFilterType.weekly),
-        _chip("Monthly", ExpenseFilterType.monthly),
-        _chip("Yearly", ExpenseFilterType.yearly),
-      ],
-    );
-  }
-
   void _applyFilters() {
     DateTime now = DateTime.now();
 
@@ -567,360 +554,377 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
 
                     // Expense list
                     Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _currentMax > _filteredExpenses.length
-                            ? _filteredExpenses.length
-                            : _currentMax,
-                        itemBuilder: (context, index) {
-                          final expense = _filteredExpenses[index];
-                          final categoryColor = _getCategoryColor(
-                            expense.category,
-                          );
-                          final categoryIcon = _getCategoryIcon(
-                            expense.category,
-                          );
-                          final date =
-                              DateTime.tryParse(expense.date) ?? DateTime.now();
-                          final dateStr =
-                              "${date.day} ${_getMonthName(date.month)}";
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          setState(() => _currentMax = _pageSize);
+                          await _loadExpenses();
+                        },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemCount: _currentMax > _filteredExpenses.length
+                              ? _filteredExpenses.length
+                              : _currentMax,
+                          itemBuilder: (context, index) {
+                            final expense = _filteredExpenses[index];
+                            final categoryColor = _getCategoryColor(
+                              expense.category,
+                            );
+                            final categoryIcon = _getCategoryIcon(
+                              expense.category,
+                            );
+                            final date =
+                                DateTime.tryParse(expense.date) ??
+                                DateTime.now();
 
-                          return Container(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white,
-                                  categoryColor.withOpacity(0.05),
-                                ],
+                            return Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: categoryColor.withOpacity(0.2),
-                                  spreadRadius: 1,
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white,
+                                    categoryColor.withOpacity(0.05),
+                                  ],
                                 ),
-                              ],
-                              border: Border.all(
-                                color: categoryColor.withOpacity(0.3),
-                                width: 1.5,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: categoryColor.withOpacity(0.2),
+                                    spreadRadius: 1,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: categoryColor.withOpacity(0.3),
+                                  width: 1.5,
+                                ),
                               ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Colored strip
-                                  Container(
-                                    width: double.infinity,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          categoryColor,
-                                          categoryColor.withOpacity(0.6),
-                                        ],
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Colored strip
+                                    Container(
+                                      width: double.infinity,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            categoryColor,
+                                            categoryColor.withOpacity(0.6),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
 
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Header Row
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // Category Icon
-                                            Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                gradient: LinearGradient(
-                                                  begin: Alignment.topLeft,
-                                                  end: Alignment.bottomRight,
-                                                  colors: [
-                                                    categoryColor,
-                                                    categoryColor.withOpacity(
-                                                      0.7,
+                                    Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // Header Row
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Category Icon
+                                              Container(
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                    colors: [
+                                                      categoryColor,
+                                                      categoryColor.withOpacity(
+                                                        0.7,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: categoryColor
+                                                          .withOpacity(0.3),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(
+                                                        0,
+                                                        2,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: categoryColor
-                                                        .withOpacity(0.3),
-                                                    blurRadius: 8,
-                                                    offset: const Offset(0, 2),
+                                                child: Icon(
+                                                  categoryIcon,
+                                                  color: Colors.white,
+                                                  size: 28,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+
+                                              // Description & Category
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      expense.description,
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: categoryColor
+                                                            .withOpacity(0.15),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: categoryColor
+                                                              .withOpacity(0.3),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        expense.category,
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: categoryColor
+                                                              .withOpacity(0.9),
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              // Actions
+                                              Column(
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                      Icons.edit_outlined,
+                                                      color: Colors.blue,
+                                                    ),
+                                                    onPressed: () =>
+                                                        _showAddEditExpenseDialog(
+                                                          expense,
+                                                        ),
+                                                    tooltip: 'Edit',
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      color: Colors.red,
+                                                    ),
+                                                    onPressed: () async {
+                                                      final confirm = await showDialog<bool>(
+                                                        context: context,
+                                                        builder: (ctx) => AlertDialog(
+                                                          title: const Text(
+                                                            "Delete Expense?",
+                                                          ),
+                                                          content: Text(
+                                                            "Are you sure you want to delete '${expense.description}'?",
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    ctx,
+                                                                    false,
+                                                                  ),
+                                                              child: const Text(
+                                                                "Cancel",
+                                                              ),
+                                                            ),
+                                                            ElevatedButton(
+                                                              style: ElevatedButton.styleFrom(
+                                                                backgroundColor:
+                                                                    Colors.red,
+                                                                foregroundColor:
+                                                                    Colors
+                                                                        .white,
+                                                              ),
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    ctx,
+                                                                    true,
+                                                                  ),
+                                                              child: const Text(
+                                                                "Delete",
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+
+                                                      if (confirm == true) {
+                                                        await _repo
+                                                            .deleteExpense(
+                                                              expense.id,
+                                                            );
+                                                        _loadExpenses();
+                                                      }
+                                                    },
+                                                    tooltip: 'Delete',
                                                   ),
                                                 ],
                                               ),
-                                              child: Icon(
-                                                categoryIcon,
-                                                color: Colors.white,
-                                                size: 28,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
+                                            ],
+                                          ),
 
-                                            // Description & Category
-                                            Expanded(
-                                              child: Column(
+                                          const SizedBox(height: 16),
+                                          const Divider(),
+                                          const SizedBox(height: 12),
+
+                                          // Amount & Date Row
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              // Amount
+                                              Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    expense.description,
-                                                    style: const TextStyle(
-                                                      fontSize: 18,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.black87,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: categoryColor
-                                                          .withOpacity(0.15),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            6,
-                                                          ),
-                                                      border: Border.all(
-                                                        color: categoryColor
-                                                            .withOpacity(0.3),
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      expense.category,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: categoryColor
-                                                            .withOpacity(0.9),
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-
-                                            // Actions
-                                            Column(
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    color: Colors.blue,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _showAddEditExpenseDialog(
-                                                        expense,
-                                                      ),
-                                                  tooltip: 'Edit',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    color: Colors.red,
-                                                  ),
-                                                  onPressed: () async {
-                                                    final confirm = await showDialog<bool>(
-                                                      context: context,
-                                                      builder: (ctx) => AlertDialog(
-                                                        title: const Text(
-                                                          "Delete Expense?",
-                                                        ),
-                                                        content: Text(
-                                                          "Are you sure you want to delete '${expense.description}'?",
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                  ctx,
-                                                                  false,
-                                                                ),
-                                                            child: const Text(
-                                                              "Cancel",
-                                                            ),
-                                                          ),
-                                                          ElevatedButton(
-                                                            style: ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  Colors.red,
-                                                              foregroundColor:
-                                                                  Colors.white,
-                                                            ),
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                  ctx,
-                                                                  true,
-                                                                ),
-                                                            child: const Text(
-                                                              "Delete",
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-
-                                                    if (confirm == true) {
-                                                      await _repo.deleteExpense(
-                                                        expense.id,
-                                                      );
-                                                      _loadExpenses();
-                                                    }
-                                                  },
-                                                  tooltip: 'Delete',
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(height: 16),
-                                        const Divider(),
-                                        const SizedBox(height: 12),
-
-                                        // Amount & Date Row
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            // Amount
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  "AMOUNT",
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: Colors.grey.shade500,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 6,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      colors: [
-                                                        Colors.red.shade600,
-                                                        Colors.red.shade400,
-                                                      ],
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                    boxShadow: [
-                                                      BoxShadow(
-                                                        color: Colors.red
-                                                            .withOpacity(0.3),
-                                                        blurRadius: 6,
-                                                        offset: const Offset(
-                                                          0,
-                                                          2,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  child: Text(
-                                                    "Rs ${expense.amount.toStringAsFixed(0)}",
-                                                    style: const TextStyle(
-                                                      fontSize: 20,
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-
-                                            // Date Badge
-                                            Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: categoryColor
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: categoryColor
-                                                      .withOpacity(0.3),
-                                                  width: 2,
-                                                ),
-                                              ),
-                                              child: Column(
-                                                children: [
-                                                  Text(
-                                                    date.day.toString(),
+                                                    "AMOUNT",
                                                     style: TextStyle(
-                                                      fontSize: 24,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: categoryColor,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    _getMonthName(date.month),
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: categoryColor
-                                                          .withOpacity(0.8),
+                                                      fontSize: 10,
+                                                      color:
+                                                          Colors.grey.shade500,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                     ),
                                                   ),
-                                                  Text(
-                                                    date.year.toString(),
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color:
-                                                          Colors.grey.shade600,
+                                                  const SizedBox(height: 2),
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(
+                                                        colors: [
+                                                          Colors.red.shade600,
+                                                          Colors.red.shade400,
+                                                        ],
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.red
+                                                              .withOpacity(0.3),
+                                                          blurRadius: 6,
+                                                          offset: const Offset(
+                                                            0,
+                                                            2,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: Text(
+                                                      "Rs ${expense.amount.toStringAsFixed(0)}",
+                                                      style: const TextStyle(
+                                                        fontSize: 20,
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
+
+                                              // Date Badge
+                                              Container(
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: categoryColor
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: categoryColor
+                                                        .withOpacity(0.3),
+                                                    width: 2,
+                                                  ),
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    Text(
+                                                      date.day.toString(),
+                                                      style: TextStyle(
+                                                        fontSize: 24,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: categoryColor,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      _getMonthName(date.month),
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: categoryColor
+                                                            .withOpacity(0.8),
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      date.year.toString(),
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],

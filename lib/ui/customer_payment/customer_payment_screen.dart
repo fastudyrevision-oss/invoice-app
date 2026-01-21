@@ -49,6 +49,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final customerDao = await _customerDao;
@@ -61,12 +62,14 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
         searchQuery: _searchController.text,
       );
 
+      if (!mounted) return;
       setState(() {
         _customers = customers;
         _payments = payments;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -457,7 +460,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                                         (c) => c.id == _selectedCustomerId,
                                         orElse: () => Customer(
                                           id: '',
-                                          phone:'',
+                                          phone: '',
                                           name: 'Unknown',
                                           createdAt: '',
                                           updatedAt: '',
@@ -477,10 +480,12 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                                   SimpleDialogOption(
                                     onPressed: () {
                                       Navigator.pop(context);
-                                      setState(
-                                        () => _selectedCustomerId = null,
-                                      );
-                                      _loadData();
+                                      if (mounted) {
+                                        setState(
+                                          () => _selectedCustomerId = null,
+                                        );
+                                        _loadData();
+                                      }
                                     },
                                     child: const Text('All Customers'),
                                   ),
@@ -488,10 +493,12 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                                     (c) => SimpleDialogOption(
                                       onPressed: () {
                                         Navigator.pop(context);
-                                        setState(
-                                          () => _selectedCustomerId = c.id,
-                                        );
-                                        _loadData();
+                                        if (mounted) {
+                                          setState(
+                                            () => _selectedCustomerId = c.id,
+                                          );
+                                          _loadData();
+                                        }
                                       },
                                       child: Text(c.name),
                                     ),
@@ -502,8 +509,10 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                           },
                           onDeleted: _selectedCustomerId != null
                               ? () {
-                                  setState(() => _selectedCustomerId = null);
-                                  _loadData();
+                                  if (mounted) {
+                                    setState(() => _selectedCustomerId = null);
+                                    _loadData();
+                                  }
                                 }
                               : null,
                         ),
@@ -531,8 +540,10 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                                       (m) => SimpleDialogOption(
                                         onPressed: () {
                                           Navigator.pop(context);
-                                          setState(() => _selectedMethod = m);
-                                          _loadData();
+                                          if (mounted) {
+                                            setState(() => _selectedMethod = m);
+                                            _loadData();
+                                          }
                                         },
                                         child: Text(
                                           m == 'all'
@@ -570,7 +581,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                                   )
                                 : null,
                           );
-                          if (range != null) {
+                          if (range != null && mounted) {
                             setState(() {
                               _startDate = range.start;
                               _endDate = range.end;
@@ -580,11 +591,13 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                         },
                         onDeleted: _startDate != null
                             ? () {
-                                setState(() {
-                                  _startDate = null;
-                                  _endDate = null;
-                                });
-                                _loadData();
+                                if (mounted) {
+                                  setState(() {
+                                    _startDate = null;
+                                    _endDate = null;
+                                  });
+                                  _loadData();
+                                }
                               }
                             : null,
                       ),

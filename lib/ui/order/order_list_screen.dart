@@ -10,6 +10,7 @@ import 'order_form_screen.dart';
 import '../../db/database_helper.dart';
 import 'order_insights_card.dart';
 import 'pdf_export_helper.dart';
+import '../../utils/responsive_utils.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -26,6 +27,7 @@ class _OrderListScreenState extends State<OrderListScreen>
   List<Invoice> _filtered = [];
 
   bool _loading = true;
+  final bool _hasMore = true;
   bool _error = false;
   DateTime? _lastUpdated;
 
@@ -151,13 +153,13 @@ class _OrderListScreenState extends State<OrderListScreen>
       if (query.isNotEmpty) {
         results = results.where((o) {
           final customer = o.customerName?.toLowerCase() ?? '';
-          final id = (o.id ?? '').toLowerCase();
+          final id = o.id.toLowerCase();
           return customer.contains(query) || id.contains(query);
         }).toList();
       }
 
       if (_showPendingOnly) {
-        results = results.where((o) => (o.pending ?? 0) > 0).toList();
+        results = results.where((o) => o.pending > 0).toList();
       }
 
       // quick filters
@@ -486,7 +488,6 @@ class _OrderListScreenState extends State<OrderListScreen>
       ),
     );
   }
-
   void _showOrderActions(Invoice invoice) {
     showModalBottomSheet(
       context: context,
@@ -507,6 +508,22 @@ class _OrderListScreenState extends State<OrderListScreen>
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("✅ Invoice PDF saved successfully"),
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text("Print Thermal Receipt"),
+              onTap: () async {
+                Navigator.pop(context);
+                final file = await generateThermalReceipt(invoice);
+                if (file != null) {
+                  await printPdfFile(file);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("✅ Sending to thermal printer..."),
                     ),
                   );
                 }
@@ -562,31 +579,78 @@ class _OrderListScreenState extends State<OrderListScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context); // required for AutomaticKeepAliveClientMixin
+    final isMobile = ResponsiveUtils.isMobile(context);
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text("Orders"),
         elevation: 0,
-        actions: [
-          const SizedBox(width: 10),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _openFilterSheet,
-            tooltip: 'Filters',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadOrders,
-            tooltip: 'Refresh',
-          ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: _exportAllOrders,
-            tooltip: 'Export PDF',
-          ),
-          const SizedBox(width: 10),
-        ],
+        actions: isMobile
+            ? [
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'filter') {
+                      _openFilterSheet();
+                    } else if (value == 'refresh') {
+                      _loadOrders();
+                    } else if (value == 'export') {
+                      _exportAllOrders();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'filter',
+                      child: Row(
+                        children: [
+                          Icon(Icons.filter_list),
+                          SizedBox(width: 8),
+                          Text('Filters'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh),
+                          SizedBox(width: 8),
+                          Text('Refresh'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'export',
+                      child: Row(
+                        children: [
+                          Icon(Icons.picture_as_pdf),
+                          SizedBox(width: 8),
+                          Text('Export PDF'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ]
+            : [
+                const SizedBox(width: 10),
+                IconButton(
+                  icon: const Icon(Icons.filter_list),
+                  onPressed: _openFilterSheet,
+                  tooltip: 'Filters',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadOrders,
+                  tooltip: 'Refresh',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf),
+                  onPressed: _exportAllOrders,
+                  tooltip: 'Export PDF',
+                ),
+                const SizedBox(width: 10),
+              ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(140),
           child: Container(

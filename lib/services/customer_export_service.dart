@@ -1,7 +1,10 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../models/customer.dart';
+import '../utils/pdf_font_helper.dart';
 
 class CustomerExportService {
   /// Export customer list to beautiful PDF with multi-page support
@@ -172,7 +175,7 @@ class CustomerExportService {
                     children: [
                       _buildDataCell((index + 1).toString()),
                       _buildDataCell(customer.name, bold: hasPending),
-                      _buildDataCell(customer.phone ?? '-'),
+                      _buildDataCell(customer.phone),
                       _buildDataCell(customer.address ?? '-'),
                       _buildDataCell(
                         customer.pendingAmount.toStringAsFixed(2),
@@ -226,7 +229,7 @@ class CustomerExportService {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
                         pw.Text(
-                          'Prepared via Invoice App',
+                          'Prepared via میاں ٹریڈرز',
                           style: const pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,

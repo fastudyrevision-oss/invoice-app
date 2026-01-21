@@ -31,7 +31,6 @@ class PurchaseForm extends StatefulWidget {
 
 class _PurchaseFormState extends State<PurchaseForm> {
   final _formKey = GlobalKey<FormState>();
-  final _invoiceNoCtrl = TextEditingController();
   final _paidCtrl = TextEditingController();
   String? _selectedSupplierId;
 

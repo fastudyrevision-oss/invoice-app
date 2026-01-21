@@ -5,6 +5,7 @@ import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/stock_report_model.dart';
 
 class StockExportService {
@@ -318,7 +319,7 @@ class StockExportService {
                       ],
                     ),
                     pw.Text(
-                      'Prepared via Invoice App',
+                      'Prepared via میاں ٹریڈرز',
                       style: const pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey700,
@@ -534,12 +535,20 @@ class StockExportService {
         'stock_report_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     final filePath = '${output.path}/$fileName';
     final fileBytes = excel.encode();
-    final file = File(filePath)
+    File(filePath)
       ..createSync(recursive: true)
       ..writeAsBytesSync(fileBytes!);
 
     print("✅ Excel exported to $filePath");
-    await OpenFile.open(filePath);
+
+    // Platform-aware: Android/iOS uses share, Desktop opens file
+    if (Platform.isAndroid || Platform.isIOS) {
+      // Mobile: Share the file
+      await Share.shareXFiles([XFile(filePath)], subject: fileName);
+    } else {
+      // Desktop: Open file directly
+      await OpenFile.open(filePath);
+    }
   }
 
   /// Print directly to POS (placeholder for future)

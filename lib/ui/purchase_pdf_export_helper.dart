@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import '../../models/purchase.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import '../../utils/platform_file_helper.dart';
+import '../../utils/pdf_font_helper.dart';
 
 /// Generate a PDF report with a chart for purchases
 Future<File?> generatePurchasePdfWithChart({
@@ -16,8 +17,10 @@ Future<File?> generatePurchasePdfWithChart({
   required double avgPurchase,
 }) async {
   final pdf = pw.Document();
-  final regularFont = await PdfGoogleFonts.notoSansRegular();
-  final boldFont = await PdfGoogleFonts.notoSansBold();
+  // Load fonts from centralized helper (future-safe)
+  final fonts = await PdfFontHelper.getBothFonts();
+  final regularFont = fonts['regular']!;
+  final boldFont = fonts['bold']!;
 
   pdf.addPage(
     pw.Page(
@@ -72,17 +75,13 @@ Future<File?> generatePurchasePdfWithChart({
   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
   final suggestedName = 'Purchase_Report_$timestamp.pdf';
 
-  final savePath = await FilePicker.platform.saveFile(
+  // Use platform-aware file handling (Android: share, Desktop: file picker)
+  final pdfBytes = await pdf.save();
+  return await PlatformFileHelper.savePdfFile(
+    pdfBytes: pdfBytes,
+    suggestedName: suggestedName,
     dialogTitle: 'Save Purchase PDF',
-    fileName: suggestedName,
-    type: FileType.custom,
-    allowedExtensions: ['pdf'],
   );
-
-  if (savePath == null) return null;
-  final file = File(savePath);
-  await file.writeAsBytes(await pdf.save());
-  return file;
 }
 
 /// Generate PDF for a single purchase with optional items
@@ -91,8 +90,10 @@ Future<File?> generatePurchaseInvoicePdf(
   List<Map<String, dynamic>>? items,
 }) async {
   final pdf = pw.Document();
-  final regularFont = await PdfGoogleFonts.notoSansRegular();
-  final boldFont = await PdfGoogleFonts.notoSansBold();
+  // Load fonts from centralized helper (future-safe)
+  final fonts = await PdfFontHelper.getBothFonts();
+  final regularFont = fonts['regular']!;
+  final boldFont = fonts['bold']!;
 
   // Load logo if available
   pw.MemoryImage? logoImage;
@@ -121,22 +122,25 @@ Future<File?> generatePurchaseInvoicePdf(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'Mian Traders',
-                        style: pw.TextStyle(font: boldFont, fontSize: 22),
-                      ),
-                      pw.Text(
-                        'Kotmomi road ,Bhagtanawala, Sargodha',
-                        style: pw.TextStyle(font: regularFont, fontSize: 12),
-                      ),
-                      pw.Text(
-                        'Phone: +92-300-1234567 | info@company.com',
-                        style: pw.TextStyle(font: regularFont, fontSize: 12),
-                      ),
-                    ],
+                  pw.Directionality(
+                    textDirection: pw.TextDirection.ltr,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          'MIAN TRADERS',
+                          style: pw.TextStyle(font: boldFont, fontSize: 22),
+                        ),
+                        pw.Text(
+                          'Kotmomi road ,Bhagtanawala, Sargodha',
+                          style: pw.TextStyle(font: regularFont, fontSize: 12),
+                        ),
+                        pw.Text(
+                          'Phone: +92-300-1234567 | info@company.com',
+                          style: pw.TextStyle(font: regularFont, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
                   if (logoImage != null)
                     pw.Container(
@@ -227,16 +231,13 @@ Future<File?> generatePurchaseInvoicePdf(
   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
   final suggestedName = 'Purchase_${purchase.id}_$timestamp.pdf';
 
-  final savePath = await FilePicker.platform.saveFile(
+  // Use platform-aware file handling (Android: share, Desktop: file picker)
+  final pdfBytes = await pdf.save();
+  return await PlatformFileHelper.savePdfFile(
+    pdfBytes: pdfBytes,
+    suggestedName: suggestedName,
     dialogTitle: 'Save Purchase PDF',
-    fileName: suggestedName,
-    allowedExtensions: ['pdf'],
   );
-
-  if (savePath == null) return null;
-  final file = File(savePath);
-  await file.writeAsBytes(await pdf.save());
-  return file;
 }
 
 /// Print a PDF file
@@ -261,4 +262,214 @@ Future<void> shareOrPrintPdf(File pdfFile) async {
   } else {
     print("⚠️ PDF file not found: ${pdfFile.path}");
   }
+}
+
+/// ✅ Generate thermal printer receipt format (80mm width) for purchases
+Future<File?> generateThermalReceipt(
+  Purchase purchase, {
+  List<Map<String, dynamic>>? items,
+  String? supplierName,
+}) async {
+  final pdf = pw.Document();
+
+  // Load fonts from centralized helper (future-safe)
+  final fonts = await PdfFontHelper.getBothFonts();
+  final regularFont = fonts['regular']!;
+  final boldFont = fonts['bold']!;
+
+  final date = DateFormat(
+    'dd MMM yyyy, hh:mm a',
+  ).format(DateTime.tryParse(purchase.date) ?? DateTime.now());
+
+  // Thermal receipt: 80mm width (approx 226 points at 72 DPI)
+  pdf.addPage(
+    pw.Page(
+      pageFormat: const PdfPageFormat(226, 400), // 80mm x custom height
+      margin: const pw.EdgeInsets.all(8),
+      build: (context) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            // 🏢 Company Header
+            pw.Directionality(
+              textDirection: pw.TextDirection.rtl,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    'MIAN TRADERS',
+                    style: pw.TextStyle(font: boldFont, fontSize: 14),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Sargodha',
+              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              textAlign: pw.TextAlign.center,
+            ),
+            pw.Text(
+              '+92 345 4297128',
+              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              textAlign: pw.TextAlign.center,
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(height: 1, color: PdfColors.black),
+            pw.SizedBox(height: 8),
+
+            // Supplier & Date
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Supplier:',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    supplierName ?? 'N/A',
+                    style: pw.TextStyle(font: regularFont, fontSize: 8),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 2),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Invoice:',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+                pw.Text(
+                  purchase.invoiceNo,
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 2),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Date:',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+                pw.Text(
+                  date,
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 6),
+            pw.Container(height: 1, color: PdfColors.black),
+            pw.SizedBox(height: 6),
+
+            // Items Table
+            if (items != null && items.isNotEmpty) ...[
+              pw.Table.fromTextArray(
+                border: pw.TableBorder.all(width: 0.5),
+                cellAlignment: pw.Alignment.centerLeft,
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                ),
+                headerStyle: pw.TextStyle(font: boldFont, fontSize: 7),
+                cellStyle: pw.TextStyle(font: regularFont, fontSize: 7),
+                headers: ['Item', 'Qty', 'Price', 'Total'],
+                data: items.map((item) {
+                  final qty = (item['qty'] ?? 0);
+                  final price = (item['price'] ?? 0.0);
+                  final total = qty * price;
+                  return [
+                    item['product_name'] ?? '',
+                    qty.toString(),
+                    price.toStringAsFixed(0),
+                    total.toStringAsFixed(0),
+                  ];
+                }).toList(),
+              ),
+              pw.SizedBox(height: 6),
+            ],
+
+            pw.Container(height: 1, color: PdfColors.black),
+            pw.SizedBox(height: 6),
+
+            // 💰 Totals
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Paid:',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+                pw.Text(
+                  'Rs ${purchase.paid.toStringAsFixed(0)}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 3),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Pending:',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+                pw.Text(
+                  'Rs ${purchase.pending.toStringAsFixed(0)}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 6),
+            pw.Container(height: 2, color: PdfColors.black),
+            pw.SizedBox(height: 4),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'TOTAL:',
+                  style: pw.TextStyle(font: boldFont, fontSize: 10),
+                ),
+                pw.Text(
+                  'Rs ${purchase.total.toStringAsFixed(0)}',
+                  style: pw.TextStyle(font: boldFont, fontSize: 10),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(height: 1, color: PdfColors.black),
+            pw.SizedBox(height: 4),
+            pw.Center(
+              child: pw.Text(
+                'Thank You!',
+                style: pw.TextStyle(font: boldFont, fontSize: 9),
+              ),
+            ),
+            pw.Center(
+              child: pw.Text(
+                'میاں ٹریڈرز',
+                style: pw.TextStyle(font: regularFont, fontSize: 7),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+
+  final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+  final suggestedName = 'Receipt_${purchase.id}_$timestamp.pdf';
+
+  // Use platform-aware file handling
+  final pdfBytes = await pdf.save();
+  return await PlatformFileHelper.savePdfFile(
+    pdfBytes: pdfBytes,
+    suggestedName: suggestedName,
+    dialogTitle: 'Save Thermal Receipt',
+  );
 }

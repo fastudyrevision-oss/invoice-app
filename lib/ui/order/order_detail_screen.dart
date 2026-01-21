@@ -68,30 +68,90 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            tooltip: "Export to PDF",
-            onPressed: () async {
+          PopupMenuButton<String>(
+            onSelected: (value) async {
               try {
                 invoice.customerName ??= _customer?.name ?? "Unknown";
-                final File? pdfFile = await generateInvoicePdf(
-                  invoice,
-                  items: _items,
-                );
-                if (pdfFile != null) {
-                  await shareOrPrintPdf(pdfFile);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("PDF generation cancelled")),
+                
+                if (value == 'pdf') {
+                  final File? pdfFile = await generateInvoicePdf(
+                    invoice,
+                    items: _items,
                   );
+                  if (pdfFile != null) {
+                    await shareOrPrintPdf(pdfFile);
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("PDF generation cancelled")),
+                    );
+                  }
+                } else if (value == 'thermal') {
+                  final File? thermalFile = await generateThermalReceipt(
+                    invoice,
+                    items: _items,
+                  );
+                  if (thermalFile != null) {
+                    await printPdfFile(thermalFile);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("✅ Sending to thermal printer..."),
+                        ),
+                      );
+                    }
+                  }
+                } else if (value == 'print') {
+                  final File? pdfFile = await generateInvoicePdf(
+                    invoice,
+                    items: _items,
+                  );
+                  if (pdfFile != null) {
+                    await printPdfFile(pdfFile);
+                  }
                 }
               } catch (e) {
-                debugPrint("❌ Error generating invoice PDF: $e");
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Failed to generate PDF: $e")),
-                );
+                debugPrint("❌ Error: $e");
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Failed: $e")),
+                  );
+                }
               }
             },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem(
+                value: 'pdf',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, size: 20),
+                    SizedBox(width: 8),
+                    Text('Export PDF'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'thermal',
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_long, size: 20),
+                    SizedBox(width: 8),
+                    Text('Thermal Receipt'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'print',
+                child: Row(
+                  children: [
+                    Icon(Icons.print, size: 20),
+                    SizedBox(width: 8),
+                    Text('Print Invoice'),
+                  ],
+                ),
+              ),
+            ],
+            icon: const Icon(Icons.more_vert),
+            tooltip: "Print Options",
           ),
         ],
       ),

@@ -72,12 +72,18 @@ class ProfitLossDao {
   }
 
   Future<double> getTotalCostOfGoodsSold(DateTime start, DateTime end) async {
+    // Using weighted average cost to avoid Cartesian product from LEFT JOIN
     final result = await db.rawQuery(
       '''
-      SELECT SUM(ii.qty * pi.purchase_price) AS cogs
+      SELECT COALESCE(SUM(ii.qty * p.weighted_avg_cost), 0) AS cogs
       FROM invoice_items ii
-      LEFT JOIN purchase_items pi ON ii.product_id = pi.product_id
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
+      LEFT JOIN (
+        SELECT product_id, 
+          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
+        FROM purchase_items
+        GROUP BY product_id
+      ) p ON ii.product_id = p.product_id
       WHERE inv.date BETWEEN ? AND ?
     ''',
       [start.toIso8601String(), end.toIso8601String()],
@@ -96,12 +102,17 @@ class ProfitLossDao {
         p.id AS product_id,
         p.name AS product_name,
         SUM(ii.qty * ii.price) AS total_sales,
-        SUM(ii.qty * pi.purchase_price) AS total_cost,
+        SUM(ii.qty * COALESCE(wa.weighted_avg_cost, 0)) AS total_cost,
         SUM(ii.qty) AS sold_qty
       FROM products p
       LEFT JOIN invoice_items ii ON ii.product_id = p.id
-      LEFT JOIN purchase_items pi ON pi.product_id = p.id
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
+      LEFT JOIN (
+        SELECT product_id, 
+          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
+        FROM purchase_items
+        GROUP BY product_id
+      ) wa ON p.id = wa.product_id
       WHERE inv.date BETWEEN ? AND ?
       GROUP BY p.id
     ''',
@@ -135,12 +146,17 @@ class ProfitLossDao {
         c.id AS category_id,
         c.name AS category_name,
         SUM(ii.qty * ii.price) AS total_sales,
-        SUM(ii.qty * pi.purchase_price) AS total_cost
+        SUM(ii.qty * COALESCE(wa.weighted_avg_cost, 0)) AS total_cost
       FROM categories c
       LEFT JOIN products p ON p.category_id = c.id
       LEFT JOIN invoice_items ii ON ii.product_id = p.id
-      LEFT JOIN purchase_items pi ON pi.product_id = p.id
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
+      LEFT JOIN (
+        SELECT product_id, 
+          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
+        FROM purchase_items
+        GROUP BY product_id
+      ) wa ON p.id = wa.product_id
       WHERE inv.date BETWEEN ? AND ?
       GROUP BY c.id
     ''',

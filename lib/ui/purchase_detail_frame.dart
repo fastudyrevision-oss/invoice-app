@@ -5,7 +5,7 @@ import '../models/purchase_item.dart';
 import '../models/product_batch.dart';
 import '../models/product.dart';
 import '../models/supplier.dart';
-import '../utils/responsive_utils.dart';
+import '../services/thermal_printer/index.dart';
 
 class PurchaseDetailFrame extends StatefulWidget {
   final PurchaseRepository repo;
@@ -25,6 +25,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
   late Future<List<PurchaseItem>> _itemsFuture;
   late Purchase _purchase;
   Supplier? _supplier;
+
 
   @override
   void initState() {
@@ -96,8 +97,6 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = ResponsiveUtils.isMobile(context);
-
         return Scaffold(
           backgroundColor: Colors.grey[100],
           appBar: AppBar(
@@ -554,12 +553,62 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                       ],
                     ),
                   ),
+
+                const SizedBox(height: 16),
+
+                // Thermal Print & Export Options
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        // Convert purchase items to receipt items
+                        final receiptItems = _buildReceiptItems();
+
+                        // Use new ESC/POS thermal printing service
+                        await thermalPrinting.printPurchase(
+                          _purchase,
+                          items: receiptItems,
+                          supplierName: _supplier?.name,
+                          context: context,
+                        );
+                      },
+                      icon: const Icon(Icons.receipt_long),
+                      label: const Text("Thermal Receipt"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Print feature available')),
+                        );
+                      },
+                      icon: const Icon(Icons.print),
+                      label: const Text("Print"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  /// Helper method to convert purchase items to receipt items
+  List<ReceiptItem> _buildReceiptItems() {
+    final items = <ReceiptItem>[];
+    // In a real app, you would fetch PurchaseItems from database
+    // For now, returning empty list (pass it from parent or fetch dynamically)
+    return items;
   }
 
   Widget _buildItemChip(String label, Color color, IconData icon) {

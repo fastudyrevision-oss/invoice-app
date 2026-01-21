@@ -1,12 +1,10 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
-import 'dart:io';
-import 'package:excel/excel.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../models/expiring_batch_detail.dart';
+import '../utils/pdf_font_helper.dart';
 
 class ExpiringExportService {
   /// Export expiring products report to PDF
@@ -232,7 +230,7 @@ class ExpiringExportService {
                       ),
                     ),
                     pw.Text(
-                      'Prepared via Invoice App',
+                      'Prepared via میاں ٹریڈرز',
                       style: const pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey700,

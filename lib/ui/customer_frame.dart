@@ -553,364 +553,370 @@ class _CustomerFrameState extends State<CustomerFrame> {
 
                     // Customer list
                     Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount: _customers.length + (_hasMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index >= _customers.length) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          }
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          _resetPagination();
+                          await Future.delayed(const Duration(milliseconds: 500));
+                        },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemCount: _customers.length + (_hasMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index >= _customers.length) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(child: CircularProgressIndicator()),
+                              );
+                            }
 
-                          final customer = _customers[index];
-                          final hasPending = customer.pendingAmount > 0;
+                            final customer = _customers[index];
+                            final hasPending = customer.pendingAmount > 0;
 
-                          return Container(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.1),
-                                  spreadRadius: 1,
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                              border: Border.all(
-                                color: hasPending
-                                    ? Colors.red.shade200
-                                    : Colors.transparent,
-                                width: hasPending ? 1.5 : 0,
+                            return Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Status Strip
-                                  if (hasPending)
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 4,
-                                        horizontal: 12,
-                                      ),
-                                      color: Colors.red.shade50,
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.account_balance_wallet,
-                                            size: 16,
-                                            color: Colors.red.shade700,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            "Pending Payment",
-                                            style: TextStyle(
-                                              color: Colors.red.shade900,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                  InkWell(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              CustomerDetailFrame(
-                                                customer: customer,
-                                                repository: _repo!,
-                                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.1),
+                                    spreadRadius: 1,
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: hasPending
+                                      ? Colors.red.shade200
+                                      : Colors.transparent,
+                                  width: hasPending ? 1.5 : 0,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Status Strip
+                                    if (hasPending)
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                          horizontal: 12,
                                         ),
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          // Header: Name & Actions
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      customer.name,
-                                                      style: const TextStyle(
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Colors.black87,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        Icon(
-                                                          Icons.phone,
-                                                          size: 14,
-                                                          color:
-                                                              Colors.grey[600],
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        Text(
-                                                          customer.phone,
-                                                          style: TextStyle(
-                                                            fontSize: 13,
-                                                            color: Colors
-                                                                .grey[700],
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              // Actions
-                                              Row(
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.payment,
-                                                      color: Colors.green,
-                                                    ),
-                                                    onPressed: () =>
-                                                        _showAddPaymentDialog(
-                                                          customer,
-                                                        ),
-                                                    tooltip: 'Add Payment',
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.edit_outlined,
-                                                      color: Colors.blue,
-                                                    ),
-                                                    onPressed: () =>
-                                                        _showEditCustomerDialog(
-                                                          customer,
-                                                        ),
-                                                    tooltip: 'Edit',
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.delete_outline,
-                                                      color: Colors.red,
-                                                    ),
-                                                    onPressed: () async {
-                                                      final confirm = await showDialog<bool>(
-                                                        context: context,
-                                                        builder: (ctx) => AlertDialog(
-                                                          title: const Text(
-                                                            "Delete Customer?",
-                                                          ),
-                                                          content: Text(
-                                                            "Are you sure you want to delete '${customer.name}'?",
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () =>
-                                                                  Navigator.pop(
-                                                                    ctx,
-                                                                    false,
-                                                                  ),
-                                                              child: const Text(
-                                                                "Cancel",
-                                                              ),
-                                                            ),
-                                                            ElevatedButton(
-                                                              style: ElevatedButton.styleFrom(
-                                                                backgroundColor:
-                                                                    Colors.red,
-                                                                foregroundColor:
-                                                                    Colors
-                                                                        .white,
-                                                              ),
-                                                              onPressed: () =>
-                                                                  Navigator.pop(
-                                                                    ctx,
-                                                                    true,
-                                                                  ),
-                                                              child: const Text(
-                                                                "Delete",
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      );
-
-                                                      if (confirm == true) {
-                                                        await _repo!
-                                                            .deleteCustomer(
-                                                              customer.id,
-                                                            );
-                                                        _resetPagination();
-                                                      }
-                                                    },
-                                                    tooltip: 'Delete',
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-
-                                          const SizedBox(height: 12),
-
-                                          // Email Chip (if present)
-                                          if (customer.email != null &&
-                                              customer.email!.isNotEmpty)
-                                            Chip(
-                                              avatar: const Icon(
-                                                Icons.email_outlined,
-                                                size: 16,
-                                              ),
-                                              label: Text(customer.email!),
-                                              backgroundColor:
-                                                  Colors.purple.shade50,
-                                              labelStyle: TextStyle(
-                                                color: Colors.purple.shade900,
-                                                fontSize: 12,
-                                              ),
-                                              padding: const EdgeInsets.all(0),
-                                              visualDensity:
-                                                  VisualDensity.compact,
+                                        color: Colors.red.shade50,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.account_balance_wallet,
+                                              size: 16,
+                                              color: Colors.red.shade700,
                                             ),
-
-                                          const SizedBox(height: 16),
-                                          const Divider(),
-                                          const SizedBox(height: 8),
-
-                                          // Pending Amount Metric
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    "PENDING AMOUNT",
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    "Rs ${customer.pendingAmount.toStringAsFixed(0)}",
-                                                    style: TextStyle(
-                                                      fontSize: 20,
-                                                      color: hasPending
-                                                          ? Colors.red.shade700
-                                                          : Colors
-                                                                .green
-                                                                .shade700,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              "Pending Payment",
+                                              style: TextStyle(
+                                                color: Colors.red.shade900,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                              if (hasPending)
-                                                ElevatedButton.icon(
-                                                  onPressed: () =>
-                                                      _showAddPaymentDialog(
-                                                        customer,
-                                                      ),
-                                                  icon: const Icon(
-                                                    Icons.payment,
-                                                    size: 18,
-                                                  ),
-                                                  label: const Text("Pay Now"),
-                                                  style:
-                                                      ElevatedButton.styleFrom(
-                                                        backgroundColor: Colors
-                                                            .green
-                                                            .shade600,
-                                                        foregroundColor:
-                                                            Colors.white,
-                                                      ),
-                                                )
-                                              else
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 6,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.green.shade50,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          20,
-                                                        ),
-                                                    border: Border.all(
-                                                      color:
-                                                          Colors.green.shade200,
-                                                    ),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                    InkWell(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                CustomerDetailFrame(
+                                                  customer: customer,
+                                                  repository: _repo!,
+                                                ),
+                                          ),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // Header: Name & Actions
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
                                                     children: [
-                                                      Icon(
-                                                        Icons.check_circle,
-                                                        size: 16,
-                                                        color: Colors
-                                                            .green
-                                                            .shade700,
-                                                      ),
-                                                      const SizedBox(width: 4),
                                                       Text(
-                                                        "All Clear",
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .green
-                                                              .shade900,
+                                                        customer.name,
+                                                        style: const TextStyle(
+                                                          fontSize: 18,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 12,
+                                                          color: Colors.black87,
                                                         ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons.phone,
+                                                            size: 14,
+                                                            color:
+                                                                Colors.grey[600],
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 4,
+                                                          ),
+                                                          Text(
+                                                            customer.phone,
+                                                            style: TextStyle(
+                                                              fontSize: 13,
+                                                              color: Colors
+                                                                  .grey[700],
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ],
                                                   ),
                                                 ),
-                                            ],
-                                          ),
-                                        ],
+                                                // Actions
+                                                Row(
+                                                  children: [
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.payment,
+                                                        color: Colors.green,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _showAddPaymentDialog(
+                                                            customer,
+                                                          ),
+                                                      tooltip: 'Add Payment',
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.edit_outlined,
+                                                        color: Colors.blue,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _showEditCustomerDialog(
+                                                            customer,
+                                                          ),
+                                                      tooltip: 'Edit',
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.delete_outline,
+                                                        color: Colors.red,
+                                                      ),
+                                                      onPressed: () async {
+                                                        final confirm = await showDialog<bool>(
+                                                          context: context,
+                                                          builder: (ctx) => AlertDialog(
+                                                            title: const Text(
+                                                              "Delete Customer?",
+                                                            ),
+                                                            content: Text(
+                                                              "Are you sure you want to delete '${customer.name}'?",
+                                                            ),
+                                                            actions: [
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    Navigator.pop(
+                                                                      ctx,
+                                                                      false,
+                                                                    ),
+                                                                child: const Text(
+                                                                  "Cancel",
+                                                                ),
+                                                              ),
+                                                              ElevatedButton(
+                                                                style: ElevatedButton.styleFrom(
+                                                                  backgroundColor:
+                                                                      Colors.red,
+                                                                  foregroundColor:
+                                                                      Colors
+                                                                          .white,
+                                                                ),
+                                                                onPressed: () =>
+                                                                    Navigator.pop(
+                                                                      ctx,
+                                                                      true,
+                                                                    ),
+                                                                child: const Text(
+                                                                  "Delete",
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        );
+
+                                                        if (confirm == true) {
+                                                          await _repo!
+                                                              .deleteCustomer(
+                                                                customer.id,
+                                                              );
+                                                          _resetPagination();
+                                                        }
+                                                      },
+                                                      tooltip: 'Delete',
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+
+                                            const SizedBox(height: 12),
+
+                                            // Email Chip (if present)
+                                            if (customer.email != null &&
+                                                customer.email!.isNotEmpty)
+                                              Chip(
+                                                avatar: const Icon(
+                                                  Icons.email_outlined,
+                                                  size: 16,
+                                                ),
+                                                label: Text(customer.email!),
+                                                backgroundColor:
+                                                    Colors.purple.shade50,
+                                                labelStyle: TextStyle(
+                                                  color: Colors.purple.shade900,
+                                                  fontSize: 12,
+                                                ),
+                                                padding: const EdgeInsets.all(0),
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                              ),
+
+                                            const SizedBox(height: 16),
+                                            const Divider(),
+                                            const SizedBox(height: 8),
+
+                                            // Pending Amount Metric
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      "PENDING AMOUNT",
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            Colors.grey.shade500,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      "Rs ${customer.pendingAmount.toStringAsFixed(0)}",
+                                                      style: TextStyle(
+                                                        fontSize: 20,
+                                                        color: hasPending
+                                                            ? Colors.red.shade700
+                                                            : Colors
+                                                                  .green
+                                                                  .shade700,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (hasPending)
+                                                  ElevatedButton.icon(
+                                                    onPressed: () =>
+                                                        _showAddPaymentDialog(
+                                                          customer,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons.payment,
+                                                      size: 18,
+                                                    ),
+                                                    label: const Text("Pay Now"),
+                                                    style:
+                                                        ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors
+                                                              .green
+                                                              .shade600,
+                                                          foregroundColor:
+                                                              Colors.white,
+                                                        ),
+                                                  )
+                                                else
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green.shade50,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            20,
+                                                          ),
+                                                      border: Border.all(
+                                                        color:
+                                                            Colors.green.shade200,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.check_circle,
+                                                          size: 16,
+                                                          color: Colors
+                                                              .green
+                                                              .shade700,
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          "All Clear",
+                                                          style: TextStyle(
+                                                            color: Colors
+                                                                .green
+                                                                .shade900,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],

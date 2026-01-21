@@ -28,9 +28,6 @@ class ProductInsightsCard extends StatelessWidget {
       0.0,
       (sum, p) => sum + (p.quantity * p.costPrice),
     );
-    final avgPrice = totalProducts > 0
-        ? totalInventoryValue / totalProducts
-        : 0.0;
 
     final metrics = [
       InsightMetric(

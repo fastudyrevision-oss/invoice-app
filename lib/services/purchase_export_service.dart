@@ -1,7 +1,10 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
-import '../models/purchase.dart'; // Assuming this is the model, will verify import
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import '../models/purchase.dart';
+import '../utils/pdf_font_helper.dart';
 
 class PurchaseExportService {
   /// Export purchase list to beautiful PDF with multi-page support
@@ -17,15 +20,15 @@ class PurchaseExportService {
     // Calculate summary statistics
     final totalAmount = purchases.fold<double>(
       0,
-      (sum, p) => sum + (p.total ?? 0),
+      (sum, p) => sum + p.total,
     );
     final totalPaid = purchases.fold<double>(
       0,
-      (sum, p) => sum + (p.paid ?? 0),
+      (sum, p) => sum + p.paid,
     );
     final totalPending = purchases.fold<double>(
       0,
-      (sum, p) => sum + (p.pending ?? 0),
+      (sum, p) => sum + p.pending,
     );
 
     // Group purchases into pages (30 per page)
@@ -167,7 +170,7 @@ class PurchaseExportService {
                   final index = startIndex + entry.key;
                   final purchase = entry.value;
                   final isEven = index % 2 == 0;
-                  final hasPending = (purchase.pending ?? 0) > 0;
+                  final hasPending = purchase.pending > 0;
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
@@ -178,18 +181,18 @@ class PurchaseExportService {
                       _buildDataCell(
                         _formatDate(DateTime.parse(purchase.createdAt)),
                       ),
-                      _buildDataCell(purchase.invoiceNo ?? '-'),
-                      _buildDataCell(purchase.supplierId ?? '-'),
+                      _buildDataCell(purchase.invoiceNo),
+                      _buildDataCell(purchase.supplierId),
                       _buildDataCell(
-                        (purchase.total ?? 0).toStringAsFixed(2),
+                        purchase.total.toStringAsFixed(2),
                         bold: true,
                       ),
                       _buildDataCell(
-                        (purchase.paid ?? 0).toStringAsFixed(2),
+                        purchase.paid.toStringAsFixed(2),
                         color: PdfColors.green700,
                       ),
                       _buildDataCell(
-                        (purchase.pending ?? 0).toStringAsFixed(2),
+                        purchase.pending.toStringAsFixed(2),
                         bold: hasPending,
                         color: hasPending ? PdfColors.orange700 : null,
                       ),
@@ -240,7 +243,7 @@ class PurchaseExportService {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
                         pw.Text(
-                          'Prepared via Invoice App',
+                          'Prepared via میاں ٹریڈرز',
                           style: const pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,

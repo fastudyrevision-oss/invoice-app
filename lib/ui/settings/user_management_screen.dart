@@ -191,7 +191,7 @@ class _UserDialogState extends State<_UserDialog> {
                   validator: (v) => v!.isEmpty ? "Required" : null,
                 ),
                 DropdownButtonFormField<String>(
-                  value: _role,
+                  initialValue: _role,
                   decoration: const InputDecoration(labelText: "Role"),
                   items: const [
                     DropdownMenuItem(value: 'staff', child: Text("Staff")),

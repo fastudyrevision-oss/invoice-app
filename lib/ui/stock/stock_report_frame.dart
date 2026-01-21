@@ -24,6 +24,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
   List<StockReport> _report = [];
   List<StockReport> _filteredReport = [];
   bool _loading = true;
+  String? _error; // 🆕 Error state
   bool _includePrice = true;
   bool _onlyLowStock = false;
   bool _showExpiry = false;
@@ -49,7 +50,10 @@ class _StockReportFrameState extends State<StockReportFrame> {
   }
 
   Future<void> _loadReport() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null; // Clear previous errors
+    });
 
     try {
       List<StockReport> data;
@@ -68,14 +72,26 @@ class _StockReportFrameState extends State<StockReportFrame> {
         _totalSell = summary['totalSellValue'] ?? 0;
         _totalProfit = summary['totalProfit'] ?? 0;
         _loading = false;
+        _error = null;
       });
-    } catch (e) {
-      debugPrint("Error loading stock report: $e");
-      setState(() => _loading = false);
+    } catch (e, stackTrace) {
+      debugPrint("❌ Error loading stock report: $e");
+      debugPrint("Stack trace: $stackTrace");
+
+      setState(() {
+        _loading = false;
+        _error = e.toString().contains('json_each')
+            ? 'Database compatibility issue detected. Please contact support.'
+            : 'Failed to load stock report. Please try again.';
+      });
+
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error loading report: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_error!),
+            action: SnackBarAction(label: 'Retry', onPressed: _loadReport),
+          ),
+        );
       }
     }
   }
@@ -557,6 +573,52 @@ class _StockReportFrameState extends State<StockReportFrame> {
 
           return _loading
               ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error Loading Stock Report',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: _loadReport,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

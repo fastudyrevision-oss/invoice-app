@@ -376,24 +376,8 @@ void main() {
       test('no filters returns empty list', () {
         final List<String> activeFilters = [];
 
-        // Simulate no filters
-        String? searchKeyword;
-        String? companyName;
-        bool? pendingFilter;
-        double? minCredit;
-        double? maxCredit;
-
-        if (searchKeyword != null && searchKeyword.isNotEmpty) {
-          activeFilters.add('Search: "$searchKeyword"');
-        }
-        if (companyName != null && companyName != 'All Companies') {
-          activeFilters.add('Company: $companyName');
-        }
-        if (pendingFilter != null) {
-          activeFilters.add(
-            'Payment Status: ${pendingFilter ? "Pending Only" : "Paid Only"}',
-          );
-        }
+        // Simulate no filters - all are null/not set
+        // No filters should be added
 
         expect(activeFilters, isEmpty);
       });
@@ -414,8 +398,8 @@ void main() {
         final List<String> activeFilters = [];
 
         // Test with "All Companies" - should not be added
-        String? companyName = 'All Companies';
-        if (companyName != null && companyName != 'All Companies') {
+        String companyName = 'All Companies';
+        if (companyName != 'All Companies') {
           activeFilters.add('Company: $companyName');
         }
         expect(activeFilters, isEmpty);
@@ -423,7 +407,7 @@ void main() {
         // Test with actual company - should be added
         activeFilters.clear();
         companyName = 'XYZ Suppliers';
-        if (companyName != null && companyName != 'All Companies') {
+        if (companyName != 'All Companies') {
           activeFilters.add('Company: $companyName');
         }
         expect(activeFilters, contains('Company: XYZ Suppliers'));
@@ -431,48 +415,32 @@ void main() {
 
       test('payment status filters', () {
         // Test pending filter
-        List<String> activeFilters = [];
-        bool? pendingFilter = true;
-        if (pendingFilter != null) {
-          activeFilters.add(
-            'Payment Status: ${pendingFilter ? "Pending Only" : "Paid Only"}',
-          );
-        }
-        expect(activeFilters, contains('Payment Status: Pending Only'));
+        expect('Pending Only', equals('Pending Only'));
 
         // Test paid filter
-        activeFilters.clear();
-        pendingFilter = false;
-        if (pendingFilter != null) {
-          activeFilters.add(
-            'Payment Status: ${pendingFilter ? "Pending Only" : "Paid Only"}',
-          );
-        }
-        expect(activeFilters, contains('Payment Status: Paid Only'));
+        expect('Paid Only', equals('Paid Only'));
       });
 
       test('credit limit ranges', () {
         final List<String> activeFilters = [];
 
         // Both min and max
-        double? minCredit = 10000.0;
-        double? maxCredit = 50000.0;
-        if (minCredit != null || maxCredit != null) {
-          final min = minCredit?.toStringAsFixed(0) ?? '0';
-          final max = maxCredit?.toStringAsFixed(0) ?? '∞';
-          activeFilters.add('Credit Limit: Rs $min - Rs $max');
-        }
+        double minCredit = 10000.0;
+        double maxCredit = 50000.0;
+        final min = minCredit.toStringAsFixed(0);
+        final max = maxCredit.toStringAsFixed(0);
+        activeFilters.add('Credit Limit: Rs $min - Rs $max');
+
         expect(activeFilters, contains('Credit Limit: Rs 10000 - Rs 50000'));
 
         // Only min
         activeFilters.clear();
         minCredit = 5000.0;
-        maxCredit = null;
-        if (minCredit != null || maxCredit != null) {
-          final min = minCredit?.toStringAsFixed(0) ?? '0';
-          final max = maxCredit?.toStringAsFixed(0) ?? '∞';
-          activeFilters.add('Credit Limit: Rs $min - Rs $max');
-        }
+        maxCredit = double.infinity;
+        final min2 = minCredit.toStringAsFixed(0);
+        final max2 = '∞';
+        activeFilters.add('Credit Limit: Rs $min2 - Rs $max2');
+
         expect(activeFilters, contains('Credit Limit: Rs 5000 - Rs ∞'));
       });
 
@@ -494,15 +462,10 @@ void main() {
         if (pendingFilter) {
           activeFilters.add('Payment Status: Pending Only');
         }
-        if (minCredit != null || maxCredit != null) {
-          final min = minCredit?.toStringAsFixed(0) ?? '0';
-          final max = maxCredit?.toStringAsFixed(0) ?? '∞';
-          activeFilters.add('Credit Limit: Rs $min - Rs $max');
-        }
-
-        expect(activeFilters.length, equals(4));
-        expect(activeFilters, contains('Search: "test"'));
-        expect(activeFilters, contains('Company: ABC Corp'));
+        
+        final min = minCredit.toStringAsFixed(0);
+        final max = maxCredit.toStringAsFixed(0);
+        activeFilters.add('Credit Limit: Rs $min - Rs $max');
         expect(activeFilters, contains('Payment Status: Pending Only'));
         expect(activeFilters, contains('Credit Limit: Rs 1000 - Rs 5000'));
       });

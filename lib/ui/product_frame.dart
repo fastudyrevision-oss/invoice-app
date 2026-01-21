@@ -45,7 +45,6 @@ class _ProductFrameState extends State<ProductFrame> {
   ProductSortOption _sortOption = ProductSortOption.name;
 
   bool _isLoading = true;
-  bool _isLoadingPage = false;
   bool _hasMore = true;
   int _currentPage = 0;
   final int _pageSize = 50; // Optimized for 1000+ products
@@ -114,8 +113,6 @@ class _ProductFrameState extends State<ProductFrame> {
     if (!_hasMore) return;
     if (!mounted) return;
 
-    setState(() => _isLoadingPage = true);
-
     final newProducts = await _repo.getProductsPage(
       page: _currentPage,
       pageSize: _pageSize,
@@ -127,8 +124,6 @@ class _ProductFrameState extends State<ProductFrame> {
       _products.addAll(newProducts);
       _currentPage++;
     }
-
-    setState(() => _isLoadingPage = false);
   }
 
   void _onSearchChanged(String query) {
@@ -719,268 +714,244 @@ class _ProductFrameState extends State<ProductFrame> {
 
                     // Product List
                     Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.only(bottom: 80),
-                        itemCount:
-                            displayedProducts.length + (_hasMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index >= displayedProducts.length) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          }
-
-                          final p = displayedProducts[index];
-                          final supplier = _suppliers.firstWhere(
-                            (s) => s.id == p.supplierId,
-                            orElse: () => Supplier(
-                              id: "0",
-                              name: "Unlinked",
-                              phone: null,
-                              address: null,
-                              createdAt: "",
-                              updatedAt: "",
-                            ),
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          _resetPagination();
+                          await Future.delayed(
+                            const Duration(milliseconds: 500),
                           );
-                          final category = _categories.firstWhere(
-                            (c) => c.id == p.categoryId,
-                            orElse: () => Category(
-                              id: "0",
-                              name: "Uncategorized",
-                              createdAt: DateTime.now().toIso8601String(),
-                              updatedAt: DateTime.now().toIso8601String(),
-                            ),
-                          );
-
-                          final isLowStock = p.quantity <= p.minStock;
-                          final profit = p.sellPrice - p.costPrice;
-                          final profitPercent = p.costPrice > 0
-                              ? (profit / p.costPrice) * 100
-                              : 0.0;
-
-                          return Container(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.1),
-                                  spreadRadius: 1,
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 3),
+                        },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemCount:
+                              displayedProducts.length + (_hasMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index >= displayedProducts.length) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
                                 ),
-                              ],
-                              border: Border.all(
-                                color: isLowStock
-                                    ? Colors.red.shade200
-                                    : Colors.transparent,
-                                width: isLowStock ? 1.5 : 0,
+                              );
+                            }
+
+                            final p = displayedProducts[index];
+                            final supplier = _suppliers.firstWhere(
+                              (s) => s.id == p.supplierId,
+                              orElse: () => Supplier(
+                                id: "0",
+                                name: "Unlinked",
+                                phone: null,
+                                address: null,
+                                createdAt: "",
+                                updatedAt: "",
                               ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Status Strip
-                                  if (isLowStock)
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 4,
-                                        horizontal: 12,
-                                      ),
-                                      color: Colors.red.shade50,
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.warning_amber_rounded,
-                                            size: 16,
-                                            color: Colors.red.shade700,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            "Low Stock Alert",
-                                            style: TextStyle(
-                                              color: Colors.red.shade900,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                            );
+                            final category = _categories.firstWhere(
+                              (c) => c.id == p.categoryId,
+                              orElse: () => Category(
+                                id: "0",
+                                name: "Uncategorized",
+                                createdAt: DateTime.now().toIso8601String(),
+                                updatedAt: DateTime.now().toIso8601String(),
+                              ),
+                            );
 
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Header: Name & SKU
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                            final isLowStock = p.quantity <= p.minStock;
+                            final profit = p.sellPrice - p.costPrice;
+                            final profitPercent = p.costPrice > 0
+                                ? (profit / p.costPrice) * 100
+                                : 0.0;
+
+                            return Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.1),
+                                    spreadRadius: 1,
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: isLowStock
+                                      ? Colors.red.shade200
+                                      : Colors.transparent,
+                                  width: isLowStock ? 1.5 : 0,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Status Strip
+                                    if (isLowStock)
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                          horizontal: 12,
+                                        ),
+                                        color: Colors.red.shade50,
+                                        child: Row(
                                           children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    p.name,
-                                                    style: const TextStyle(
-                                                      fontSize: 18,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.black87,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    "SKU: ${p.sku}",
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: Colors.grey[600],
-                                                      fontFamily: 'Monospace',
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                            Icon(
+                                              Icons.warning_amber_rounded,
+                                              size: 16,
+                                              color: Colors.red.shade700,
                                             ),
-                                            // Actions
-                                            Row(
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    color: Colors.blue,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _showAddEditProductDialog(
-                                                        p,
-                                                      ),
-                                                  tooltip: 'Edit',
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    color: Colors.red,
-                                                  ),
-                                                  onPressed: () async {
-                                                    // Confirm delete
-                                                    final confirm = await showDialog<bool>(
-                                                      context: context,
-                                                      builder: (ctx) => AlertDialog(
-                                                        title: const Text(
-                                                          "Delete Product?",
-                                                        ),
-                                                        content: Text(
-                                                          "Are you sure you want to delete '${p.name}'?",
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                  ctx,
-                                                                  false,
-                                                                ),
-                                                            child: const Text(
-                                                              "Cancel",
-                                                            ),
-                                                          ),
-                                                          ElevatedButton(
-                                                            style: ElevatedButton.styleFrom(
-                                                              backgroundColor:
-                                                                  Colors.red,
-                                                              foregroundColor:
-                                                                  Colors.white,
-                                                            ),
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                  ctx,
-                                                                  true,
-                                                                ),
-                                                            child: const Text(
-                                                              "Delete",
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-
-                                                    if (confirm == true) {
-                                                      await _repo.deleteProduct(
-                                                        p.id,
-                                                      );
-                                                      _resetPagination();
-                                                    }
-                                                  },
-                                                  tooltip: 'Delete',
-                                                ),
-                                              ],
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              "Low Stock Alert",
+                                              style: TextStyle(
+                                                color: Colors.red.shade900,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ],
                                         ),
+                                      ),
 
-                                        const SizedBox(height: 12),
+                                    Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // Header: Name & SKU
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      p.name,
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      "SKU: ${p.sku}",
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[600],
+                                                        fontFamily: 'Monospace',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              // Actions
+                                              Row(
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                      Icons.edit_outlined,
+                                                      color: Colors.blue,
+                                                    ),
+                                                    onPressed: () =>
+                                                        _showAddEditProductDialog(
+                                                          p,
+                                                        ),
+                                                    tooltip: 'Edit',
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      color: Colors.red,
+                                                    ),
+                                                    onPressed: () async {
+                                                      // Confirm delete
+                                                      final confirm = await showDialog<bool>(
+                                                        context: context,
+                                                        builder: (ctx) => AlertDialog(
+                                                          title: const Text(
+                                                            "Delete Product?",
+                                                          ),
+                                                          content: Text(
+                                                            "Are you sure you want to delete '${p.name}'?",
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    ctx,
+                                                                    false,
+                                                                  ),
+                                                              child: const Text(
+                                                                "Cancel",
+                                                              ),
+                                                            ),
+                                                            ElevatedButton(
+                                                              style: ElevatedButton.styleFrom(
+                                                                backgroundColor:
+                                                                    Colors.red,
+                                                                foregroundColor:
+                                                                    Colors
+                                                                        .white,
+                                                              ),
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    ctx,
+                                                                    true,
+                                                                  ),
+                                                              child: const Text(
+                                                                "Delete",
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
 
-                                        // Chips: Category & Supplier
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: [
-                                            Chip(
-                                              avatar: const Icon(
-                                                Icons.category_outlined,
-                                                size: 16,
+                                                      if (confirm == true) {
+                                                        await _repo
+                                                            .deleteProduct(
+                                                              p.id,
+                                                            );
+                                                        _resetPagination();
+                                                      }
+                                                    },
+                                                    tooltip: 'Delete',
+                                                  ),
+                                                ],
                                               ),
-                                              label: Text(category.name),
-                                              backgroundColor:
-                                                  Colors.blue.shade50,
-                                              labelStyle: TextStyle(
-                                                color: Colors.blue.shade900,
-                                                fontSize: 12,
-                                              ),
-                                              padding: const EdgeInsets.all(0),
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                            ),
-                                            Chip(
-                                              avatar: const Icon(
-                                                Icons.store_outlined,
-                                                size: 16,
-                                              ),
-                                              label: Text(supplier.name),
-                                              backgroundColor:
-                                                  Colors.orange.shade50,
-                                              labelStyle: TextStyle(
-                                                color: Colors.orange.shade900,
-                                                fontSize: 12,
-                                              ),
-                                              padding: const EdgeInsets.all(0),
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                            ),
-                                            if (p.trackExpiry)
+                                            ],
+                                          ),
+
+                                          const SizedBox(height: 12),
+
+                                          // Chips: Category & Supplier
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
                                               Chip(
                                                 avatar: const Icon(
-                                                  Icons.access_time,
+                                                  Icons.category_outlined,
                                                   size: 16,
                                                 ),
-                                                label: const Text(
-                                                  "Expiry Tracked",
-                                                ),
+                                                label: Text(category.name),
                                                 backgroundColor:
-                                                    Colors.purple.shade50,
+                                                    Colors.blue.shade50,
                                                 labelStyle: TextStyle(
-                                                  color: Colors.purple.shade900,
+                                                  color: Colors.blue.shade900,
                                                   fontSize: 12,
                                                 ),
                                                 padding: const EdgeInsets.all(
@@ -989,119 +960,165 @@ class _ProductFrameState extends State<ProductFrame> {
                                                 visualDensity:
                                                     VisualDensity.compact,
                                               ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(height: 16),
-                                        const Divider(),
-                                        const SizedBox(height: 8),
-
-                                        // Metrics Grid
-                                        // Metrics Grid
-                                        isMobile
-                                            ? Column(
-                                                children: [
-                                                  Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
-                                                    children: [
-                                                      _buildMetricColumn(
-                                                        "Cost",
-                                                        "Rs ${p.costPrice.toStringAsFixed(0)}",
-                                                        Colors.grey.shade700,
-                                                      ),
-                                                      _buildMetricColumn(
-                                                        "Sell",
-                                                        "Rs ${p.sellPrice.toStringAsFixed(0)}",
-                                                        Colors.black87,
-                                                        isBold: true,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  const SizedBox(height: 12),
-                                                  Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
-                                                    children: [
-                                                      _buildMetricColumn(
-                                                        "Profit",
-                                                        "Rs ${profit.toStringAsFixed(0)}",
-                                                        profit > 0
-                                                            ? Colors
-                                                                  .green
-                                                                  .shade700
-                                                            : Colors
-                                                                  .red
-                                                                  .shade700,
-                                                        subtext:
-                                                            "(${profitPercent.toStringAsFixed(0)}%)",
-                                                      ),
-                                                      _buildMetricColumn(
-                                                        "Stock",
-                                                        "${p.quantity} ${p.defaultUnit}",
-                                                        isLowStock
-                                                            ? Colors
-                                                                  .red
-                                                                  .shade700
-                                                            : Colors
-                                                                  .blue
-                                                                  .shade700,
-                                                        isBold: true,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              )
-                                            : Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  _buildMetricColumn(
-                                                    "Cost",
-                                                    "Rs ${p.costPrice.toStringAsFixed(0)}",
-                                                    Colors.grey.shade700,
-                                                  ),
-                                                  _buildMetricColumn(
-                                                    "Sell",
-                                                    "Rs ${p.sellPrice.toStringAsFixed(0)}",
-                                                    Colors.black87,
-                                                    isBold: true,
-                                                  ),
-                                                  _buildMetricColumn(
-                                                    "Profit",
-                                                    "Rs ${profit.toStringAsFixed(0)}",
-                                                    profit > 0
-                                                        ? Colors.green.shade700
-                                                        : Colors.red.shade700,
-                                                    subtext:
-                                                        "(${profitPercent.toStringAsFixed(0)}%)",
-                                                  ),
-                                                  Container(
-                                                    width: 1,
-                                                    height: 30,
-                                                    color: Colors.grey.shade300,
-                                                  ),
-                                                  _buildMetricColumn(
-                                                    "Stock",
-                                                    "${p.quantity} ${p.defaultUnit}",
-                                                    isLowStock
-                                                        ? Colors.red.shade700
-                                                        : Colors.blue.shade700,
-                                                    isBold: true,
-                                                  ),
-                                                ],
+                                              Chip(
+                                                avatar: const Icon(
+                                                  Icons.store_outlined,
+                                                  size: 16,
+                                                ),
+                                                label: Text(supplier.name),
+                                                backgroundColor:
+                                                    Colors.orange.shade50,
+                                                labelStyle: TextStyle(
+                                                  color: Colors.orange.shade900,
+                                                  fontSize: 12,
+                                                ),
+                                                padding: const EdgeInsets.all(
+                                                  0,
+                                                ),
+                                                visualDensity:
+                                                    VisualDensity.compact,
                                               ),
-                                      ],
+                                              if (p.trackExpiry)
+                                                Chip(
+                                                  avatar: const Icon(
+                                                    Icons.access_time,
+                                                    size: 16,
+                                                  ),
+                                                  label: const Text(
+                                                    "Expiry Tracked",
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.purple.shade50,
+                                                  labelStyle: TextStyle(
+                                                    color:
+                                                        Colors.purple.shade900,
+                                                    fontSize: 12,
+                                                  ),
+                                                  padding: const EdgeInsets.all(
+                                                    0,
+                                                  ),
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                ),
+                                            ],
+                                          ),
+
+                                          const SizedBox(height: 16),
+                                          const Divider(),
+                                          const SizedBox(height: 8),
+
+                                          // Metrics Grid
+                                          // Metrics Grid
+                                          isMobile
+                                              ? Column(
+                                                  children: [
+                                                    Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        _buildMetricColumn(
+                                                          "Cost",
+                                                          "Rs ${p.costPrice.toStringAsFixed(0)}",
+                                                          Colors.grey.shade700,
+                                                        ),
+                                                        _buildMetricColumn(
+                                                          "Sell",
+                                                          "Rs ${p.sellPrice.toStringAsFixed(0)}",
+                                                          Colors.black87,
+                                                          isBold: true,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        _buildMetricColumn(
+                                                          "Profit",
+                                                          "Rs ${profit.toStringAsFixed(0)}",
+                                                          profit > 0
+                                                              ? Colors
+                                                                    .green
+                                                                    .shade700
+                                                              : Colors
+                                                                    .red
+                                                                    .shade700,
+                                                          subtext:
+                                                              "(${profitPercent.toStringAsFixed(0)}%)",
+                                                        ),
+                                                        _buildMetricColumn(
+                                                          "Stock",
+                                                          "${p.quantity} ${p.defaultUnit}",
+                                                          isLowStock
+                                                              ? Colors
+                                                                    .red
+                                                                    .shade700
+                                                              : Colors
+                                                                    .blue
+                                                                    .shade700,
+                                                          isBold: true,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                )
+                                              : Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    _buildMetricColumn(
+                                                      "Cost",
+                                                      "Rs ${p.costPrice.toStringAsFixed(0)}",
+                                                      Colors.grey.shade700,
+                                                    ),
+                                                    _buildMetricColumn(
+                                                      "Sell",
+                                                      "Rs ${p.sellPrice.toStringAsFixed(0)}",
+                                                      Colors.black87,
+                                                      isBold: true,
+                                                    ),
+                                                    _buildMetricColumn(
+                                                      "Profit",
+                                                      "Rs ${profit.toStringAsFixed(0)}",
+                                                      profit > 0
+                                                          ? Colors
+                                                                .green
+                                                                .shade700
+                                                          : Colors.red.shade700,
+                                                      subtext:
+                                                          "(${profitPercent.toStringAsFixed(0)}%)",
+                                                    ),
+                                                    Container(
+                                                      width: 1,
+                                                      height: 30,
+                                                      color:
+                                                          Colors.grey.shade300,
+                                                    ),
+                                                    _buildMetricColumn(
+                                                      "Stock",
+                                                      "${p.quantity} ${p.defaultUnit}",
+                                                      isLowStock
+                                                          ? Colors.red.shade700
+                                                          : Colors
+                                                                .blue
+                                                                .shade700,
+                                                      isBold: true,
+                                                    ),
+                                                  ],
+                                                ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],

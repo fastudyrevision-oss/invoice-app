@@ -4,21 +4,55 @@ import '../models/stock_report_model.dart';
 class StockRepository {
   final StockDao _stockDao = StockDao();
 
-  /// 🔹 Get the full stock report
-  Future<List<StockReport>> getStockReport() async {
+  // Cache for stock report data
+  List<StockReport>? _cachedReport;
+  DateTime? _cacheTime;
+  static const Duration _cacheDuration = Duration(minutes: 5);
+
+  /// 🔹 Get the full stock report (with caching)
+  Future<List<StockReport>> getStockReport({bool forceRefresh = false}) async {
+    // Return cached data if available and not expired
+    if (!forceRefresh &&
+        _cachedReport != null &&
+        _cacheTime != null &&
+        DateTime.now().difference(_cacheTime!) < _cacheDuration) {
+      print('📦 Returning cached stock report');
+      return _cachedReport!;
+    }
+
     try {
+      print('🔄 Fetching fresh stock report from database');
       final reportList = await _stockDao.getStockReport();
+
+      // Update cache
+      _cachedReport = reportList;
+      _cacheTime = DateTime.now();
+
       return reportList;
     } catch (e) {
       print('Error loading stock report: $e');
+
+      // Return cached data if available, even if expired
+      if (_cachedReport != null) {
+        print('⚠️ Returning stale cached data due to error');
+        return _cachedReport!;
+      }
+
       rethrow;
     }
+  }
+
+  /// Clear the cache (useful after data modifications)
+  void clearCache() {
+    _cachedReport = null;
+    _cacheTime = null;
+    print('🗑️ Stock report cache cleared');
   }
 
   /// 🔹 Get only low-stock (below min level) products
   Future<List<StockReport>> getLowStockReport() async {
     try {
-      final allReports = await _stockDao.getStockReport();
+      final allReports = await getStockReport(); // Use cached version
       return allReports
           .where(
             (r) =>
@@ -36,7 +70,7 @@ class StockRepository {
   /// 🔹 Get expired or near-expiry products
   Future<List<StockReport>> getExpiryReport({int daysBefore = 0}) async {
     try {
-      final allReports = await _stockDao.getStockReport();
+      final allReports = await getStockReport(); // Use cached version
       final now = DateTime.now();
       return allReports.where((r) {
         if (r.expiryDate == null) return false;
@@ -53,7 +87,7 @@ class StockRepository {
   /// 🔹 Calculate total stock value (cost and selling)
   Future<Map<String, double>> getStockSummary() async {
     try {
-      final reports = await _stockDao.getStockReport();
+      final reports = await getStockReport(); // Use cached version
 
       double totalCostValue = 0;
       double totalSellValue = 0;

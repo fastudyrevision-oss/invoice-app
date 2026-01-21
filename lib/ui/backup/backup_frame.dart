@@ -10,6 +10,7 @@ import '../../services/database_seeder_service.dart';
 import 'package:csv/csv.dart';
 import '../../services/auth_service.dart';
 import '../../utils/responsive_utils.dart';
+import '../../utils/platform_file_helper.dart';
 
 //I am using here the syncTimeService to track last sync times for tables and for preparing bulk sysnc data i am using BulkSyncService.
 //For now it is  just exposting or  prearing bulk sync for products table. You can extend it later to other tables as needed.
@@ -177,24 +178,20 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
 
       String csvString = const ListToCsvConverter().convert(csvData);
 
-      // Save file
-      String? outputFile = await FilePicker.platform.saveFile(
+      // Use platform-aware file handling (Android: share, Desktop: file picker)
+      final file = await PlatformFileHelper.saveCsvFile(
+        csvContent: csvString,
+        suggestedName: '${table}_${DateTime.now().millisecondsSinceEpoch}.csv',
         dialogTitle: 'Save $table CSV',
-        fileName: '${table}_${DateTime.now().millisecondsSinceEpoch}.csv',
-        allowedExtensions: ['csv'],
-        type: FileType.custom,
       );
 
-      if (outputFile != null) {
-        // saveFile returns path (maybe?), or we use result.
-        // FilePicker saveFile returns string nullable path.
-        final file = File(outputFile);
-        await file.writeAsString(csvString);
+      if (file != null && mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Exported to $outputFile')));
+        ).showSnackBar(SnackBar(content: Text('Exported $table successfully')));
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('CSV Export failed: $e')));

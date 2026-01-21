@@ -50,7 +50,7 @@ class DatabaseSeederService {
       );
 
       // 5. Seed Purchases (and batches)
-      if (onProgress != null) onProgress("Seeding Purchases (${purchases})...");
+      if (onProgress != null) onProgress("Seeding Purchases ($purchases)...");
       await _seedPurchases(
         txn,
         count: purchases,
@@ -59,7 +59,7 @@ class DatabaseSeederService {
       );
 
       // 6. Seed Invoices
-      if (onProgress != null) onProgress("Seeding Invoices (${invoices})...");
+      if (onProgress != null) onProgress("Seeding Invoices ($invoices)...");
       await _seedInvoices(
         txn,
         count: invoices,

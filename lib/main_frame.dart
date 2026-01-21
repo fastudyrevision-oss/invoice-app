@@ -12,6 +12,7 @@ import 'ui/backup/backup_frame.dart';
 import 'modules/audit_log/presentation/audit_log_screen.dart';
 import 'ui/customer_payment/customer_payment_screen.dart';
 import 'ui/settings/user_management_screen.dart';
+import 'ui/settings/printer_settings_screen.dart';
 
 import '../repositories/purchase_repo.dart';
 import '../repositories/supplier_repo.dart';
@@ -205,7 +206,7 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     if (_tabController.length != _tabs.length) {
       _tabController.dispose();
       _tabController = TabController(
-        length: _tabs.length > 0 ? _tabs.length : 1,
+        length: _tabs.isNotEmpty ? _tabs.length : 1,
         vsync: this,
       );
       _tabController.addListener(_handleTabSelection);
@@ -296,6 +297,15 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
   }
 
   @override
+void _openPrinterSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const PrinterSettingsScreen(),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Safety check for empty tabs
     if (_tabs.isEmpty) {
@@ -303,6 +313,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         appBar: AppBar(
           title: const Text("Access Denied"),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.print),
+              tooltip: "Printer Settings",
+              onPressed: _openPrinterSettings,
+            ),
             IconButton(
               icon: const Icon(Icons.logout),
               tooltip: "Logout",
@@ -331,6 +346,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
           appBar: AppBar(
             title: Text(isMobile ? title : "Invoice App"),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.print),
+                tooltip: "Printer Settings",
+                onPressed: _openPrinterSettings,
+              ),
               IconButton(
                 icon: const Icon(Icons.logout),
                 tooltip: "Logout",

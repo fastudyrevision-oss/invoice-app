@@ -16,11 +16,17 @@ class ProfitLossDao {
     double totalSales = salesData.first["total_sales"] ?? 0.0;
 
     // --- COGS (Purchase Price × Qty sold) ---
+    // Using weighted average cost to avoid cartesian product issues
     final cogsData = await dbHelper.rawQuery(
       """
-      SELECT SUM(ii.qty * pi.purchase_price) as total_cogs
+      SELECT COALESCE(SUM(ii.qty * p.weighted_avg_cost), 0) as total_cogs
       FROM invoice_items ii
-      JOIN purchase_items pi ON ii.product_id = pi.product_id
+      JOIN (
+        SELECT product_id, 
+          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
+        FROM purchase_items
+        GROUP BY product_id
+      ) p ON ii.product_id = p.product_id
       WHERE ii.invoice_id IN (
         SELECT id FROM invoices WHERE date BETWEEN ? AND ?
       )

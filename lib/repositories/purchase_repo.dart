@@ -48,7 +48,7 @@ class PurchaseRepository {
       final pDao = PurchaseDao(txn);
       final iDao = PurchaseItemDao(txn);
       final bDao = ProductBatchDao(txn);
-      final prodDao = ProductDao(txn);
+      // prodDao removed - not currently used (product qty updates commented out)
 
       await pDao.insertPurchase(purchase);
 
@@ -132,7 +132,7 @@ class PurchaseRepository {
           item.productId,
           includeDeleted: true,
         );
-        if (product != null && product.isDeleted == 0) {
+        if (product != null && !product.isDeleted) {
           final updatedQty = product.quantity - item.qty;
           await prodDao.update(product.copyWith(quantity: updatedQty));
         }
