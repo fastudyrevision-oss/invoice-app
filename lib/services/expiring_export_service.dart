@@ -1,10 +1,7 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import '../models/expiring_batch_detail.dart';
-import '../utils/pdf_font_helper.dart';
 
 class ExpiringExportService {
   /// Export expiring products report to PDF

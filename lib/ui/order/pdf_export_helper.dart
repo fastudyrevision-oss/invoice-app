@@ -667,8 +667,9 @@ Future<File?> generateThermalReceipt(
   // Thermal receipt: 80mm width (approx 226 points at 72 DPI)
   pdf.addPage(
     pw.Page(
-      pageFormat: const PdfPageFormat(226, 400), // 80mm x custom height
-      margin: const pw.EdgeInsets.all(8),
+      pageFormat: const PdfPageFormat(284, double.infinity), // 80mm x custom height
+      margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+
       build: (context) {
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -681,152 +682,182 @@ Future<File?> generateThermalReceipt(
                 children: [
                   pw.Text(
                     'MIAN TRADERS',
-                    style: pw.TextStyle(font: boldFont, fontSize: 14),
+                    style: pw.TextStyle(font: boldFont, fontSize: 12),
                     textAlign: pw.TextAlign.center,
                   ),
                 ],
               ),
             ),
-            pw.SizedBox(height: 4),
+            pw.SizedBox(height: 2),
             pw.Text(
               'Sargodha',
-              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              style: pw.TextStyle(font: regularFont, fontSize: 7),
               textAlign: pw.TextAlign.center,
             ),
             pw.Text(
               '+92 345 4297128',
-              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              style: pw.TextStyle(font: regularFont, fontSize: 7),
               textAlign: pw.TextAlign.center,
             ),
-            pw.SizedBox(height: 8),
-            pw.Container(height: 1, color: PdfColors.black),
-            pw.SizedBox(height: 8),
-
-            // Customer & Date
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'Customer:',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-                pw.Expanded(
-                  child: pw.Text(
-                    invoice.customerName ?? 'N/A',
-                    style: pw.TextStyle(font: regularFont, fontSize: 8),
-                    textAlign: pw.TextAlign.right,
-                  ),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 2),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'Date:',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-                pw.Text(
-                  date,
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-              ],
-            ),
             pw.SizedBox(height: 6),
             pw.Container(height: 1, color: PdfColors.black),
-            pw.SizedBox(height: 6),
+            pw.SizedBox(height: 4),
 
-            // Items Table
+            // Customer & Date (stacked for narrow width)
+            pw.Text(
+              'Customer: ${(invoice.customerName ?? 'N/A').length > 18 ? (invoice.customerName ?? 'N/A').substring(0, 18) : invoice.customerName ?? 'N/A'}',
+              style: pw.TextStyle(font: regularFont, fontSize: 6),
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
+            ),
+            pw.SizedBox(height: 1),
+            pw.Text(
+              'Date: ${date.length > 18 ? date.substring(0, 18) : date}',
+              style: pw.TextStyle(font: regularFont, fontSize: 7),
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
+            ),
+            pw.SizedBox(height: 4),
+            pw.Container(height: 1, color: PdfColors.black),
+            pw.SizedBox(height: 4),
+
+            // Items Table with wrapping support
             if (items != null && items.isNotEmpty) ...[
-              pw.Table.fromTextArray(
-                border: pw.TableBorder.all(width: 0.5),
-                cellAlignment: pw.Alignment.centerLeft,
-                headerDecoration: const pw.BoxDecoration(
-                  color: PdfColors.grey200,
-                ),
-                headerStyle: pw.TextStyle(font: boldFont, fontSize: 7),
-                cellStyle: pw.TextStyle(font: regularFont, fontSize: 7),
-                headers: ['Item', 'Qty', 'Price', 'Total'],
-                data: items.map((item) {
-                  final qty = (item['qty'] ?? 0);
-                  final price = (item['price'] ?? 0.0);
-                  final total = qty * price;
-                  return [
-                    item['product_name'] ?? '',
-                    qty.toString(),
-                    price.toStringAsFixed(0),
-                    total.toStringAsFixed(0),
-                  ];
-                }).toList(),
+              pw.Table(
+                border: pw.TableBorder.all(width: 0.3),
+                columnWidths: {
+  0: const pw.FixedColumnWidth(60), // Item
+  1: const pw.FixedColumnWidth(30),  // Qty
+  2: const pw.FixedColumnWidth(20),  // Price
+  3: const pw.FixedColumnWidth(100),  // Total
+},
+
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey200,
+                    ),
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(1),
+                        child: pw.Text(
+                          'Item',
+                          style: pw.TextStyle(font: boldFont, fontSize: 6),
+                          textAlign: pw.TextAlign.left,
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(1),
+                        child: pw.Text(
+                          'Qty',
+                          style: pw.TextStyle(font: boldFont, fontSize: 6),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(1),
+                        child: pw.Text(
+                          'Price',
+                          style: pw.TextStyle(font: boldFont, fontSize: 6),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(1),
+                        child: pw.Text(
+                          'Total',
+                          style: pw.TextStyle(font: boldFont, fontSize: 6),
+                          textAlign: pw.TextAlign.left,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ...items.map((item) {
+                    final qty = (item['qty'] ?? 0);
+                    final price = (item['price'] ?? 0.0);
+                    final total = qty * price;
+                    final productName = item['product_name'] ?? '';
+                    return pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            productName,
+                            softWrap: true,
+                            maxLines: 2,
+                            overflow: pw.TextOverflow.clip,
+                            style: pw.TextStyle(font: regularFont, fontSize: 6),
+                            textAlign: pw.TextAlign.left,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            qty.toString(),
+                            style: pw.TextStyle(font: regularFont, fontSize: 6),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            price.toStringAsFixed(0),
+                            style: pw.TextStyle(font: regularFont, fontSize: 6),
+                            textAlign: pw.TextAlign.left,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            total.toStringAsFixed(0),
+                            style: pw.TextStyle(font: regularFont, fontSize: 6),
+                            textAlign: pw.TextAlign.left,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ],
               ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 4),
             ],
 
             pw.Container(height: 1, color: PdfColors.black),
-            pw.SizedBox(height: 6),
+            pw.SizedBox(height: 3),
 
-            // 💰 Totals
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'Discount:',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-                pw.Text(
-                  'Rs ${invoice.discount.toStringAsFixed(0)}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-              ],
+            // 💰 Totals with optimized layout (single line each)
+            pw.Text(
+              'Disc: Rs   ${invoice.discount.toStringAsFixed(0)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
             ),
-            pw.SizedBox(height: 3),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'Paid:',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-                pw.Text(
-                  'Rs ${(invoice.total - invoice.pending).toStringAsFixed(0)}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-              ],
+            pw.SizedBox(height: 1),
+            pw.Text(
+              'Paid: Rs   ${(invoice.total - invoice.pending).toStringAsFixed(0)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
             ),
-            pw.SizedBox(height: 3),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'Pending:',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-                pw.Text(
-                  'Rs ${invoice.pending.toStringAsFixed(0)}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
-              ],
+            pw.SizedBox(height: 1),
+            pw.Text(
+              'Due: Rs   ${invoice.pending.toStringAsFixed(0)}',
+              style: pw.TextStyle(font: regularFont, fontSize: 9),
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
+            ),
+            pw.SizedBox(height: 4),
+            pw.Container(height: 1.5, color: PdfColors.black),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              'TOTAL: Rs   ${invoice.total.toStringAsFixed(0)}',
+              style: pw.TextStyle(font: boldFont, fontSize: 9),
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
             ),
             pw.SizedBox(height: 6),
-            pw.Container(height: 2, color: PdfColors.black),
-            pw.SizedBox(height: 4),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'TOTAL:',
-                  style: pw.TextStyle(font: boldFont, fontSize: 10),
-                ),
-                pw.Text(
-                  'Rs ${invoice.total.toStringAsFixed(0)}',
-                  style: pw.TextStyle(font: boldFont, fontSize: 10),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 8),
             pw.Container(height: 1, color: PdfColors.black),
-            pw.SizedBox(height: 4),
+            pw.SizedBox(height: 3),
             pw.Center(
               child: pw.Text(
                 'Thank You!',
@@ -837,7 +868,7 @@ Future<File?> generateThermalReceipt(
               child: pw.Text(
                 'میاں ٹریڈرز',
                 textDirection: pw.TextDirection.rtl,
-                style: pw.TextStyle(font: regularFont, fontSize: 7),
+                style: pw.TextStyle(font: regularFont, fontSize: 8),
               ),
             ),
           ],

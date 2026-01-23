@@ -1,10 +1,7 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import '../models/purchase.dart';
-import '../utils/pdf_font_helper.dart';
 
 class PurchaseExportService {
   /// Export purchase list to beautiful PDF with multi-page support

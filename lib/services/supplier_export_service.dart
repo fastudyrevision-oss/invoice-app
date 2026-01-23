@@ -1,10 +1,7 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import '../models/supplier.dart';
-import '../utils/pdf_font_helper.dart';
 
 class SupplierExportService {
   /// Export supplier list to beautiful PDF with multi-page support and filter metadata
