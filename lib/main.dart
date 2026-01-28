@@ -4,12 +4,14 @@ import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:provider/provider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'main_frame.dart';
 import 'db/database_helper.dart';
+import 'ui/settings/logs_frame.dart';
 import 'services/auth_service.dart';
 import 'ui/auth/login_screen.dart';
 import 'ui/auth/inactivity_wrapper.dart';
+
+import 'services/logger_service.dart';
 
 void main() async {
   runZonedGuarded(
@@ -17,39 +19,17 @@ void main() async {
       // ----------------------------------------------------------
       // 🔍 DEBUG LOGGING SETUP
       // ----------------------------------------------------------
-      // Initialize bindings first to use path_provider
       WidgetsFlutterBinding.ensureInitialized();
 
-      // Get the proper writable directory
-      File? logFile;
-      // Initialize log with debugPrint immediately to make it non-nullable
-      void Function(String) log = (String message) => debugPrint(message);
+      // Initialize centralized logger
+      final logger = LoggerService.instance;
+      await logger.initialize(
+        enableConsoleLogging: true,
+        enableFileLogging: true,
+      );
 
-      try {
-        final directory = await getApplicationDocumentsDirectory();
-        logFile = File('${directory.path}/startup_log.txt');
-
-        // Upgrade to file logging if possible
-        log = (String message) {
-          final msg = "${DateTime.now().toIso8601String()} - $message\n";
-          // Using sync write to ensure it's captured before any crash
-          try {
-            logFile!.writeAsStringSync(msg, mode: FileMode.append);
-          } catch (e) {
-            debugPrint("Failed to write log: $e");
-          }
-          debugPrint(message);
-        };
-
-        // Clear old log
-        if (logFile.existsSync()) logFile.deleteSync();
-        log("🚀 APPLICATION STARTING");
-        log("✅ WidgetsBinding Initialized");
-      } catch (e) {
-        debugPrint("❌ Failed to init logging: $e");
-        // log is already initialized with debugPrint fallback
-        log("⚠️ Running without file logging");
-      }
+      logger.info('Startup', "🚀 APPLICATION STARTING");
+      logger.debug('Startup', "✅ WidgetsBinding Initialized");
 
       // 1. Setup Desktop FFI
       if (!kIsWeb) {
@@ -57,52 +37,71 @@ void main() async {
           try {
             sqfliteFfiInit();
             databaseFactory = databaseFactoryFfi;
-            log("✅ FFI Initialized");
-          } catch (e) {
-            log("❌ Failed to init FFI: $e");
+            logger.info('Startup', "✅ FFI Initialized");
+          } catch (e, st) {
+            logger.error(
+              'Startup',
+              "❌ Failed to init FFI",
+              error: e,
+              stackTrace: st,
+            );
           }
         }
       }
 
       // 2. Launch Splash Screen
-      log("🎨 Calling runApp(LauncherApp)");
+      logger.debug('Startup', "🎨 Calling runApp(LauncherApp)");
       runApp(const LauncherApp());
 
       // 3. Initialize Heavy Resources in Background
       bool dbInitialized = false;
       try {
-        log("💾 Initializing Database in background...");
+        logger.info('Startup', "💾 Initializing Database in background...");
 
         // Run database initialization with timeout
         await DatabaseHelper.instance.init().timeout(
-          const Duration(seconds: 15), // Increased from 10s
+          const Duration(seconds: 15),
           onTimeout: () {
-            log("⏱️ Database initialization timed out after 15s");
+            logger.error(
+              'Startup',
+              "⏱️ Database initialization timed out after 15s",
+            );
             throw TimeoutException('Database initialization timeout');
           },
         );
 
-        log("✅ Database Initialized Success");
+        logger.info('Startup', "✅ Database Initialized Success");
         dbInitialized = true;
       } catch (e, stack) {
-        log("❌ Database initialization failed: $e");
-        log("Stack trace: ${stack.toString()}");
+        logger.critical(
+          'Startup',
+          "❌ Database initialization failed",
+          error: e,
+          stackTrace: stack,
+        );
         // Don't crash - continue with limited functionality
         dbInitialized = false;
       }
 
       try {
-        log("🔑 Initializing Auth Service...");
+        logger.info('Startup', "🔑 Initializing Auth Service...");
         await AuthService.instance.init();
-        log("✅ Auth Service Initialized");
-      } catch (e) {
-        log("⚠️ Auth Service init failed: $e");
+        logger.info('Startup', "✅ Auth Service Initialized");
+      } catch (e, st) {
+        logger.warning(
+          'Startup',
+          "⚠️ Auth Service init failed",
+          error: e,
+          context: {'stack': st.toString()},
+        );
         // Continue anyway
       }
 
       // 4. Launch Main App (even if DB failed)
-      log(
-        "🚀 Launching Main App (DB Status: ${dbInitialized ? 'Ready' : 'Failed'})",
+      logger.info(
+        'Startup',
+        "🚀 Launching Main App",
+        context: {'dbStatus': dbInitialized ? 'Ready' : 'Failed'},
       );
 
       if (!dbInitialized) {
@@ -139,6 +138,21 @@ void main() async {
                         icon: Icon(Icons.refresh),
                         label: Text('Retry'),
                       ),
+                      SizedBox(height: 16),
+                      Builder(
+                        builder: (context) => TextButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LogsFrame(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.bug_report),
+                          label: const Text('View System Logs'),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -157,10 +171,8 @@ void main() async {
       );
     },
     (error, stack) {
-      debugPrint("☠️ GLOBAL UNCAUGHT ERROR: $error");
-      debugPrint("Stack trace: $stack");
-      // Note: We can't safely write to file here as we may not have initialized path_provider
-      // The error will be visible in the debug console
+      // Use the static crash logger we implemented
+      LoggerService.logCrash(error, stack);
     },
   );
 }

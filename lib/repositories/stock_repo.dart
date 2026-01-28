@@ -1,5 +1,6 @@
 import '../dao/stock_report_dao.dart';
 import '../models/stock_report_model.dart';
+import '../services/logger_service.dart';
 
 class StockRepository {
   final StockDao _stockDao = StockDao();
@@ -16,12 +17,12 @@ class StockRepository {
         _cachedReport != null &&
         _cacheTime != null &&
         DateTime.now().difference(_cacheTime!) < _cacheDuration) {
-      print('📦 Returning cached stock report');
+      logger.info('StockRepo', 'Returning cached stock report');
       return _cachedReport!;
     }
 
     try {
-      print('🔄 Fetching fresh stock report from database');
+      logger.info('StockRepo', 'Fetching fresh stock report from database');
       final reportList = await _stockDao.getStockReport();
 
       // Update cache
@@ -29,12 +30,17 @@ class StockRepository {
       _cacheTime = DateTime.now();
 
       return reportList;
-    } catch (e) {
-      print('Error loading stock report: $e');
+    } catch (e, stackTrace) {
+      logger.error(
+        'StockRepo',
+        'Error loading stock report',
+        error: e,
+        stackTrace: stackTrace,
+      );
 
       // Return cached data if available, even if expired
       if (_cachedReport != null) {
-        print('⚠️ Returning stale cached data due to error');
+        logger.warning('StockRepo', 'Returning stale cached data due to error');
         return _cachedReport!;
       }
 
@@ -46,7 +52,7 @@ class StockRepository {
   void clearCache() {
     _cachedReport = null;
     _cacheTime = null;
-    print('🗑️ Stock report cache cleared');
+    logger.info('StockRepo', 'Stock report cache cleared');
   }
 
   /// 🔹 Get only low-stock (below min level) products
@@ -62,7 +68,7 @@ class StockRepository {
           )
           .toList();
     } catch (e) {
-      print('Error filtering low stock: $e');
+      logger.error('StockRepo', 'Error filtering low stock', error: e);
       rethrow;
     }
   }
@@ -79,33 +85,60 @@ class StockRepository {
         return r.expiryDate!.isBefore(threshold);
       }).toList();
     } catch (e) {
-      print('Error filtering expiry report: $e');
+      logger.error('StockRepo', 'Error filtering expiry report', error: e);
       rethrow;
     }
   }
 
-  /// 🔹 Calculate total stock value (cost and selling)
+  /// 🔹 Get a paged stock report (optimized for large datasets)
+  Future<List<StockReport>> getPagedStockReport({
+    int limit = 50,
+    int offset = 0,
+    String? searchQuery,
+    bool onlyLowStock = false,
+    String? abcFilter,
+    String? orderBy,
+  }) async {
+    try {
+      return await _stockDao.getPagedStockReport(
+        limit: limit,
+        offset: offset,
+        searchQuery: searchQuery,
+        onlyLowStock: onlyLowStock,
+        abcFilter: abcFilter,
+        orderBy: orderBy,
+      );
+    } catch (e) {
+      logger.error('StockRepo', 'Error fetching paged stock report', error: e);
+      rethrow;
+    }
+  }
+
+  /// 🔹 Get total count of stock items
+  Future<int> getStockTotalCount({
+    String? searchQuery,
+    bool onlyLowStock = false,
+    String? abcFilter,
+  }) async {
+    try {
+      return await _stockDao.getStockTotalCount(
+        searchQuery: searchQuery,
+        onlyLowStock: onlyLowStock,
+        abcFilter: abcFilter,
+      );
+    } catch (e) {
+      logger.error('StockRepo', 'Error getting stock total count', error: e);
+      return 0;
+    }
+  }
+
+  /// 🔹 Calculate total stock value (cost and selling) - Optimized
   Future<Map<String, double>> getStockSummary() async {
     try {
-      final reports = await getStockReport(); // Use cached version
-
-      double totalCostValue = 0;
-      double totalSellValue = 0;
-      double totalProfit = 0;
-
-      for (var r in reports) {
-        totalCostValue += r.totalCostValue;
-        totalSellValue += r.totalSellValue;
-        totalProfit += r.profitValue;
-      }
-
-      return {
-        'totalCostValue': totalCostValue,
-        'totalSellValue': totalSellValue,
-        'totalProfit': totalProfit,
-      };
+      // Use the optimized DAO method instead of iterating in memory
+      return await _stockDao.getStockTotalSummary();
     } catch (e) {
-      print('Error calculating stock summary: $e');
+      logger.error('StockRepo', 'Error calculating stock summary', error: e);
       return {'totalCostValue': 0, 'totalSellValue': 0, 'totalProfit': 0};
     }
   }
@@ -127,7 +160,7 @@ class StockRepository {
 
       return grouped;
     } catch (e) {
-      print('Error grouping stock by supplier: $e');
+      logger.error('StockRepo', 'Error grouping stock by supplier', error: e);
       rethrow;
     }
   }
@@ -145,7 +178,7 @@ class StockRepository {
 
       return grouped;
     } catch (e) {
-      print('Error grouping stock by company: $e');
+      logger.error('StockRepo', 'Error grouping stock by company', error: e);
       rethrow;
     }
   }
@@ -163,8 +196,18 @@ class StockRepository {
 
       return grouped;
     } catch (e) {
-      print('Error grouping stock by category: $e');
+      logger.error('StockRepo', 'Error grouping stock by category', error: e);
       rethrow;
+    }
+  }
+
+  /// 🔹 Get top N products by total quantity (product-centric for charts)
+  Future<List<StockReport>> getTopStockByQuantity({int limit = 10}) async {
+    try {
+      return await _stockDao.getTopProducts(limit: limit);
+    } catch (e) {
+      logger.error('StockRepo', 'Error fetching top products', error: e);
+      return [];
     }
   }
 
@@ -177,7 +220,7 @@ class StockRepository {
           .where((r) => r.batchNo != null && r.batchNo!.isNotEmpty)
           .toList();
     } catch (e) {
-      print('Error getting batch-wise report: $e');
+      logger.error('StockRepo', 'Error getting batch-wise report', error: e);
       rethrow;
     }
   }
@@ -189,7 +232,11 @@ class StockRepository {
       reports.sort((a, b) => b.profitValue.compareTo(a.profitValue));
       return reports.take(limit).toList();
     } catch (e) {
-      print('Error fetching top profitable products: $e');
+      logger.error(
+        'StockRepo',
+        'Error fetching top profitable products',
+        error: e,
+      );
       rethrow;
     }
   }
@@ -200,8 +247,18 @@ class StockRepository {
       final reports = await _stockDao.getStockReport();
       return reports.where((r) => r.profitValue < 0).toList();
     } catch (e) {
-      print('Error filtering loss products: $e');
+      logger.error('StockRepo', 'Error filtering loss products', error: e);
       rethrow;
+    }
+  }
+
+  /// 🔹 Get stable ABC statistics (full inventory)
+  Future<Map<String, Map<String, dynamic>>> getABCStatistics() async {
+    try {
+      return await _stockDao.getABCStatistics();
+    } catch (e) {
+      logger.error('StockRepo', 'Error getting ABC statistics', error: e);
+      return <String, Map<String, dynamic>>{};
     }
   }
 }

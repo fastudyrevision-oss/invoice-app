@@ -1,14 +1,64 @@
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
-import 'package:printing/printing.dart';
+
 import 'package:share_plus/share_plus.dart';
 import '../models/stock_report_model.dart';
+import '../utils/unified_print_helper.dart';
+import '../utils/pdf_font_helper.dart';
+import '../services/logger_service.dart';
 
 class StockExportService {
+  /// Print stock report directly
+  Future<void> printStockReport(
+    List<StockReport> reports, {
+    bool includePrice = true,
+    bool showExpiry = false,
+    bool detailedView = false,
+  }) async {
+    logger.info(
+      'StockExport',
+      'Printing Stock Report',
+      context: {'items': reports.length},
+    );
+    final pdfBytes = await _generatePdf(
+      reports,
+      includePrice: includePrice,
+      showExpiry: showExpiry,
+      detailedView: detailedView,
+    );
+
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Stock_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Save stock report PDF to file
+  Future<File?> saveStockReportPdf(
+    List<StockReport> reports, {
+    bool includePrice = true,
+    bool showExpiry = false,
+    bool detailedView = false,
+  }) async {
+    final pdfBytes = await _generatePdf(
+      reports,
+      includePrice: includePrice,
+      showExpiry: showExpiry,
+      detailedView: detailedView,
+    );
+
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Stock_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Stock Report',
+    );
+  }
+
   /// Export stock report to PDF with beautiful modern design
   Future<void> exportToPDF(
     List<StockReport> reports, {
@@ -16,13 +66,42 @@ class StockExportService {
     bool showExpiry = false,
     bool detailedView = false,
   }) async {
+    final pdfBytes = await _generatePdf(
+      reports,
+      includePrice: includePrice,
+      showExpiry: showExpiry,
+      detailedView: detailedView,
+    );
+
+    await UnifiedPrintHelper.sharePdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Stock_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+
+    logger.info(
+      'StockExport',
+      'Stock Report PDF exported successfully',
+      context: {'count': reports.length},
+    );
+  }
+
+  Future<Uint8List> _generatePdf(
+    List<StockReport> reports, {
+    required bool includePrice,
+    required bool showExpiry,
+    required bool detailedView,
+  }) async {
     if (reports.isEmpty) {
-      print('⚠️ No data to export.');
-      return;
+      return Uint8List(0);
     }
 
     final pdf = pw.Document();
     final now = DateTime.now();
+
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
 
     // ═══════════════════════════════════════
     // 📊 CALCULATE SUMMARY STATISTICS
@@ -110,14 +189,16 @@ class StockExportService {
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
                       pw.Text(
                         'Page ${pageIndex + 1} of $totalPages',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 11,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                     ],
@@ -127,9 +208,10 @@ class StockExportService {
                     children: [
                       pw.Text(
                         'Generated: ${_formatDateTime(now)}',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 9,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
@@ -139,6 +221,7 @@ class StockExportService {
                           fontSize: 10,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                     ],
@@ -159,24 +242,32 @@ class StockExportService {
                     'Total Cost Value',
                     'Rs ${totalCost.toStringAsFixed(2)}',
                     PdfColors.blue700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 10),
                   _buildSummaryCard(
                     'Total Sell Value',
                     'Rs ${totalSell.toStringAsFixed(2)}',
                     PdfColors.green700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 10),
                   _buildSummaryCard(
                     'Total Profit',
                     'Rs ${totalProfit.toStringAsFixed(2)}',
                     PdfColors.orange700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 10),
                   _buildSummaryCard(
                     'Low Stock Items',
                     '$lowStockCount items',
                     PdfColors.red700,
+                    regularFont,
+                    boldFont,
                   ),
                 ],
               ),
@@ -194,7 +285,7 @@ class StockExportService {
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.blue50),
                   children: columns
-                      .map((col) => _buildHeaderCell(col))
+                      .map((col) => _buildHeaderCell(col, boldFont))
                       .toList(),
                 ),
                 // Data Rows
@@ -208,25 +299,51 @@ class StockExportService {
                       r.remainingQty <= r.reorderLevel!;
 
                   final cells = <pw.Widget>[
-                    _buildDataCell((index + 1).toString(), fontSize: 8),
+                    _buildDataCell(
+                      (index + 1).toString(),
+                      fontSize: 8,
+                      font: regularFont,
+                    ),
                     _buildDataCell(
                       r.productName,
                       bold: isLowStock,
                       fontSize: 8,
+                      font: isLowStock ? boldFont : regularFont,
                     ),
-                    _buildDataCell(r.batchNo ?? '-', fontSize: 8),
-                    _buildDataCell(r.purchasedQty.toString(), fontSize: 8),
-                    _buildDataCell(r.soldQty.toString(), fontSize: 8),
+                    _buildDataCell(
+                      r.batchNo ?? '-',
+                      fontSize: 8,
+                      font: regularFont,
+                    ),
+                    _buildDataCell(
+                      r.purchasedQty.toString(),
+                      fontSize: 8,
+                      font: regularFont,
+                    ),
+                    _buildDataCell(
+                      r.soldQty.toString(),
+                      fontSize: 8,
+                      font: regularFont,
+                    ),
                     _buildDataCell(
                       r.remainingQty.toString(),
                       bold: isLowStock,
                       color: isLowStock ? PdfColors.red900 : null,
                       fontSize: 8,
+                      font: isLowStock ? boldFont : regularFont,
                     ),
                     if (showExpiry)
-                      _buildDataCell(r.supplierName ?? '-', fontSize: 8),
+                      _buildDataCell(
+                        r.supplierName ?? '-',
+                        fontSize: 8,
+                        font: regularFont,
+                      ),
                     if (showExpiry)
-                      _buildDataCell(r.companyName ?? '-', fontSize: 8),
+                      _buildDataCell(
+                        r.companyName ?? '-',
+                        fontSize: 8,
+                        font: regularFont,
+                      ),
                     if (showExpiry)
                       _buildDataCell(
                         r.expiryDate != null
@@ -237,16 +354,19 @@ class StockExportService {
                                   .first
                             : '-',
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     if (includePrice)
                       _buildDataCell(
                         r.costPrice.toStringAsFixed(2),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     if (includePrice)
                       _buildDataCell(
                         r.sellPrice.toStringAsFixed(2),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     if (detailedView)
                       _buildDataCell(
@@ -255,21 +375,25 @@ class StockExportService {
                             ? PdfColors.green900
                             : PdfColors.red900,
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     if (detailedView)
                       _buildDataCell(
                         r.profitValue.toStringAsFixed(2),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     if (includePrice)
                       _buildDataCell(
                         r.totalSellValue.toStringAsFixed(2),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     if (detailedView)
                       _buildDataCell(
                         r.reorderLevel?.toString() ?? '-',
                         fontSize: 8,
+                        font: regularFont,
                       ),
                   ];
 
@@ -309,20 +433,23 @@ class StockExportService {
                           style: pw.TextStyle(
                             fontSize: 11,
                             fontWeight: pw.FontWeight.bold,
+                            font: boldFont,
                           ),
                         ),
                         pw.SizedBox(height: 3),
                         pw.Text(
                           'Total Items: ${reports.length} | Total Stock Value: Rs ${totalSell.toStringAsFixed(2)} | Low Stock: $lowStockCount',
-                          style: const pw.TextStyle(fontSize: 9),
+                          style: pw.TextStyle(fontSize: 9, font: regularFont),
                         ),
                       ],
                     ),
                     pw.Text(
                       'Prepared via میاں ٹریڈرز',
-                      style: const pw.TextStyle(
+                      textDirection: pw.TextDirection.rtl,
+                      style: pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey700,
+                        font: regularFont,
                       ),
                     ),
                   ],
@@ -334,25 +461,20 @@ class StockExportService {
       );
     }
 
-    // ═══════════════════════════════════════
-    // 🖨️ SHARE PDF
-    // ═══════════════════════════════════════
-    final bytes = await pdf.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Stock_Report_${_formatDate(now)}.pdf',
-    );
-
-    print(
-      '✅ Stock Report PDF exported successfully (${reports.length} records, $totalPages pages).',
-    );
+    return await pdf.save();
   }
 
   // ═══════════════════════════════════════
   // 🎨 HELPER WIDGETS
   // ═══════════════════════════════════════
 
-  pw.Widget _buildSummaryCard(String label, String value, PdfColor color) {
+  pw.Widget _buildSummaryCard(
+    String label,
+    String value,
+    PdfColor color,
+    pw.Font regular,
+    pw.Font bold,
+  ) {
     return pw.Expanded(
       child: pw.Container(
         padding: const pw.EdgeInsets.all(10),
@@ -370,6 +492,7 @@ class StockExportService {
                 fontSize: 9,
                 color: color,
                 fontWeight: pw.FontWeight.bold,
+                font: bold,
               ),
             ),
             pw.SizedBox(height: 3),
@@ -379,6 +502,7 @@ class StockExportService {
                 fontSize: 13,
                 fontWeight: pw.FontWeight.bold,
                 color: color,
+                font: bold,
               ),
             ),
           ],
@@ -387,7 +511,7 @@ class StockExportService {
     );
   }
 
-  pw.Widget _buildHeaderCell(String text) {
+  pw.Widget _buildHeaderCell(String text, pw.Font font) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
@@ -396,6 +520,7 @@ class StockExportService {
           fontSize: 10,
           fontWeight: pw.FontWeight.bold,
           color: PdfColors.blue900,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),
@@ -407,6 +532,7 @@ class StockExportService {
     bool bold = false,
     PdfColor? color,
     double fontSize = 9,
+    required pw.Font font,
   }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(4),
@@ -416,6 +542,7 @@ class StockExportService {
           fontSize: fontSize,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),
@@ -457,7 +584,7 @@ class StockExportService {
     bool detailedView = false,
   }) async {
     if (reports.isEmpty) {
-      print("⚠️ No data to export!");
+      logger.warning('StockExport', 'No data to export to Excel');
       return;
     }
 
@@ -539,7 +666,11 @@ class StockExportService {
       ..createSync(recursive: true)
       ..writeAsBytesSync(fileBytes!);
 
-    print("✅ Excel exported to $filePath");
+    logger.info(
+      'StockExport',
+      'Excel exported successfully',
+      context: {'path': filePath},
+    );
 
     // Platform-aware: Android/iOS uses share, Desktop opens file
     if (Platform.isAndroid || Platform.isIOS) {
@@ -553,6 +684,10 @@ class StockExportService {
 
   /// Print directly to POS (placeholder for future)
   Future<void> printPOS(List<StockReport> reports) async {
-    print('🖨️ Printing ${reports.length} items to POS printer...');
+    logger.info(
+      'StockExport',
+      'Printing to POS (Placeholder)',
+      context: {'items': reports.length},
+    );
   }
 }

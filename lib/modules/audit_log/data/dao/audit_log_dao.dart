@@ -25,6 +25,7 @@ class AuditLogDao {
     DateTime? end,
     String? action,
     String? tableName,
+    String? userId,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -46,6 +47,10 @@ class AuditLogDao {
     if (tableName != null && tableName.isNotEmpty) {
       query += ' AND table_name = ?';
       args.add(tableName);
+    }
+    if (userId != null && userId.isNotEmpty) {
+      query += ' AND user_id = ?';
+      args.add(userId);
     }
 
     query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';

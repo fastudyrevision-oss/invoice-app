@@ -1,4 +1,5 @@
 class ExpiringBatchDetail {
+  final String batchId;
   final String batchNo;
   final DateTime expiryDate;
   final int qty;
@@ -9,8 +10,10 @@ class ExpiringBatchDetail {
   final String? supplierPhone;
   final String? supplierAddress;
   final String purchaseId;
+  final double? purchasePrice;
 
   ExpiringBatchDetail({
+    required this.batchId,
     required this.batchNo,
     required this.expiryDate,
     required this.qty,
@@ -21,10 +24,12 @@ class ExpiringBatchDetail {
     this.supplierPhone,
     this.supplierAddress,
     required this.purchaseId,
+    this.purchasePrice,
   });
 
   factory ExpiringBatchDetail.fromMap(Map<String, dynamic> map) {
     return ExpiringBatchDetail(
+      batchId: map['batch_id'] ?? map['id'] ?? '',
       batchNo: map['batch_no'] ?? '',
       expiryDate: DateTime.tryParse(map['expiry_date'] ?? '') ?? DateTime.now(),
       qty: map['qty'] ?? 0,
@@ -35,6 +40,7 @@ class ExpiringBatchDetail {
       supplierPhone: map['supplier_phone'],
       supplierAddress: map['supplier_address'],
       purchaseId: map['purchase_id'] ?? '',
+      purchasePrice: (map['purchase_price'] as num?)?.toDouble(),
     );
   }
 }

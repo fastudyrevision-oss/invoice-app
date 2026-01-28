@@ -1,12 +1,13 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'logger_service.dart';
 
 /// 🖨️ Thermal Printer Settings Service
-/// 
+///
 /// Manages all printer configuration persistently using SharedPreferences
 /// Handles: IP address, port, timeout, print density, paper width, etc.
 class PrinterSettingsService {
   static const String _tag = '🖨️ PrinterSettings';
-  
+
   // SharedPreferences Keys
   static const String _printerAddressKey = 'printer_address';
   static const String _printerPortKey = 'printer_port';
@@ -16,7 +17,7 @@ class PrinterSettingsService {
   static const String _paperWidthKey = 'paper_width_mm';
   static const String _autoPrintTestKey = 'auto_print_test';
   static const String _enableLoggingKey = 'enable_printer_logging';
-  
+
   late SharedPreferences _prefs;
   bool _initialized = false;
 
@@ -38,10 +39,10 @@ class PrinterSettingsService {
   /// Initialize the settings service
   Future<void> initialize() async {
     if (_initialized) return;
-    
+
     _prefs = await SharedPreferences.getInstance();
     _initialized = true;
-    print('$_tag ✅ Initialized');
+    logger.info(_tag, 'Initialized');
   }
 
   /// Ensure initialization before operations
@@ -125,7 +126,7 @@ class PrinterSettingsService {
     await _ensureInitialized();
     final result = await _prefs.setString(_printerAddressKey, address.trim());
     if (result) {
-      print('$_tag ✅ Printer address saved: $address');
+      logger.info(_tag, 'Printer address saved', context: {'address': address});
     }
     return result;
   }
@@ -134,12 +135,12 @@ class PrinterSettingsService {
   Future<bool> setPrinterPort(int port) async {
     await _ensureInitialized();
     if (port < 1 || port > 65535) {
-      print('$_tag ❌ Invalid port: $port (must be 1-65535)');
+      logger.warning(_tag, 'Invalid port', context: {'port': port});
       return false;
     }
     final result = await _prefs.setInt(_printerPortKey, port);
     if (result) {
-      print('$_tag ✅ Printer port saved: $port');
+      logger.info(_tag, 'Printer port saved', context: {'port': port});
     }
     return result;
   }
@@ -148,12 +149,16 @@ class PrinterSettingsService {
   Future<bool> setConnectionTimeout(int seconds) async {
     await _ensureInitialized();
     if (seconds < 1 || seconds > 60) {
-      print('$_tag ❌ Invalid timeout: $seconds (must be 1-60 seconds)');
+      logger.warning(_tag, 'Invalid timeout', context: {'seconds': seconds});
       return false;
     }
     final result = await _prefs.setInt(_printerTimeoutKey, seconds);
     if (result) {
-      print('$_tag ✅ Connection timeout saved: ${seconds}s');
+      logger.info(
+        _tag,
+        'Connection timeout saved',
+        context: {'seconds': seconds},
+      );
     }
     return result;
   }
@@ -163,7 +168,7 @@ class PrinterSettingsService {
     await _ensureInitialized();
     final result = await _prefs.setString(_printerNameKey, name.trim());
     if (result) {
-      print('$_tag ✅ Printer name saved: $name');
+      logger.info(_tag, 'Printer name saved', context: {'name': name});
     }
     return result;
   }
@@ -172,12 +177,16 @@ class PrinterSettingsService {
   Future<bool> setPrintDensity(int level) async {
     await _ensureInitialized();
     if (!densityLevels.containsKey(level)) {
-      print('$_tag ❌ Invalid density level: $level');
+      logger.warning(_tag, 'Invalid density level', context: {'level': level});
       return false;
     }
     final result = await _prefs.setInt(_printerDensityKey, level);
     if (result) {
-      print('$_tag ✅ Print density saved: ${densityLevels[level]}');
+      logger.info(
+        _tag,
+        'Print density saved',
+        context: {'level': densityLevels[level]},
+      );
     }
     return result;
   }
@@ -186,12 +195,12 @@ class PrinterSettingsService {
   Future<bool> setPaperWidth(int width) async {
     await _ensureInitialized();
     if (!paperWidths.contains(width)) {
-      print('$_tag ❌ Invalid paper width: $width');
+      logger.warning(_tag, 'Invalid paper width', context: {'width': width});
       return false;
     }
     final result = await _prefs.setInt(_paperWidthKey, width);
     if (result) {
-      print('$_tag ✅ Paper width saved: ${width}mm');
+      logger.info(_tag, 'Paper width saved', context: {'width': width});
     }
     return result;
   }
@@ -201,7 +210,11 @@ class PrinterSettingsService {
     await _ensureInitialized();
     final result = await _prefs.setBool(_autoPrintTestKey, enabled);
     if (result) {
-      print('$_tag ✅ Auto print test: ${enabled ? 'enabled' : 'disabled'}');
+      logger.info(
+        _tag,
+        'Auto print test updated',
+        context: {'enabled': enabled},
+      );
     }
     return result;
   }
@@ -211,7 +224,11 @@ class PrinterSettingsService {
     await _ensureInitialized();
     final result = await _prefs.setBool(_enableLoggingKey, enabled);
     if (result) {
-      print('$_tag ✅ Printer logging: ${enabled ? 'enabled' : 'disabled'}');
+      logger.info(
+        _tag,
+        'Printer logging updated',
+        context: {'enabled': enabled},
+      );
     }
     return result;
   }
@@ -219,7 +236,7 @@ class PrinterSettingsService {
   /// Save all settings at once
   Future<bool> saveAllSettings(Map<String, dynamic> settings) async {
     await _ensureInitialized();
-    
+
     try {
       if (settings.containsKey('address')) {
         await setPrinterAddress(settings['address']);
@@ -245,10 +262,10 @@ class PrinterSettingsService {
       if (settings.containsKey('enableLogging')) {
         await setLoggingEnabled(settings['enableLogging']);
       }
-      
+
       return true;
     } catch (e) {
-      print('$_tag ❌ Error saving settings: $e');
+      logger.error(_tag, 'Error saving settings', error: e);
       return false;
     }
   }
@@ -275,10 +292,11 @@ class PrinterSettingsService {
       await _prefs.remove(_paperWidthKey);
       await _prefs.remove(_autoPrintTestKey);
       await _prefs.remove(_enableLoggingKey);
-      print('$_tag ✅ All settings cleared');
+      await _prefs.remove(_enableLoggingKey);
+      logger.info(_tag, 'All settings cleared');
       return true;
     } catch (e) {
-      print('$_tag ❌ Error clearing settings: $e');
+      logger.error(_tag, 'Error clearing settings', error: e);
       return false;
     }
   }
@@ -288,11 +306,11 @@ class PrinterSettingsService {
     final address = await getPrinterAddress();
     final port = await getPrinterPort();
     final name = await getPrinterName();
-    
+
     if (address == null) {
       return 'Not configured';
     }
-    
+
     final displayName = name != null && name.isNotEmpty ? name : 'Printer';
     return '$displayName ($address:$port)';
   }

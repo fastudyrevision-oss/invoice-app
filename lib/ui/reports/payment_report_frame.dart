@@ -426,10 +426,80 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
                 },
               ),
 
-            // Export Button
+            // Export Buttons
             ElevatedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf),
-              label: const Text("Export PDF"),
+              icon: const Icon(Icons.print),
+              label: const Text("Print"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                try {
+                  await _exportService.printCombinedCashFlowReport(
+                    _filteredEntries,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Sent to printer'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Print error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.save),
+              label: const Text("Save PDF"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                try {
+                  final file = await _exportService.saveCombinedCashFlowPdf(
+                    _filteredEntries,
+                  );
+                  if (mounted && file != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✅ Saved: ${file.path}'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Save error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.share),
+              label: const Text("Share"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
               onPressed: () async {
                 await _exportService.exportCombinedCashFlowPdf(
                   _filteredEntries,

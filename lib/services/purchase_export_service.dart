@@ -1,32 +1,85 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
+
 import '../models/purchase.dart';
+import '../utils/unified_print_helper.dart';
+import '../utils/pdf_font_helper.dart';
+import '../services/logger_service.dart';
 
 class PurchaseExportService {
+  /// Print purchase list directly
+  Future<void> printPurchaseList(
+    List<Purchase> purchases, {
+    String? supplierName,
+  }) async {
+    logger.info(
+      'PurchaseExport',
+      'Printing Purchase Report',
+      context: {'count': purchases.length, 'supplier': supplierName},
+    );
+    final pdfBytes = await _generatePdf(purchases, supplierName: supplierName);
+
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Purchase_Report_${_formatDateFile(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Save purchase list PDF to file
+  Future<File?> savePurchaseListPdf(
+    List<Purchase> purchases, {
+    String? supplierName,
+  }) async {
+    final pdfBytes = await _generatePdf(purchases, supplierName: supplierName);
+
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Purchase_Report_${_formatDateFile(DateTime.now())}.pdf',
+      dialogTitle: 'Save Purchase Report',
+    );
+  }
+
   /// Export purchase list to beautiful PDF with multi-page support
-  Future<void> exportToPDF(List<Purchase> purchases) async {
+  Future<void> exportToPDF(
+    List<Purchase> purchases, {
+    String? supplierName,
+  }) async {
+    final pdfBytes = await _generatePdf(purchases, supplierName: supplierName);
+
+    await UnifiedPrintHelper.sharePdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Purchase_Report_${_formatDateFile(DateTime.now())}.pdf',
+    );
+
+    logger.info(
+      'PurchaseExport',
+      'Purchase Report PDF exported successfully',
+      context: {'count': purchases.length},
+    );
+  }
+
+  Future<Uint8List> _generatePdf(
+    List<Purchase> purchases, {
+    String? supplierName,
+  }) async {
     if (purchases.isEmpty) {
-      print('⚠️ No purchases to export.');
-      return;
+      return Uint8List(0);
     }
 
     final pdf = pw.Document();
     final now = DateTime.now();
 
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
     // Calculate summary statistics
-    final totalAmount = purchases.fold<double>(
-      0,
-      (sum, p) => sum + p.total,
-    );
-    final totalPaid = purchases.fold<double>(
-      0,
-      (sum, p) => sum + p.paid,
-    );
-    final totalPending = purchases.fold<double>(
-      0,
-      (sum, p) => sum + p.pending,
-    );
+    final totalAmount = purchases.fold<double>(0, (sum, p) => sum + p.total);
+    final totalPaid = purchases.fold<double>(0, (sum, p) => sum + p.paid);
+    final totalPending = purchases.fold<double>(0, (sum, p) => sum + p.pending);
 
     // Group purchases into pages (30 per page)
     const itemsPerPage = 30;
@@ -67,14 +120,27 @@ class PurchaseExportService {
                           fontSize: 24,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
+                      if (supplierName != null) ...[
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          'Supplier: $supplierName',
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            color: PdfColors.white,
+                            font: regularFont,
+                          ),
+                        ),
+                      ],
                       pw.SizedBox(height: 4),
                       pw.Text(
                         'Page ${pageIndex + 1} of $totalPages',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 12,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                     ],
@@ -84,9 +150,10 @@ class PurchaseExportService {
                     children: [
                       pw.Text(
                         'Generated: ${_formatDateTime(now)}',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 10,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
@@ -96,6 +163,7 @@ class PurchaseExportService {
                           fontSize: 11,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                     ],
@@ -116,18 +184,24 @@ class PurchaseExportService {
                     'Total Purchases',
                     'Rs ${totalAmount.toStringAsFixed(2)}',
                     PdfColors.teal700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 12),
                   _buildSummaryCard(
                     'Total Paid',
                     'Rs ${totalPaid.toStringAsFixed(2)}',
                     PdfColors.green700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 12),
                   _buildSummaryCard(
                     'Total Pending',
                     'Rs ${totalPending.toStringAsFixed(2)}',
                     PdfColors.orange700,
+                    regularFont,
+                    boldFont,
                   ),
                 ],
               ),
@@ -153,13 +227,13 @@ class PurchaseExportService {
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.teal50),
                   children: [
-                    _buildHeaderCell('#'),
-                    _buildHeaderCell('Date'),
-                    _buildHeaderCell('Invoice #'),
-                    _buildHeaderCell('Supplier'),
-                    _buildHeaderCell('Total'),
-                    _buildHeaderCell('Paid'),
-                    _buildHeaderCell('Pending'),
+                    _buildHeaderCell('#', boldFont),
+                    _buildHeaderCell('Date', boldFont),
+                    _buildHeaderCell('Invoice #', boldFont),
+                    _buildHeaderCell('Supplier', boldFont),
+                    _buildHeaderCell('Total', boldFont),
+                    _buildHeaderCell('Paid', boldFont),
+                    _buildHeaderCell('Pending', boldFont),
                   ],
                 ),
                 // Data Rows
@@ -174,24 +248,28 @@ class PurchaseExportService {
                       color: isEven ? PdfColors.white : PdfColors.grey50,
                     ),
                     children: [
-                      _buildDataCell((index + 1).toString()),
+                      _buildDataCell((index + 1).toString(), font: regularFont),
                       _buildDataCell(
                         _formatDate(DateTime.parse(purchase.createdAt)),
+                        font: regularFont,
                       ),
-                      _buildDataCell(purchase.invoiceNo),
-                      _buildDataCell(purchase.supplierId),
+                      _buildDataCell(purchase.invoiceNo, font: regularFont),
+                      _buildDataCell(purchase.supplierId, font: regularFont),
                       _buildDataCell(
                         purchase.total.toStringAsFixed(2),
                         bold: true,
+                        font: boldFont,
                       ),
                       _buildDataCell(
                         purchase.paid.toStringAsFixed(2),
                         color: PdfColors.green700,
+                        font: regularFont,
                       ),
                       _buildDataCell(
                         purchase.pending.toStringAsFixed(2),
                         bold: hasPending,
                         color: hasPending ? PdfColors.orange700 : null,
+                        font: hasPending ? boldFont : regularFont,
                       ),
                     ],
                   );
@@ -223,16 +301,17 @@ class PurchaseExportService {
                           style: pw.TextStyle(
                             fontSize: 12,
                             fontWeight: pw.FontWeight.bold,
+                            font: boldFont,
                           ),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           'Total Records: ${purchases.length}',
-                          style: const pw.TextStyle(fontSize: 10),
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                         pw.Text(
                           'Total Amount: Rs ${totalAmount.toStringAsFixed(2)}',
-                          style: const pw.TextStyle(fontSize: 10),
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                       ],
                     ),
@@ -241,17 +320,20 @@ class PurchaseExportService {
                       children: [
                         pw.Text(
                           'Prepared via میاں ٹریڈرز',
-                          style: const pw.TextStyle(
+                          textDirection: pw.TextDirection.rtl,
+                          style: pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
+                            font: regularFont,
                           ),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           _formatDateTime(now),
-                          style: const pw.TextStyle(
+                          style: pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
+                            font: regularFont,
                           ),
                         ),
                       ],
@@ -265,25 +347,20 @@ class PurchaseExportService {
       );
     }
 
-    // ═══════════════════════════════════════
-    // 🖨️ SHARE PDF
-    // ═══════════════════════════════════════
-    final bytes = await pdf.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Purchase_Report_${_formatDateFile(now)}.pdf',
-    );
-
-    print(
-      '✅ Purchase Report PDF exported successfully (${purchases.length} records, $totalPages pages).',
-    );
+    return await pdf.save();
   }
 
   // ═══════════════════════════════════════
   // 🎨 HELPER WIDGETS
   // ═══════════════════════════════════════
 
-  pw.Widget _buildSummaryCard(String label, String value, PdfColor color) {
+  pw.Widget _buildSummaryCard(
+    String label,
+    String value,
+    PdfColor color,
+    pw.Font regular,
+    pw.Font bold,
+  ) {
     return pw.Expanded(
       child: pw.Container(
         padding: const pw.EdgeInsets.all(12),
@@ -301,6 +378,7 @@ class PurchaseExportService {
                 fontSize: 10,
                 color: color,
                 fontWeight: pw.FontWeight.bold,
+                font: bold,
               ),
             ),
             pw.SizedBox(height: 4),
@@ -310,6 +388,7 @@ class PurchaseExportService {
                 fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
                 color: color,
+                font: bold,
               ),
             ),
           ],
@@ -318,7 +397,7 @@ class PurchaseExportService {
     );
   }
 
-  pw.Widget _buildHeaderCell(String text) {
+  pw.Widget _buildHeaderCell(String text, pw.Font font) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(8),
       child: pw.Text(
@@ -327,13 +406,19 @@ class PurchaseExportService {
           fontSize: 11,
           fontWeight: pw.FontWeight.bold,
           color: PdfColors.teal900,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),
     );
   }
 
-  pw.Widget _buildDataCell(String text, {bool bold = false, PdfColor? color}) {
+  pw.Widget _buildDataCell(
+    String text, {
+    bool bold = false,
+    PdfColor? color,
+    required pw.Font font,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
@@ -342,6 +427,7 @@ class PurchaseExportService {
           fontSize: 9,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),

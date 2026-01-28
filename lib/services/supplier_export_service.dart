@@ -1,9 +1,98 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
 import '../models/supplier.dart';
+import '../utils/unified_print_helper.dart';
+import '../utils/pdf_font_helper.dart';
+import '../services/logger_service.dart';
 
 class SupplierExportService {
+  /// Print supplier list directly
+  Future<void> printSupplierList(
+    List<Supplier> suppliers, {
+    String? searchKeyword,
+    String? companyName,
+    bool? pendingFilter,
+    double? minCredit,
+    double? maxCredit,
+    double? minPending,
+    double? maxPending,
+    bool showDeleted = false,
+  }) async {
+    logger.info(
+      'SupplierExport',
+      'Printing Supplier Report',
+      context: {'count': suppliers.length},
+    );
+    final pdfBytes = await _generatePdf(
+      suppliers,
+      searchKeyword: searchKeyword,
+      companyName: companyName,
+      pendingFilter: pendingFilter,
+      minCredit: minCredit,
+      maxCredit: maxCredit,
+      minPending: minPending,
+      maxPending: maxPending,
+      showDeleted: showDeleted,
+    );
+
+    final filterSuffix = pendingFilter == true
+        ? '_Pending'
+        : pendingFilter == false
+        ? '_Paid'
+        : '';
+
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename:
+          'Supplier_Report${filterSuffix}_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Save supplier list PDF to file
+  Future<File?> saveSupplierListPdf(
+    List<Supplier> suppliers, {
+    String? searchKeyword,
+    String? companyName,
+    bool? pendingFilter,
+    double? minCredit,
+    double? maxCredit,
+    double? minPending,
+    double? maxPending,
+    bool showDeleted = false,
+  }) async {
+    logger.info(
+      'SupplierExport',
+      'Saving Supplier Report PDF',
+      context: {'count': suppliers.length},
+    );
+    final pdfBytes = await _generatePdf(
+      suppliers,
+      searchKeyword: searchKeyword,
+      companyName: companyName,
+      pendingFilter: pendingFilter,
+      minCredit: minCredit,
+      maxCredit: maxCredit,
+      minPending: minPending,
+      maxPending: maxPending,
+      showDeleted: showDeleted,
+    );
+
+    final filterSuffix = pendingFilter == true
+        ? '_Pending'
+        : pendingFilter == false
+        ? '_Paid'
+        : '';
+
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName:
+          'Supplier_Report${filterSuffix}_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Supplier Report',
+    );
+  }
+
   /// Export supplier list to beautiful PDF with multi-page support and filter metadata
   Future<void> exportToPDF(
     List<Supplier> suppliers, {
@@ -16,13 +105,64 @@ class SupplierExportService {
     double? maxPending,
     bool showDeleted = false,
   }) async {
+    logger.info(
+      'SupplierExport',
+      'Exporting Supplier Report',
+      context: {'count': suppliers.length},
+    );
+    final pdfBytes = await _generatePdf(
+      suppliers,
+      searchKeyword: searchKeyword,
+      companyName: companyName,
+      pendingFilter: pendingFilter,
+      minCredit: minCredit,
+      maxCredit: maxCredit,
+      minPending: minPending,
+      maxPending: maxPending,
+      showDeleted: showDeleted,
+    );
+
+    final filterSuffix = pendingFilter == true
+        ? '_Pending'
+        : pendingFilter == false
+        ? '_Paid'
+        : '';
+
+    await UnifiedPrintHelper.sharePdfBytes(
+      pdfBytes: pdfBytes,
+      filename:
+          'Supplier_Report${filterSuffix}_${_formatDate(DateTime.now())}.pdf',
+    );
+
+    logger.info(
+      'SupplierExport',
+      'Supplier Report PDF exported successfully',
+      context: {'count': suppliers.length},
+    );
+  }
+
+  Future<Uint8List> _generatePdf(
+    List<Supplier> suppliers, {
+    String? searchKeyword,
+    String? companyName,
+    bool? pendingFilter,
+    double? minCredit,
+    double? maxCredit,
+    double? minPending,
+    double? maxPending,
+    bool showDeleted = false,
+  }) async {
     if (suppliers.isEmpty) {
-      print('No suppliers to export.');
-      return;
+      return Uint8List(0);
     }
 
     final pdf = pw.Document();
     final now = DateTime.now();
+
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
 
     // Build filter summary
     final List<String> activeFilters = [];
@@ -100,14 +240,16 @@ class SupplierExportService {
                           fontSize: 24,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
                       pw.Text(
                         'Page ${pageIndex + 1} of $totalPages',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 12,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                     ],
@@ -117,9 +259,10 @@ class SupplierExportService {
                     children: [
                       pw.Text(
                         'Generated: ${_formatDateTime(now)}',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 10,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
@@ -129,6 +272,7 @@ class SupplierExportService {
                           fontSize: 11,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                     ],
@@ -157,6 +301,7 @@ class SupplierExportService {
                         fontSize: 12,
                         fontWeight: pw.FontWeight.bold,
                         color: PdfColors.purple900,
+                        font: boldFont,
                       ),
                     ),
                     pw.SizedBox(height: 6),
@@ -176,9 +321,10 @@ class SupplierExportService {
                             pw.SizedBox(width: 6),
                             pw.Text(
                               filter,
-                              style: const pw.TextStyle(
+                              style: pw.TextStyle(
                                 fontSize: 10,
                                 color: PdfColors.purple900,
+                                font: regularFont,
                               ),
                             ),
                           ],
@@ -199,18 +345,24 @@ class SupplierExportService {
                     'Total Pending',
                     'Rs ${totalPending.toStringAsFixed(2)}',
                     PdfColors.deepOrange700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 12),
                   _buildSummaryCard(
                     'Average Pending',
                     'Rs ${avgPending.toStringAsFixed(2)}',
                     PdfColors.purple700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 12),
                   _buildSummaryCard(
                     'With Pending',
                     '$suppliersWithPending suppliers',
                     PdfColors.red700,
+                    regularFont,
+                    boldFont,
                   ),
                 ],
               ),
@@ -233,12 +385,12 @@ class SupplierExportService {
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.purple50),
                   children: [
-                    _buildHeaderCell('#'),
-                    _buildHeaderCell('Supplier Name'),
-                    _buildHeaderCell('Phone'),
-                    _buildHeaderCell('Company'),
-                    _buildHeaderCell('Pending (Rs)'),
-                    _buildHeaderCell('Credit Limit'),
+                    _buildHeaderCell('#', boldFont),
+                    _buildHeaderCell('Supplier Name', boldFont),
+                    _buildHeaderCell('Phone', boldFont),
+                    _buildHeaderCell('Company', boldFont),
+                    _buildHeaderCell('Pending (Rs)', boldFont),
+                    _buildHeaderCell('Credit Limit', boldFont),
                   ],
                 ),
                 // Data Rows
@@ -255,16 +407,27 @@ class SupplierExportService {
                           : (isEven ? PdfColors.white : PdfColors.grey50),
                     ),
                     children: [
-                      _buildDataCell((index + 1).toString()),
-                      _buildDataCell(supplier.name, bold: hasPending),
-                      _buildDataCell(supplier.phone ?? '-'),
-                      _buildDataCell(supplier.companyId.toString()),
+                      _buildDataCell((index + 1).toString(), font: regularFont),
+                      _buildDataCell(
+                        supplier.name,
+                        bold: hasPending,
+                        font: hasPending ? boldFont : regularFont,
+                      ),
+                      _buildDataCell(supplier.phone ?? '-', font: regularFont),
+                      _buildDataCell(
+                        supplier.companyId.toString(),
+                        font: regularFont,
+                      ),
                       _buildDataCell(
                         supplier.pendingAmount.toStringAsFixed(2),
                         bold: hasPending,
                         color: hasPending ? PdfColors.deepOrange900 : null,
+                        font: hasPending ? boldFont : regularFont,
                       ),
-                      _buildDataCell(supplier.creditLimit.toStringAsFixed(2)),
+                      _buildDataCell(
+                        supplier.creditLimit.toStringAsFixed(2),
+                        font: regularFont,
+                      ),
                     ],
                   );
                 }),
@@ -293,16 +456,17 @@ class SupplierExportService {
                           style: pw.TextStyle(
                             fontSize: 12,
                             fontWeight: pw.FontWeight.bold,
+                            font: boldFont,
                           ),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           'Total Records: ${suppliers.length}',
-                          style: const pw.TextStyle(fontSize: 10),
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                         pw.Text(
                           'Total Pending Amount: Rs ${totalPending.toStringAsFixed(2)}',
-                          style: const pw.TextStyle(fontSize: 10),
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                       ],
                     ),
@@ -311,17 +475,20 @@ class SupplierExportService {
                       children: [
                         pw.Text(
                           'Prepared via میاں ٹریڈرز',
-                          style: const pw.TextStyle(
+                          textDirection: pw.TextDirection.rtl,
+                          style: pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
+                            font: regularFont,
                           ),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           _formatDateTime(now),
-                          style: const pw.TextStyle(
+                          style: pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
+                            font: regularFont,
                           ),
                         ),
                       ],
@@ -335,28 +502,20 @@ class SupplierExportService {
       );
     }
 
-    // Share PDF
-    final bytes = await pdf.save();
-    final filterSuffix = pendingFilter == true
-        ? '_Pending'
-        : pendingFilter == false
-        ? '_Paid'
-        : '';
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Supplier_Report${filterSuffix}_${_formatDate(now)}.pdf',
-    );
-
-    print(
-      'Supplier Report PDF exported successfully (${suppliers.length} records, $totalPages pages).',
-    );
+    return await pdf.save();
   }
 
   // ═══════════════════════════════════════
   // 🎨 HELPER WIDGETS
   // ═══════════════════════════════════════
 
-  pw.Widget _buildSummaryCard(String label, String value, PdfColor color) {
+  pw.Widget _buildSummaryCard(
+    String label,
+    String value,
+    PdfColor color,
+    pw.Font regular,
+    pw.Font bold,
+  ) {
     return pw.Expanded(
       child: pw.Container(
         padding: const pw.EdgeInsets.all(12),
@@ -374,6 +533,7 @@ class SupplierExportService {
                 fontSize: 10,
                 color: color,
                 fontWeight: pw.FontWeight.bold,
+                font: bold,
               ),
             ),
             pw.SizedBox(height: 4),
@@ -383,6 +543,7 @@ class SupplierExportService {
                 fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
                 color: color,
+                font: bold,
               ),
             ),
           ],
@@ -391,7 +552,7 @@ class SupplierExportService {
     );
   }
 
-  pw.Widget _buildHeaderCell(String text) {
+  pw.Widget _buildHeaderCell(String text, pw.Font font) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(8),
       child: pw.Text(
@@ -400,13 +561,19 @@ class SupplierExportService {
           fontSize: 11,
           fontWeight: pw.FontWeight.bold,
           color: PdfColors.purple900,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),
     );
   }
 
-  pw.Widget _buildDataCell(String text, {bool bold = false, PdfColor? color}) {
+  pw.Widget _buildDataCell(
+    String text, {
+    bool bold = false,
+    PdfColor? color,
+    required pw.Font font,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
@@ -415,6 +582,7 @@ class SupplierExportService {
           fontSize: 9,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),

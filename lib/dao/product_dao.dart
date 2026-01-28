@@ -49,13 +49,17 @@ class ProductDao {
     return result.map((e) => Product.fromMap(e)).toList();
   }
 
-  /// Get products by page for lazy loading
+  /// Get products by page for lazy loading with advanced filters
   Future<List<Product>> getProductsPage({
     required int page,
     required int pageSize,
     bool includeDeleted = false,
-    String? searchQuery, // optional search
-    String? categoryId, // optional category filter
+    String? searchQuery,
+    String? categoryId,
+    String? supplierId,
+    bool onlyLowStock = false,
+    String orderBy = 'name',
+    bool isAscending = true,
   }) async {
     final offset = page * pageSize;
 
@@ -71,25 +75,113 @@ class ProductDao {
       whereArgs.addAll(["%$searchQuery%", "%$searchQuery%"]);
     }
 
-    if (categoryId != null) {
+    if (categoryId != null && categoryId != 'all') {
       whereClauses.add("category_id = ?");
       whereArgs.add(categoryId);
+    }
+
+    if (supplierId != null && supplierId != 'all') {
+      whereClauses.add("supplier_id = ?");
+      whereArgs.add(supplierId);
+    }
+
+    if (onlyLowStock) {
+      // Assuming min_stock is a column, or defaulting to 0 check
+      whereClauses.add("quantity <= min_stock");
     }
 
     final whereString = whereClauses.isNotEmpty
         ? whereClauses.join(" AND ")
         : null;
 
+    // Map sort options to columns
+    String orderColumn = 'name';
+    switch (orderBy) {
+      case 'quantity':
+        orderColumn = 'quantity';
+        break;
+      case 'costPrice':
+        orderColumn = 'cost_price';
+        break;
+      case 'sellPrice':
+        orderColumn = 'sell_price';
+        break;
+      case 'name':
+      default:
+        orderColumn = 'name';
+        break;
+    }
+
+    final orderDirection = isAscending ? 'ASC' : 'DESC';
+
     final result = await db.query(
       "products",
       where: whereString,
       whereArgs: whereArgs,
-      orderBy: "name ASC",
+      orderBy: "$orderColumn $orderDirection",
       limit: pageSize,
       offset: offset,
     );
 
     return result.map((e) => Product.fromMap(e)).toList();
+  }
+
+  /// Get overall inventory statistics based on filters
+  Future<Map<String, dynamic>> getInventoryStats({
+    bool includeDeleted = false,
+    String? searchQuery,
+    String? categoryId,
+    String? supplierId,
+    bool onlyLowStock = false,
+  }) async {
+    final whereClauses = <String>[];
+    final whereArgs = <dynamic>[];
+
+    if (!includeDeleted) {
+      whereClauses.add("is_deleted = 0");
+    }
+
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      whereClauses.add("(name LIKE ? OR sku LIKE ?)");
+      whereArgs.addAll(["%$searchQuery%", "%$searchQuery%"]);
+    }
+
+    if (categoryId != null && categoryId != 'all') {
+      whereClauses.add("category_id = ?");
+      whereArgs.add(categoryId);
+    }
+
+    if (supplierId != null && supplierId != 'all') {
+      whereClauses.add("supplier_id = ?");
+      whereArgs.add(supplierId);
+    }
+
+    if (onlyLowStock) {
+      whereClauses.add("quantity <= min_stock");
+    }
+
+    String sql =
+        "SELECT COUNT(*) as totalProducts, "
+        "SUM(CASE WHEN quantity <= min_stock AND min_stock > 0 THEN 1 ELSE 0 END) as lowStockCount, "
+        "SUM(quantity * cost_price) as totalValue "
+        "FROM products";
+
+    if (whereClauses.isNotEmpty) {
+      sql += " WHERE ${whereClauses.join(" AND ")}";
+    }
+
+    final result = await db.rawQuery(sql, whereArgs);
+
+    if (result.isEmpty) {
+      return {'totalProducts': 0, 'lowStockCount': 0, 'totalValue': 0.0};
+    }
+
+    final row = result.first;
+    return {
+      'totalProducts': row['totalProducts'] ?? 0,
+      'lowStockCount': row['lowStockCount'] ?? 0,
+      'totalValue': (row['totalValue'] as num?)?.toDouble() ?? 0.0,
+    };
   }
 
   /// Get product by ID

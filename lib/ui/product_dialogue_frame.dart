@@ -151,11 +151,11 @@ class _ProductDialogState extends State<ProductDialog> {
                       categories.firstWhere((c) => c.id == 'cat-001'),
                   itemAsString: (c) => c.name,
                   compareFn: (a, b) => a.id == b.id,
-                  popupProps: PopupProps.menu(
+                  popupProps: const PopupProps.modalBottomSheet(
                     showSearchBox: true,
-                    fit: FlexFit.loose,
+                    constraints: BoxConstraints(maxHeight: 500),
                   ),
-                  decoratorProps: DropDownDecoratorProps(
+                  decoratorProps: const DropDownDecoratorProps(
                     decoration: InputDecoration(
                       labelText: "Category",
                       border: OutlineInputBorder(),
@@ -181,10 +181,19 @@ class _ProductDialogState extends State<ProductDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            FocusScope.of(context).unfocus();
+            Navigator.pop(context);
+          },
           child: const Text("Cancel"),
         ),
-        ElevatedButton(onPressed: _save, child: const Text("Save")),
+        ElevatedButton(
+          onPressed: () {
+            FocusScope.of(context).unfocus();
+            _save();
+          },
+          child: const Text("Save"),
+        ),
       ],
     );
   }

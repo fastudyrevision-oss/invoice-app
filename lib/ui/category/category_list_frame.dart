@@ -1,25 +1,29 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../dao/category_dao.dart';
 import '../../models/category.dart';
 import '../../repositories/category_repository.dart';
 import 'category_form_screen.dart';
 import '../../utils/responsive_utils.dart';
+import '../../services/logger_service.dart';
 
 class CategoryListFrame extends StatefulWidget {
   const CategoryListFrame({super.key});
 
   @override
-  _CategoryListFrameState createState() => _CategoryListFrameState();
+  State<CategoryListFrame> createState() => _CategoryListFrameState();
 }
 
 class _CategoryListFrameState extends State<CategoryListFrame> {
   final TextEditingController _searchController = TextEditingController();
   final List<Category> _categories = [];
+  List<Category> _filteredCategories = [];
   bool _loading = false;
   bool _loadingMore = false;
   bool _showDeleted = false;
   SortMode _sortMode = SortMode.nameAsc;
   late CategoryRepository _repo;
+  Timer? _debounce;
 
   // Lazy loading variables
   static const int _pageSize = 10;
@@ -30,7 +34,14 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   void initState() {
     super.initState();
     _initRepoAndLoad();
-    _searchController.addListener(_applyFilters);
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _refreshCategories();
+    });
   }
 
   Future<void> _initRepoAndLoad() async {
@@ -39,7 +50,10 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   }
 
   Future<void> _refreshCategories() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadingMore = false; // Reset to allow search to force a reload
+    });
     _categories.clear();
     _currentOffset = 0;
     _hasMoreData = true;
@@ -57,6 +71,13 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
       _currentOffset,
       _pageSize,
       includeDeleted: _showDeleted,
+      searchQuery: _searchController.text,
+    );
+
+    logger.debug(
+      'CategoryList',
+      'Loaded page',
+      context: {'offset': _currentOffset, 'count': page.length},
     );
 
     if (page.length < _pageSize) _hasMoreData = false;
@@ -69,15 +90,9 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
   }
 
   void _applyFilters() {
-    final q = _searchController.text.toLowerCase().trim();
-    List<Category> filtered = _categories.where((c) {
-      if (q.isEmpty) return true;
-      return c.name.toLowerCase().contains(q) ||
-          (c.slug ?? '').toLowerCase().contains(q) ||
-          (c.description ?? '').toLowerCase().contains(q);
-    }).toList();
-
-    filtered.sort((a, b) {
+    // Sorting only now, as filtering is done in DB
+    final sorted = List<Category>.from(_categories);
+    sorted.sort((a, b) {
       switch (_sortMode) {
         case SortMode.nameAsc:
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
@@ -92,10 +107,10 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
       }
     });
 
-    _filteredCategories = filtered;
+    setState(() {
+      _filteredCategories = sorted;
+    });
   }
-
-  List<Category> _filteredCategories = [];
 
   Future<void> _openForm({Category? category}) async {
     final result = await Navigator.of(context).push<Category?>(
@@ -126,6 +141,11 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
     );
     if (ok == true) {
       await _repo.deleteCategory(c.id);
+      logger.info(
+        'CategoryList',
+        'Deleted category',
+        context: {'id': c.id, 'name': c.name},
+      );
       await _refreshCategories();
     }
   }
@@ -136,11 +156,18 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
       updatedAt: DateTime.now().toIso8601String(),
     );
     await _repo.updateCategory(restored);
+    logger.info(
+      'CategoryList',
+      'Restored category',
+      context: {'id': c.id, 'name': c.name},
+    );
     await _refreshCategories();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -197,10 +224,10 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
               colors: [
                 Colors.white,
                 isDeleted
-                    ? Colors.grey.withOpacity(0.1)
+                    ? Colors.grey.withValues(alpha: 0.1)
                     : isActive
-                    ? Colors.green.withOpacity(0.05)
-                    : Colors.orange.withOpacity(0.05),
+                    ? Colors.green.withValues(alpha: 0.05)
+                    : Colors.orange.withValues(alpha: 0.05),
               ],
             ),
             borderRadius: BorderRadius.circular(16),
@@ -212,7 +239,7 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                             : isActive
                             ? Colors.green
                             : Colors.orange)
-                        .withOpacity(0.2),
+                        .withValues(alpha: 0.2),
                 spreadRadius: 1,
                 blurRadius: 8,
                 offset: const Offset(0, 4),
@@ -225,7 +252,7 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                           : isActive
                           ? Colors.green
                           : Colors.orange)
-                      .withOpacity(0.3),
+                      .withValues(alpha: 0.3),
               width: 1.5,
             ),
           ),
@@ -323,7 +350,7 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.purple.withOpacity(0.3),
+                                color: Colors.purple.withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -510,8 +537,8 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Theme.of(context).primaryColor.withOpacity(0.1),
-                      Theme.of(context).primaryColor.withOpacity(0.05),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.05),
                     ],
                   ),
                 ),
@@ -522,6 +549,16 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.search),
                       hintText: 'Search categories...',
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                // Manual clear doesn't always trigger listener immediately in some cases,
+                                // but our listener handles it. Ensuring it fires.
+                              },
+                            )
+                          : null,
                       filled: true,
                       fillColor: Colors.white,
                       contentPadding: const EdgeInsets.symmetric(
@@ -533,6 +570,7 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
                         borderSide: BorderSide.none,
                       ),
                     ),
+                    onSubmitted: (_) => _refreshCategories(),
                   ),
                 ),
               ),

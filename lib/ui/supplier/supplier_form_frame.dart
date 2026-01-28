@@ -113,12 +113,21 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
             children: [
               TextFormField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: "Name"),
-                validator: (v) => v!.isEmpty ? "Required" : null,
+                decoration: const InputDecoration(labelText: "Name *"),
+                validator: (v) => v!.trim().isEmpty ? "Required" : null,
               ),
               TextFormField(
                 controller: _phoneCtrl,
                 decoration: const InputDecoration(labelText: "Phone"),
+                keyboardType: TextInputType.phone,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    if (!RegExp(r'^[0-9+]+$').hasMatch(value)) {
+                      return 'Invalid phone number';
+                    }
+                  }
+                  return null;
+                },
               ),
               TextFormField(
                 controller: _addressCtrl,
@@ -132,6 +141,13 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
                 controller: _creditCtrl,
                 decoration: const InputDecoration(labelText: "Credit Limit"),
                 keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    final v = double.tryParse(value);
+                    if (v == null || v < 0) return 'Invalid';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               DropdownSearch<SupplierCompany>(
@@ -152,9 +168,9 @@ class _SupplierFormFrameState extends State<SupplierFormFrame> {
                   orElse: () => allCompaniesOption, // return null if not found
                 ),
 
-                popupProps: PopupProps.menu(
+                popupProps: const PopupProps.modalBottomSheet(
                   showSearchBox: true,
-                  fit: FlexFit.loose,
+                  constraints: BoxConstraints(maxHeight: 500),
                 ), // lets user type to search
                 decoratorProps: DropDownDecoratorProps(
                   decoration: InputDecoration(

@@ -87,10 +87,11 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
                     final p = purchases.firstWhere((p) => p.id == id);
                     return "Invoice: ${p.invoiceNo} | Total: Rs ${p.total} | Pending: Rs ${p.pending}";
                   },
-                  popupProps: PopupProps.menu(
+                  popupProps: const PopupProps.modalBottomSheet(
                     showSearchBox: true,
+                    constraints: BoxConstraints(maxHeight: 500),
                     searchFieldProps: TextFieldProps(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: "Search Purchase",
                         border: OutlineInputBorder(),
                       ),
@@ -237,6 +238,9 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
                         ),
                         TextButton(
                           onPressed: () {
+                            FocusScope.of(
+                              context,
+                            ).unfocus(); // ✅ Clear focus to avoid disposal race condition
                             Navigator.pop(context); // Close warning
                             Navigator.pop(ctx, {
                               "amount": amt,
@@ -255,6 +259,7 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
                     ),
                   );
                 } else {
+                  FocusScope.of(context).unfocus(); // ✅ Clear focus
                   Navigator.pop(ctx, {
                     "amount": amt,
                     "note": noteCtrl.text,

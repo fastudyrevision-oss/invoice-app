@@ -3,6 +3,7 @@ import '../models/supplier_payment.dart';
 import '../dao/supplier_dao.dart';
 import '../repositories/purchase_repo.dart';
 import '../models/purchase.dart';
+import '../services/logger_service.dart';
 
 class SupplierPaymentRepository {
   //create a db instance
@@ -16,6 +17,8 @@ class SupplierPaymentRepository {
     this._supplierDao,
     this._purchaseRepo,
   );
+
+  LoggerService get logger => LoggerService.instance;
 
   /// Get all payments for a supplier
   Future<List<SupplierPayment>> getPayments(
@@ -63,9 +66,9 @@ class SupplierPaymentRepository {
         final oldPaid = _toDouble(purchase.paid);
         final oldPending = _toDouble(purchase.pending);
 
-        final paymentApplied = amount > oldPending ? oldPending : amount;
-        final newPaid = oldPaid + paymentApplied;
-        final newPending = oldPending - paymentApplied;
+        // ✅ Remove capping logic: Allow pending to become negative (overpaid)
+        final newPaid = oldPaid + amount;
+        final newPending = oldPending - amount;
 
         await _purchaseRepo.updatePurchase(
           purchase.copyWith(paid: newPaid, pending: newPending),
@@ -74,7 +77,7 @@ class SupplierPaymentRepository {
     }
 
     // 3️⃣ Recalculate supplier.pending from all purchases
-    await _recalculateSupplierPending(supplierId);
+    await recalculateSupplierBalance(supplierId);
   }
 
   /// Update an existing payment
@@ -86,46 +89,68 @@ class SupplierPaymentRepository {
     // If amount or purchaseId changed, we need to update purchase balances
     if (oldPayment.amount != payment.amount ||
         oldPayment.purchaseId != payment.purchaseId) {
-      // 1️⃣ Revert the old payment from old purchase
-      if (oldPayment.purchaseId != null) {
-        final oldPurchase = await _purchaseRepo.getPurchaseById(
-          oldPayment.purchaseId!,
+      // ✅ CASE 1: Editing payment for THE SAME purchase (only amount changed)
+      if (oldPayment.purchaseId != null &&
+          oldPayment.purchaseId == payment.purchaseId) {
+        // Just apply the DIFFERENCE to avoid double-update
+        final amountDifference = payment.amount - oldPayment.amount;
+
+        final purchase = await _purchaseRepo.getPurchaseById(
+          payment.purchaseId!,
         );
-        if (oldPurchase != null) {
-          final newPaid = _toDouble(oldPurchase.paid) - oldPayment.amount;
-          final newPending = _toDouble(oldPurchase.pending) + oldPayment.amount;
+        if (purchase != null) {
+          final newPaid = _toDouble(purchase.paid) + amountDifference;
+          final newPending = _toDouble(purchase.pending) - amountDifference;
+
           await _purchaseRepo.updatePurchase(
-            oldPurchase.copyWith(
+            purchase.copyWith(
               paid: newPaid.clamp(0.0, double.infinity),
               pending: newPending,
             ),
           );
         }
       }
-
-      // 2️⃣ Apply the new payment to new purchase
-      if (payment.purchaseId != null) {
-        final newPurchase = await _purchaseRepo.getPurchaseById(
-          payment.purchaseId!,
-        );
-        if (newPurchase != null) {
-          final oldPaid = _toDouble(newPurchase.paid);
-          final oldPending = _toDouble(newPurchase.pending);
-
-          final paymentApplied = payment.amount > oldPending
-              ? oldPending
-              : payment.amount;
-          final newPaid = oldPaid + paymentApplied;
-          final newPending = oldPending - paymentApplied;
-
-          await _purchaseRepo.updatePurchase(
-            newPurchase.copyWith(paid: newPaid, pending: newPending),
+      // ✅ CASE 2: Moving payment to a DIFFERENT purchase
+      else {
+        // 1️⃣ Revert the old payment from old purchase
+        if (oldPayment.purchaseId != null) {
+          final oldPurchase = await _purchaseRepo.getPurchaseById(
+            oldPayment.purchaseId!,
           );
+          if (oldPurchase != null) {
+            final newPaid = _toDouble(oldPurchase.paid) - oldPayment.amount;
+            final newPending =
+                _toDouble(oldPurchase.pending) + oldPayment.amount;
+            await _purchaseRepo.updatePurchase(
+              oldPurchase.copyWith(
+                paid: newPaid.clamp(0.0, double.infinity),
+                pending: newPending,
+              ),
+            );
+          }
+        }
+
+        // 2️⃣ Apply the new payment to new purchase
+        if (payment.purchaseId != null) {
+          final newPurchase = await _purchaseRepo.getPurchaseById(
+            payment.purchaseId!,
+          );
+          if (newPurchase != null) {
+            final oldPaid = _toDouble(newPurchase.paid);
+            final oldPending = _toDouble(newPurchase.pending);
+
+            final newPaid = oldPaid + payment.amount;
+            final newPending = oldPending - payment.amount;
+
+            await _purchaseRepo.updatePurchase(
+              newPurchase.copyWith(paid: newPaid, pending: newPending),
+            );
+          }
         }
       }
 
       // 3️⃣ Recalculate supplier pending
-      await _recalculateSupplierPending(payment.supplierId);
+      await recalculateSupplierBalance(payment.supplierId);
     }
 
     // 4️⃣ Update the payment record
@@ -157,7 +182,7 @@ class SupplierPaymentRepository {
     }
 
     // 2️⃣ Recalculate supplier.pending from all purchases
-    await _recalculateSupplierPending(payment.supplierId);
+    await recalculateSupplierBalance(payment.supplierId);
   }
 
   /// Restore a soft-deleted payment (mark deleted = 0)
@@ -173,11 +198,9 @@ class SupplierPaymentRepository {
         final oldPaid = _toDouble(purchase.paid);
         final oldPending = _toDouble(purchase.pending);
 
-        final paymentApplied = payment.amount > oldPending
-            ? oldPending
-            : payment.amount;
-        final newPaid = oldPaid + paymentApplied;
-        final newPending = oldPending - paymentApplied;
+        // ✅ Remove capping logic
+        final newPaid = oldPaid + payment.amount;
+        final newPending = oldPending - payment.amount;
 
         await _purchaseRepo.updatePurchase(
           purchase.copyWith(paid: newPaid, pending: newPending),
@@ -186,7 +209,7 @@ class SupplierPaymentRepository {
     }
 
     // 2️⃣ Recalculate supplier.pending from all purchases
-    await _recalculateSupplierPending(payment.supplierId);
+    await recalculateSupplierBalance(payment.supplierId);
   }
 
   /// Search / filter payments
@@ -247,25 +270,42 @@ class SupplierPaymentRepository {
   // Private helper methods
   // -----------------------------
 
-  /// Recalculate supplier.pending from all purchases and payments
-  Future<void> _recalculateSupplierPending(String supplierId) async {
-    // 1. Get total purchases
+  /// Recalculate supplier.pending from all purchases and general payments
+  /// ✅ Made public so UI can trigger recalculation when needed
+  Future<void> recalculateSupplierBalance(String supplierId) async {
+    // 1. Get total remaining debt from all purchases (Already accounts for UPFRONT payments)
     final allPurchases = await _purchaseRepo.getPurchasesForSupplier(
       supplierId,
     );
-    final totalPurchases = allPurchases
-        .map((p) => _toDouble(p.total))
+    final totalPurchasesPending = allPurchases
+        .map((p) => _toDouble(p.pending))
         .fold(0.0, (a, b) => a + b);
 
-    // 2. Get total active payments
+    // 2. Get total of GENERAL payments (Payments NOT linked to a specific purchase)
+    // Linked payments are already subtracted from Purchase.pending, so we don't count them again.
     final allPayments = await _paymentDao.getPayments(supplierId);
-    final totalPaid = allPayments
-        .where((p) => p.deleted == 0)
+    final totalGeneralPayments = allPayments
+        .where(
+          (p) =>
+              p.deleted == 0 && (p.purchaseId == null || p.purchaseId!.isEmpty),
+        )
         .map((p) => p.amount)
         .fold(0.0, (a, b) => a + b);
 
-    // 3. Calculate pending (Purchases - Payments)
-    final pendingAmount = totalPurchases - totalPaid;
+    // 3. Final Supplier Balance = Sum(Purchase Pendings) - Sum(General Payments)
+    final pendingAmount = totalPurchasesPending - totalGeneralPayments;
+
+    // 🛑 DEBUG LOGGING
+    logger.info(
+      "SupplierPaymentRepo",
+      "Recalculating Balance for $supplierId",
+      context: {
+        "purchases_checked": allPurchases.length,
+        "sum_purchase_pending": totalPurchasesPending,
+        "general_payments_sum": totalGeneralPayments,
+        "final_balance": pendingAmount,
+      },
+    );
 
     final supplier = await _supplierDao.getSupplierById(supplierId);
     if (supplier != null) {

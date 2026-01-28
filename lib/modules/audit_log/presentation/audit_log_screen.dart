@@ -72,17 +72,12 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
         action: _selectedAction,
         tableName: _selectedTable,
         limit: 100, // Load more for better visibility
-        // userId: _selectedUserId, // TODO: Update repo to support this
+        userId: _selectedUserId,
       );
 
-      // In-memory filter for now until repo updated
-      var filtered = logs;
-      if (_selectedUserId != null) {
-        filtered = logs.where((l) => l.userId == _selectedUserId).toList();
-      }
-
+      // In-memory filter removed as repo now supports it
       setState(() {
-        _logs = filtered;
+        _logs = logs;
         _loading = false;
       });
     } catch (e) {

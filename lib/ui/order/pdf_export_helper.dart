@@ -9,6 +9,8 @@ import 'package:printing/printing.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../utils/platform_file_helper.dart';
 import '../../utils/pdf_font_helper.dart';
+import '../../services/logger_service.dart';
+import '../../utils/date_helper.dart';
 
 /// Helper function to create and export a PDF report with a chart image.
 Future<File?> generatePdfReportWithChart({
@@ -17,6 +19,7 @@ Future<File?> generatePdfReportWithChart({
   required double totalRevenue,
   required double avgInvoice,
 }) async {
+  logger.info('PDFHelper', 'Generating Revenue Report with Chart: $title');
   final pdf = pw.Document();
 
   // Load fonts from centralized helper (future-safe)
@@ -64,7 +67,7 @@ Future<File?> generatePdfReportWithChart({
 
             pw.SizedBox(height: 30),
             pw.Text(
-              'Generated on ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}',
+              'Generated on ${DateHelper.formatDate(DateTime.now())}, ${DateFormat('hh:mm a').format(DateTime.now())}',
               style: pw.TextStyle(
                 font: regularFont,
                 fontSize: 10,
@@ -94,6 +97,7 @@ Future<File?> generateInvoicePdf(
   Invoice invoice, {
   List<Map<String, dynamic>>? items,
 }) async {
+  logger.info('PDFHelper', 'Generating Invoice PDF for #${invoice.id}');
   final pdf = pw.Document();
 
   // Load fonts from centralized helper (future-safe)
@@ -107,81 +111,78 @@ Future<File?> generateInvoicePdf(
     final logoBytes = await rootBundle.load('assets/logo.png');
     logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
   } catch (e) {
-    print('⚠️ Logo not found, skipping: $e');
+    logger.warning('PDFHelper', 'Logo not found, skipping', error: e);
   }
 
-  final date = DateFormat(
-    'dd MMM yyyy, hh:mm a',
-  ).format(DateTime.tryParse(invoice.date) ?? DateTime.now());
+  final date =
+      '${DateHelper.formatIso(invoice.date)}, ${DateFormat('hh:mm a').format(DateTime.tryParse(invoice.date) ?? DateTime.now())}';
 
   pdf.addPage(
-    pw.Page(
+    pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       build: (context) {
-        return pw.Padding(
-          padding: const pw.EdgeInsets.all(24),
-          child: pw.Column(
+        return [
+          // 🏢 Company Header
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // 🏢 Company Header
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Directionality(
-                    textDirection: pw.TextDirection.rtl,
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text(
-                          'MIAN TRADERS',
-                          style: pw.TextStyle(font: boldFont, fontSize: 22),
-                        ),
-                        pw.Text(
-                          'Kotmomin road ,Bhagtanawala, Sargodha',
-                          style: pw.TextStyle(font: regularFont, fontSize: 12),
-                        ),
-                        pw.Text(
-                          'Phone: +92 345 4297128 | bilalahmadgh@gmail.com',
-                          style: pw.TextStyle(font: regularFont, fontSize: 12),
-                        ),
-                      ],
+              pw.Directionality(
+                textDirection: pw.TextDirection.rtl,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'MIAN TRADERS',
+                      style: pw.TextStyle(font: boldFont, fontSize: 22),
                     ),
-                  ),
-                  if (logoImage != null)
-                    pw.Container(
-                      height: 60,
-                      width: 60,
-                      child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                    pw.Text(
+                      'Kotmomin road ,Bhagtanawala, Sargodha',
+                      style: pw.TextStyle(font: regularFont, fontSize: 12),
                     ),
-                ],
-              ),
-
-              pw.SizedBox(height: 20),
-              pw.Divider(),
-              pw.SizedBox(height: 12),
-
-              // 🧾 Invoice Info (Customer & Date only)
-              pw.Text(
-                'Customer: ${invoice.customerName ?? "N/A"}',
-                style: pw.TextStyle(font: regularFont, fontSize: 14),
-              ),
-              pw.Text(
-                'Date: $date',
-                style: pw.TextStyle(font: regularFont, fontSize: 12),
-              ),
-              pw.Divider(),
-              pw.SizedBox(height: 16),
-
-              // 🧾 Items Table
-              if (items != null && items.isNotEmpty) ...[
-                pw.SizedBox(height: 24),
-                pw.Text(
-                  'Items',
-                  style: pw.TextStyle(font: boldFont, fontSize: 16),
+                    pw.Text(
+                      'Phone: +92 345 4297128 | bilalahmadgh@gmail.com',
+                      style: pw.TextStyle(font: regularFont, fontSize: 12),
+                    ),
+                  ],
                 ),
-                pw.SizedBox(height: 8),
-                pw.Table.fromTextArray(
+              ),
+              if (logoImage != null)
+                pw.Container(
+                  height: 60,
+                  width: 60,
+                  child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                ),
+            ],
+          ),
+
+          pw.SizedBox(height: 20),
+          pw.Divider(),
+          pw.SizedBox(height: 12),
+
+          // 🧾 Invoice Info (Customer & Date only)
+          pw.Text(
+            'Customer: ${invoice.customerName ?? "N/A"}',
+            style: pw.TextStyle(font: regularFont, fontSize: 14),
+          ),
+          pw.Text(
+            'Date: $date',
+            style: pw.TextStyle(font: regularFont, fontSize: 12),
+          ),
+          pw.Divider(),
+          pw.SizedBox(height: 16),
+
+          // 🧾 Items Table (Chunked to prevent TooManyPagesException)
+          if (items != null && items.isNotEmpty) ...[
+            pw.SizedBox(height: 24),
+            pw.Text('Items', style: pw.TextStyle(font: boldFont, fontSize: 16)),
+            pw.SizedBox(height: 8),
+
+            // Loop through items in chunks
+            for (var i = 0; i < items.length; i += 20)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 2),
+                child: pw.TableHelper.fromTextArray(
                   border: pw.TableBorder.all(width: 0.5),
                   cellAlignment: pw.Alignment.centerLeft,
                   headerDecoration: const pw.BoxDecoration(
@@ -189,102 +190,230 @@ Future<File?> generateInvoicePdf(
                   ),
                   headerStyle: pw.TextStyle(font: boldFont, fontSize: 12),
                   cellStyle: pw.TextStyle(font: regularFont, fontSize: 10),
-                  headers: ['Product', 'Qty', 'Price', 'Total'],
-                  data: items.map((item) {
-                    final qty = (item['qty'] ?? 0);
-                    final price = (item['price'] ?? 0.0);
-                    final total = qty * price;
-                    return [
-                      item['product_name'] ?? '',
-                      qty.toString(),
-                      price.toStringAsFixed(2),
-                      total.toStringAsFixed(2),
-                    ];
-                  }).toList(),
+                  headers: i == 0
+                      ? ['Product', 'Qty', 'Price', 'Total']
+                      : [], // Header only on first chunk
+                  data: items
+                      .sublist(
+                        i,
+                        (i + 20) > items.length ? items.length : i + 20,
+                      )
+                      .map((item) {
+                        final qty = (item['qty'] ?? 0);
+                        final price = (item['price'] ?? 0.0);
+                        final total = qty * price;
+                        return [
+                          item['product_name'] ?? '',
+                          qty.toString(),
+                          price.toStringAsFixed(2),
+                          total.toStringAsFixed(2),
+                        ];
+                      })
+                      .toList(),
                 ),
-              ],
+              ),
+          ],
 
-              pw.Spacer(),
-              
-              // 💰 Totals (Moved to bottom)
-              pw.Divider(),
-              pw.SizedBox(height: 12),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Discount:',
-                    style: pw.TextStyle(font: regularFont, fontSize: 12),
-                  ),
-                  pw.Text(
-                    'Rs ${invoice.discount.toStringAsFixed(2)}',
-                    style: pw.TextStyle(font: regularFont, fontSize: 12),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 8),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Paid:',
-                    style: pw.TextStyle(font: regularFont, fontSize: 12),
-                  ),
-                  pw.Text(
-                    'Rs ${(invoice.total - invoice.pending).toStringAsFixed(2)}',
-                    style: pw.TextStyle(font: regularFont, fontSize: 12),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 8),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Pending:',
-                    style: pw.TextStyle(font: regularFont, fontSize: 12),
-                  ),
-                  pw.Text(
-                    'Rs ${invoice.pending.toStringAsFixed(2)}',
-                    style: pw.TextStyle(font: regularFont, fontSize: 12),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 12),
+          pw.SizedBox(height: 24),
+
+          // 💰 Totals Table
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.end,
+            children: [
               pw.Container(
-                decoration: pw.BoxDecoration(
-                  border: pw.Border(
-                    top: pw.BorderSide(width: 2, color: PdfColors.black),
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Total:',
-                    style: pw.TextStyle(font: boldFont, fontSize: 14),
-                  ),
-                  pw.Text(
-                    'Rs ${invoice.total.toStringAsFixed(2)}',
-                    style: pw.TextStyle(font: boldFont, fontSize: 14),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 12),
-              pw.Divider(),
-              pw.Center(
-                child: pw.Text(
-                  'Thank you for your business!',
-                  style: pw.TextStyle(
-                    font: regularFont,
-                    fontSize: 12,
-                    color: PdfColors.grey700,
-                  ),
+                width: 250,
+                child: pw.Table(
+                  border: pw.TableBorder.all(width: 0.5),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(2),
+                    1: const pw.FlexColumnWidth(1),
+                  },
+                  children: [
+                    // Subtotal
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            'Subtotal',
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            "Rs ${(invoice.total + invoice.discount).toStringAsFixed(2)}",
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                            ),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Discount (only if > 0)
+                    if (invoice.discount > 0)
+                      pw.TableRow(
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 4,
+                            ),
+                            child: pw.Text(
+                              'Discount',
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 4,
+                            ),
+                            child: pw.Text(
+                              "Rs ${invoice.discount.toStringAsFixed(2)}",
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: 10,
+                              ),
+                              textAlign: pw.TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                    // Total
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.grey200,
+                      ),
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            'Total',
+                            style: pw.TextStyle(font: boldFont, fontSize: 12),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            "Rs ${invoice.total.toStringAsFixed(2)}",
+                            style: pw.TextStyle(font: boldFont, fontSize: 12),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Paid
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            'Paid',
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            "Rs ${(invoice.total - invoice.pending).toStringAsFixed(2)}",
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                            ),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Due
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            'Due',
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: pw.Text(
+                            "Rs ${invoice.pending.toStringAsFixed(2)}",
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                            ),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
+          ),
+
+          pw.SizedBox(height: 12),
+          pw.Divider(),
+          pw.Center(
+            child: pw.Text(
+              'Thank you for your business!',
+              style: pw.TextStyle(
+                font: regularFont,
+                fontSize: 12,
+                color: PdfColors.grey700,
+              ),
+            ),
+          ),
+        ];
+      },
+      footer: (context) {
+        return pw.Container(
+          alignment: pw.Alignment.centerRight,
+          margin: const pw.EdgeInsets.only(top: 1.0 * PdfPageFormat.cm),
+          child: pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: pw.TextStyle(color: PdfColors.grey, fontSize: 10),
           ),
         );
       },
@@ -311,8 +440,13 @@ Future<File?> generateAllOrdersPdf(
   DateTimeRange? dateRange,
   String? quickFilter,
 }) async {
+  logger.info(
+    'PDFHelper',
+    'Generating All Orders Report',
+    context: {'orders': orders.length},
+  );
   final pdf = pw.Document();
-  
+
   // Load fonts from centralized helper (future-safe)
   final fonts = await PdfFontHelper.getBothFonts();
   final regularFont = fonts['regular']!;
@@ -341,14 +475,14 @@ Future<File?> generateAllOrdersPdf(
   }
 
   // Calculate totals
-  final totalRevenue = orders.fold<double>(
+  final totalRevenue = orders.fold<double>(0.0, (sum, o) => sum + o.total);
+  final totalPending = orders.fold<double>(0.0, (sum, o) => sum + o.pending);
+  final totalPaid = orders.fold<double>(
     0.0,
-    (sum, o) => sum + o.total,
+    (sum, o) => sum + (o.total - o.pending),
   );
-  final totalPending = orders.fold<double>(
-    0.0,
-    (sum, o) => sum + o.pending,
-  );
+  final totalDiscount = orders.fold<double>(0.0, (sum, o) => sum + o.discount);
+  final totalSubtotal = totalRevenue + totalDiscount;
 
   pdf.addPage(
     pw.MultiPage(
@@ -473,86 +607,56 @@ Future<File?> generateAllOrdersPdf(
             pw.SizedBox(height: 16),
           ],
 
-          // Summary Cards
-          pw.Row(
-            children: [
-              pw.Expanded(
-                child: pw.Container(
-                  padding: const pw.EdgeInsets.all(12),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.green50,
-                    borderRadius: pw.BorderRadius.circular(8),
-                    border: pw.Border.all(color: PdfColors.green700),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'Total Revenue',
-                        style: pw.TextStyle(
-                          font: regularFont,
-                          fontSize: 10,
-                          color: PdfColors.green900,
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Rs ${totalRevenue.toStringAsFixed(2)}',
-                        style: pw.TextStyle(
-                          font: boldFont,
-                          fontSize: 14,
-                          color: PdfColors.green900,
-                        ),
-                      ),
-                    ],
-                  ),
+          // Summary Section as Table
+          pw.Text(
+            'Financial Summary',
+            style: pw.TextStyle(font: boldFont, fontSize: 14),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Container(
+            width: 300,
+            child: pw.Table(
+              border: pw.TableBorder.all(width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(2),
+                1: const pw.FlexColumnWidth(1),
+              },
+              children: [
+                _buildSummaryRow('Total Subtotal', totalSubtotal, regularFont),
+                _buildSummaryRow('Total Discount', totalDiscount, regularFont),
+                _buildSummaryRow(
+                  'Total Revenue (Net)',
+                  totalRevenue,
+                  boldFont,
+                  isBold: true,
+                  bgColor: PdfColors.grey200,
                 ),
-              ),
-              pw.SizedBox(width: 12),
-              pw.Expanded(
-                child: pw.Container(
-                  padding: const pw.EdgeInsets.all(12),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.orange50,
-                    borderRadius: pw.BorderRadius.circular(8),
-                    border: pw.Border.all(color: PdfColors.orange700),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'Total Pending',
-                        style: pw.TextStyle(
-                          font: regularFont,
-                          fontSize: 10,
-                          color: PdfColors.orange900,
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Rs ${totalPending.toStringAsFixed(2)}',
-                        style: pw.TextStyle(
-                          font: boldFont,
-                          fontSize: 14,
-                          color: PdfColors.orange900,
-                        ),
-                      ),
-                    ],
-                  ),
+                _buildSummaryRow('Total Paid', totalPaid, regularFont),
+                _buildSummaryRow(
+                  'Total Pending (Due)',
+                  totalPending,
+                  regularFont,
+                  textColor: PdfColors.red900,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
 
           pw.SizedBox(height: 20),
 
-          // Orders Table
-          pw.Table.fromTextArray(
+          // Orders Table (Single table with auto-pagination)
+          pw.TableHelper.fromTextArray(
             headers: ['#', 'Customer', 'Date', 'Total', 'Pending'],
             headerStyle: pw.TextStyle(font: boldFont, fontSize: 11),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.blue100),
             cellStyle: pw.TextStyle(font: regularFont, fontSize: 9),
             border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(25), // #
+              2: const pw.FixedColumnWidth(70), // Date
+              3: const pw.FixedColumnWidth(80), // Total
+              4: const pw.FixedColumnWidth(80), // Pending
+            },
             data: orders.asMap().entries.map((entry) {
               final index = entry.key;
               final o = entry.value;
@@ -581,6 +685,7 @@ Future<File?> generateAllOrdersPdf(
               children: [
                 pw.Text(
                   'Prepared via میاں ٹریڈرز',
+                  textDirection: pw.TextDirection.rtl,
                   style: pw.TextStyle(
                     font: regularFont,
                     fontSize: 9,
@@ -616,27 +721,86 @@ Future<File?> generateAllOrdersPdf(
   );
 }
 
+// Helper for AllOrders Report Summary Table
+pw.TableRow _buildSummaryRow(
+  String label,
+  double value,
+  pw.Font font, {
+  bool isBold = false,
+  PdfColor? bgColor,
+  PdfColor? textColor,
+}) {
+  return pw.TableRow(
+    decoration: bgColor != null ? pw.BoxDecoration(color: bgColor) : null,
+    children: [
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: pw.Text(
+          label,
+          style: pw.TextStyle(
+            font: font,
+            fontSize: 10,
+            fontWeight: isBold ? pw.FontWeight.bold : null,
+            color: textColor,
+          ),
+        ),
+      ),
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: pw.Text(
+          "Rs ${value.toStringAsFixed(2)}",
+          style: pw.TextStyle(
+            font: font,
+            fontSize: 10,
+            fontWeight: isBold ? pw.FontWeight.bold : null,
+            color: textColor,
+          ),
+          textAlign: pw.TextAlign.right,
+        ),
+      ),
+    ],
+  );
+}
+
 /// ✅ Print a PDF file directly to a physical printer
 Future<void> printPdfFile(File pdfFile) async {
+  logger.info(
+    'PDFHelper',
+    'Printing PDF file',
+    context: {'path': pdfFile.path},
+  );
   if (await pdfFile.exists()) {
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => await pdfFile.readAsBytes(),
       name: pdfFile.path.split(Platform.pathSeparator).last,
     );
   } else {
-    print("⚠️ PDF file not found for printing: ${pdfFile.path}");
+    logger.warning(
+      'PDFHelper',
+      'PDF file not found for printing',
+      context: {'path': pdfFile.path},
+    );
   }
 }
 
 /// ✅ Share or print directly
 Future<void> shareOrPrintPdf(File pdfFile) async {
+  logger.info(
+    'PDFHelper',
+    'Sharing/Printing PDF file',
+    context: {'path': pdfFile.path},
+  );
   if (await pdfFile.exists()) {
     await Printing.sharePdf(
       bytes: await pdfFile.readAsBytes(),
       filename: pdfFile.path.split(Platform.pathSeparator).last,
     );
   } else {
-    print("⚠️ PDF file not found: ${pdfFile.path}");
+    logger.warning(
+      'PDFHelper',
+      'PDF file not found for sharing',
+      context: {'path': pdfFile.path},
+    );
   }
 }
 
@@ -645,9 +809,14 @@ Future<File?> generateThermalReceipt(
   Invoice invoice, {
   List<Map<String, dynamic>>? items,
 }) async {
+  logger.info('PDFHelper', 'Generating Thermal Receipt for #${invoice.id}');
   // ⚠️ Warn if receipt has many items (thermal printer best for 10-20 items)
   if (items != null && items.length > 20) {
-    debugPrint('⚠️ Warning: Receipt has ${items.length} items. Consider PDF export for better formatting.');
+    logger.warning(
+      'PDFHelper',
+      'Receipt has ${items.length} items. Consider PDF export for better formatting.',
+      context: {'itemCount': items.length},
+    );
   }
 
   final pdf = pw.Document();
@@ -660,14 +829,16 @@ Future<File?> generateThermalReceipt(
     await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'),
   );
 
-  final date = DateFormat(
-    'dd MMM yyyy, hh:mm a',
-  ).format(DateTime.tryParse(invoice.date) ?? DateTime.now());
+  final date =
+      '${DateHelper.formatIso(invoice.date)}, ${DateFormat('hh:mm a').format(DateTime.tryParse(invoice.date) ?? DateTime.now())}';
 
   // Thermal receipt: 80mm width (approx 226 points at 72 DPI)
   pdf.addPage(
     pw.Page(
-      pageFormat: const PdfPageFormat(284, double.infinity), // 80mm x custom height
+      pageFormat: const PdfPageFormat(
+        260,
+        double.infinity,
+      ), // 80mm x custom height
       margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
 
       build: (context) {
@@ -681,8 +852,9 @@ Future<File?> generateThermalReceipt(
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
                   pw.Text(
-                    'MIAN TRADERS',
-                    style: pw.TextStyle(font: boldFont, fontSize: 12),
+                    'میاں ٹریڈرز',
+                    textDirection: pw.TextDirection.rtl,
+                    style: pw.TextStyle(font: regularFont, fontSize: 20),
                     textAlign: pw.TextAlign.center,
                   ),
                 ],
@@ -690,32 +862,48 @@ Future<File?> generateThermalReceipt(
             ),
             pw.SizedBox(height: 2),
             pw.Text(
-              'Sargodha',
+              'Whole Sale & Retail Store',
               style: pw.TextStyle(font: regularFont, fontSize: 7),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              'Sargodha , Bhagtanawala , Kotmomin Road',
+              style: pw.TextStyle(font: regularFont, fontSize: 7),
+              textAlign: pw.TextAlign.left,
             ),
             pw.Text(
               '+92 345 4297128',
               style: pw.TextStyle(font: regularFont, fontSize: 7),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
             ),
             pw.SizedBox(height: 6),
             pw.Container(height: 1, color: PdfColors.black),
             pw.SizedBox(height: 4),
 
             // Customer & Date (stacked for narrow width)
-            pw.Text(
-              'Customer: ${(invoice.customerName ?? 'N/A').length > 18 ? (invoice.customerName ?? 'N/A').substring(0, 18) : invoice.customerName ?? 'N/A'}',
-              style: pw.TextStyle(font: regularFont, fontSize: 6),
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
+            pw.Align(
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Text(
+                'Customer: ${(invoice.customerName ?? 'N/A').length > 18 ? (invoice.customerName ?? 'N/A').substring(0, 18) : invoice.customerName ?? 'N/A'}',
+                textAlign: pw.TextAlign.left,
+                textDirection: pw.TextDirection.ltr,
+                style: pw.TextStyle(font: regularFont, fontSize: 6),
+                maxLines: 1,
+                overflow: pw.TextOverflow.clip,
+              ),
             ),
             pw.SizedBox(height: 1),
-            pw.Text(
-              'Date: ${date.length > 18 ? date.substring(0, 18) : date}',
-              style: pw.TextStyle(font: regularFont, fontSize: 7),
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
+            pw.Align(
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Text(
+                'Date: ${date.length > 18 ? date.substring(0, 18) : date}',
+                textDirection: pw.TextDirection.ltr,
+                textAlign: pw.TextAlign.left,
+                style: pw.TextStyle(font: regularFont, fontSize: 7),
+                maxLines: 1,
+                overflow: pw.TextOverflow.clip,
+              ),
             ),
             pw.SizedBox(height: 4),
             pw.Container(height: 1, color: PdfColors.black),
@@ -726,11 +914,11 @@ Future<File?> generateThermalReceipt(
               pw.Table(
                 border: pw.TableBorder.all(width: 0.3),
                 columnWidths: {
-  0: const pw.FixedColumnWidth(60), // Item
-  1: const pw.FixedColumnWidth(30),  // Qty
-  2: const pw.FixedColumnWidth(20),  // Price
-  3: const pw.FixedColumnWidth(100),  // Total
-},
+                  0: const pw.FixedColumnWidth(80), // Item
+                  1: const pw.FixedColumnWidth(30), // Qty
+                  2: const pw.FixedColumnWidth(20), // Price
+                  3: const pw.FixedColumnWidth(60), // Total
+                },
 
                 children: [
                   pw.TableRow(
@@ -816,7 +1004,7 @@ Future<File?> generateThermalReceipt(
                         ),
                       ],
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
               pw.SizedBox(height: 4),
@@ -825,35 +1013,152 @@ Future<File?> generateThermalReceipt(
             pw.Container(height: 1, color: PdfColors.black),
             pw.SizedBox(height: 3),
 
-            // 💰 Totals with optimized layout (single line each)
-            pw.Text(
-              'Disc: Rs   ${invoice.discount.toStringAsFixed(0)}',
-              style: pw.TextStyle(font: regularFont, fontSize: 9),
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
-            ),
-            pw.SizedBox(height: 1),
-            pw.Text(
-              'Paid: Rs   ${(invoice.total - invoice.pending).toStringAsFixed(0)}',
-              style: pw.TextStyle(font: regularFont, fontSize: 9),
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
-            ),
-            pw.SizedBox(height: 1),
-            pw.Text(
-              'Due: Rs   ${invoice.pending.toStringAsFixed(0)}',
-              style: pw.TextStyle(font: regularFont, fontSize: 9),
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
-            ),
-            pw.SizedBox(height: 4),
-            pw.Container(height: 1.5, color: PdfColors.black),
-            pw.SizedBox(height: 2),
-            pw.Text(
-              'TOTAL: Rs   ${invoice.total.toStringAsFixed(0)}',
-              style: pw.TextStyle(font: boldFont, fontSize: 9),
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
+            // 💰 Totals Table
+            pw.Container(
+              width: 200, // Limit width for better centering
+              child: pw.Table(
+                border: pw.TableBorder.all(width: 0.5),
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(2),
+                  1: const pw.FlexColumnWidth(1),
+                },
+                children: [
+                  // Subtotal
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          'Subtotal',
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          (invoice.total + invoice.discount).toStringAsFixed(0),
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Discount (only if > 0)
+                  if (invoice.discount > 0)
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: pw.Text(
+                            'Discount',
+                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: pw.Text(
+                            invoice.discount.toStringAsFixed(0),
+                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  // Total
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey200,
+                    ),
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          'Total',
+                          style: pw.TextStyle(font: boldFont, fontSize: 9),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          invoice.total.toStringAsFixed(0),
+                          style: pw.TextStyle(font: boldFont, fontSize: 9),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Paid
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          'Paid',
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          (invoice.total - invoice.pending).toStringAsFixed(0),
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Due
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          'Due',
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: pw.Text(
+                          invoice.pending.toStringAsFixed(0),
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             pw.SizedBox(height: 6),
             pw.Container(height: 1, color: PdfColors.black),
@@ -862,13 +1167,6 @@ Future<File?> generateThermalReceipt(
               child: pw.Text(
                 'Thank You!',
                 style: pw.TextStyle(font: boldFont, fontSize: 9),
-              ),
-            ),
-            pw.Center(
-              child: pw.Text(
-                'میاں ٹریڈرز',
-                textDirection: pw.TextDirection.rtl,
-                style: pw.TextStyle(font: regularFont, fontSize: 8),
               ),
             ),
           ],

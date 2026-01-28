@@ -4,11 +4,16 @@ import '../models/customer_payment.dart';
 import 'package:sqflite/sqflite.dart';
 import '../core/services/audit_logger.dart';
 import '../services/auth_service.dart';
+import '../services/logger_service.dart';
+import 'invoice_dao.dart';
+import 'customer_dao.dart';
 
 class CustomerPaymentDao {
   final DatabaseExecutor? db; // Optional for transaction support
 
   CustomerPaymentDao([this.db]);
+
+  LoggerService get logger => LoggerService.instance;
 
   Future<DatabaseExecutor> get _db async =>
       db ?? await DatabaseHelper.instance.db;
@@ -181,5 +186,145 @@ class CustomerPaymentDao {
     }
 
     return count;
+  }
+
+  /// ✅ Transacted Payment Processing
+  /// Updates Payment Record + Invoice Balance + Customer Balance
+  Future<void> processPayment({
+    required CustomerPayment payment,
+    bool isUpdate = false,
+    CustomerPayment? oldPayment,
+  }) async {
+    final dbClient = await DatabaseHelper.instance.db;
+
+    await dbClient.transaction((txn) async {
+      final invDao = InvoiceDao(txn);
+      final custDao = CustomerDao(txn);
+      final cpDao = CustomerPaymentDao(txn);
+
+      if (isUpdate && oldPayment != null) {
+        logger.info(
+          'CustomerPaymentDao',
+          'Updated payment ${payment.id}: Processing balance changes',
+        );
+
+        // ✅ CASE 1: Editing payment for THE SAME invoice (only amount changed)
+        if (oldPayment.invoiceId != null &&
+            payment.invoiceId != null &&
+            oldPayment.invoiceId == payment.invoiceId) {
+          // Apply only the DIFFERENCE to avoid double-update
+          final amountDifference = payment.amount - oldPayment.amount;
+
+          logger.info(
+            'CustomerPaymentDao',
+            'CASE 1: Same invoice edit - Old: ${oldPayment.amount}, New: ${payment.amount}, Difference: $amountDifference',
+          );
+
+          // Update invoice with difference
+          await invDao.updatePendingAmount(
+            payment.invoiceId!,
+            -amountDifference, // Negative = reduce pending
+          );
+
+          // Update customer with difference
+          await custDao.updatePendingAmount(
+            payment.customerId,
+            -amountDifference, // Negative = reduce pending
+          );
+        }
+        // ✅ CASE 2: Moving payment to a DIFFERENT invoice or changing assignment
+        else {
+          logger.info(
+            'CustomerPaymentDao',
+            'CASE 2: Different invoice or assignment change (Revert + Apply)',
+          );
+          // 1. Revert Old Payment Effects
+          if (oldPayment.invoiceId != null) {
+            logger.info(
+              'CustomerPaymentDao',
+              'Reverting old payment from invoice ${oldPayment.invoiceId}',
+            );
+            await invDao.updatePendingAmount(
+              oldPayment.invoiceId!,
+              oldPayment.amount, // Adding back to pending
+            );
+          }
+          await custDao.updatePendingAmount(
+            oldPayment.customerId,
+            oldPayment.amount, // Adding back to customer pending
+          );
+
+          // 2. Apply New Payment Effects
+          if (payment.invoiceId != null) {
+            logger.info(
+              'CustomerPaymentDao',
+              'Applying new payment to invoice ${payment.invoiceId}',
+            );
+            await invDao.updatePendingAmount(
+              payment.invoiceId!,
+              -payment.amount, // Deducting from pending
+            );
+          }
+          await custDao.updatePendingAmount(
+            payment.customerId,
+            -payment.amount, // Deducting from customer pending
+          );
+        }
+
+        // Update the payment record
+        await cpDao.update(payment);
+      } else {
+        // New Payment - Insert record
+        logger.info(
+          'CustomerPaymentDao',
+          'New payment ${payment.id}: Inserting record',
+        );
+        await cpDao.insert(payment);
+
+        // Apply New Payment Effects
+        if (payment.invoiceId != null) {
+          logger.info(
+            'CustomerPaymentDao',
+            'Applying balance reduction to invoice ${payment.invoiceId}',
+          );
+          await invDao.updatePendingAmount(
+            payment.invoiceId!,
+            -payment.amount, // Deducting from pending
+          );
+        }
+        logger.info(
+          'CustomerPaymentDao',
+          'Applying balance reduction to customer ${payment.customerId}',
+        );
+        await custDao.updatePendingAmount(
+          payment.customerId,
+          -payment.amount, // Deducting from customer pending
+        );
+      }
+    });
+  }
+
+  /// ✅ Safe Delete with Balance Reversion
+  Future<void> deleteWithBalanceUpdate(CustomerPayment payment) async {
+    final dbClient = await DatabaseHelper.instance.db;
+
+    await dbClient.transaction((txn) async {
+      final invDao = InvoiceDao(txn);
+      final custDao = CustomerDao(txn);
+      final cpDao = CustomerPaymentDao(txn);
+
+      logger.info(
+        'CustomerPaymentDao',
+        'Deleting payment ${payment.id}: Reverting balances',
+      );
+      // 1. Revert effects
+      if (payment.invoiceId != null) {
+        await invDao.updatePendingAmount(payment.invoiceId!, payment.amount);
+      }
+      await custDao.updatePendingAmount(payment.customerId, payment.amount);
+
+      // 2. Delete record
+      await cpDao.delete(payment.id);
+    });
   }
 }

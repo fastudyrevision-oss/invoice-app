@@ -35,6 +35,7 @@ class AuditLogRepository {
     DateTime? end,
     String? action,
     String? tableName,
+    String? userId,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -43,6 +44,7 @@ class AuditLogRepository {
       end: end,
       action: action,
       tableName: tableName,
+      userId: userId,
       limit: limit,
       offset: offset,
     );

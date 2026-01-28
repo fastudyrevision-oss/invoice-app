@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+
 import '../models/expiring_batch_detail.dart';
 import '../repositories/purchase_repo.dart';
 import '../models/product.dart';
 import '../models/supplier.dart';
 import '../models/purchase.dart';
 import 'package:sqflite/sqflite.dart';
+import '../utils/date_helper.dart';
 
 class BatchDetailFrame extends StatefulWidget {
   final ExpiringBatchDetail batch;
@@ -67,7 +68,6 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
 
   @override
   Widget build(BuildContext context) {
-    final formatter = DateFormat('yyyy-MM-dd');
     final expiryDate = widget.batch.expiryDate;
 
     return Scaffold(
@@ -91,7 +91,9 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
                   // Batch info
                   Text("Batch No: ${widget.batch.batchNo}"),
                   Text("Quantity: ${widget.batch.qty}"),
-                  Text("Expiry: ${formatter.format(expiryDate)}"),
+                  Text(
+                    "Expiry: ${DateHelper.formatIso(expiryDate.toIso8601String())}",
+                  ),
                   const Divider(),
 
                   // Supplier info
@@ -113,7 +115,7 @@ class _BatchDetailFrameState extends State<BatchDetailFrame> {
                       "Purchase Ref: ${_purchase!.id}",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    Text("Date: ${_purchase!.date}"),
+                    Text("Date: ${DateHelper.formatIso(_purchase!.date)}"),
                     Text("Invoice No: ${_purchase!.invoiceNo}"),
                   ],
 

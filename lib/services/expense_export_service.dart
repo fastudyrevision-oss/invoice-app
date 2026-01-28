@@ -1,18 +1,77 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
 import '../models/expense.dart';
+import '../utils/unified_print_helper.dart';
+import '../utils/pdf_font_helper.dart';
+import '../services/logger_service.dart';
 
 class ExpenseExportService {
+  /// Print expense report directly
+  Future<void> printExpenseReport(List<Expense> expenses) async {
+    logger.info(
+      'ExpenseExport',
+      'Printing Expense Report',
+      context: {'count': expenses.length},
+    );
+    final pdfBytes = await _generatePdf(expenses);
+
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Expense_Report_${_formatDateFile(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Save expense report PDF to file
+  Future<File?> saveExpenseReportPdf(List<Expense> expenses) async {
+    logger.info(
+      'ExpenseExport',
+      'Saving Expense Report PDF',
+      context: {'count': expenses.length},
+    );
+    final pdfBytes = await _generatePdf(expenses);
+
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Expense_Report_${_formatDateFile(DateTime.now())}.pdf',
+      dialogTitle: 'Save Expense Report',
+    );
+  }
+
   /// Export expense list to beautiful PDF with multi-page support
   Future<void> exportToPDF(List<Expense> expenses) async {
+    logger.info(
+      'ExpenseExport',
+      'Exporting Expense Report',
+      context: {'count': expenses.length},
+    );
+    final pdfBytes = await _generatePdf(expenses);
+
+    await UnifiedPrintHelper.sharePdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Expense_Report_${_formatDateFile(DateTime.now())}.pdf',
+    );
+
+    logger.info(
+      'ExpenseExport',
+      'Expense Report PDF exported successfully',
+      context: {'count': expenses.length},
+    );
+  }
+
+  Future<Uint8List> _generatePdf(List<Expense> expenses) async {
     if (expenses.isEmpty) {
-      print('⚠️ No expenses to export.');
-      return;
+      return Uint8List(0);
     }
 
     final pdf = pw.Document();
     final now = DateTime.now();
+
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
 
     // Calculate summary statistics
     final totalAmount = expenses.fold<double>(0, (sum, e) => sum + e.amount);
@@ -65,14 +124,16 @@ class ExpenseExportService {
                           fontSize: 24,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
                       pw.Text(
                         'Page ${pageIndex + 1} of $totalPages',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 12,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                     ],
@@ -82,9 +143,10 @@ class ExpenseExportService {
                     children: [
                       pw.Text(
                         'Generated: ${_formatDateTime(now)}',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 10,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
@@ -94,6 +156,7 @@ class ExpenseExportService {
                           fontSize: 11,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                     ],
@@ -114,18 +177,24 @@ class ExpenseExportService {
                     'Total Amount',
                     'Rs ${totalAmount.toStringAsFixed(2)}',
                     PdfColors.red700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 12),
                   _buildSummaryCard(
                     'Average Expense',
                     'Rs ${avgAmount.toStringAsFixed(2)}',
                     PdfColors.orange700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 12),
                   _buildSummaryCard(
                     'Categories',
                     '${categoryTotals.length} types',
                     PdfColors.blue700,
+                    regularFont,
+                    boldFont,
                   ),
                 ],
               ),
@@ -149,11 +218,11 @@ class ExpenseExportService {
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.red50),
                   children: [
-                    _buildHeaderCell('#'),
-                    _buildHeaderCell('Date'),
-                    _buildHeaderCell('Description'),
-                    _buildHeaderCell('Category'),
-                    _buildHeaderCell('Amount (Rs)'),
+                    _buildHeaderCell('#', boldFont),
+                    _buildHeaderCell('Date', boldFont),
+                    _buildHeaderCell('Description', boldFont),
+                    _buildHeaderCell('Category', boldFont),
+                    _buildHeaderCell('Amount (Rs)', boldFont),
                   ],
                 ),
                 // Data Rows
@@ -167,14 +236,18 @@ class ExpenseExportService {
                       color: isEven ? PdfColors.white : PdfColors.grey50,
                     ),
                     children: [
-                      _buildDataCell((index + 1).toString()),
-                      _buildDataCell(_formatDate(DateTime.parse(expense.date))),
-                      _buildDataCell(expense.description),
-                      _buildDataCell(expense.category),
+                      _buildDataCell((index + 1).toString(), font: regularFont),
+                      _buildDataCell(
+                        _formatDate(DateTime.parse(expense.date)),
+                        font: regularFont,
+                      ),
+                      _buildDataCell(expense.description, font: regularFont),
+                      _buildDataCell(expense.category, font: regularFont),
                       _buildDataCell(
                         expense.amount.toStringAsFixed(2),
                         bold: true,
                         color: PdfColors.red900,
+                        font: boldFont,
                       ),
                     ],
                   );
@@ -204,6 +277,7 @@ class ExpenseExportService {
                       style: pw.TextStyle(
                         fontSize: 12,
                         fontWeight: pw.FontWeight.bold,
+                        font: boldFont,
                       ),
                     ),
                     pw.SizedBox(height: 8),
@@ -216,13 +290,17 @@ class ExpenseExportService {
                           children: [
                             pw.Text(
                               '${entry.key}:',
-                              style: const pw.TextStyle(fontSize: 10),
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                font: regularFont,
+                              ),
                             ),
                             pw.Text(
                               'Rs ${entry.value.toStringAsFixed(2)} (${percentage.toStringAsFixed(1)}%)',
                               style: pw.TextStyle(
                                 fontSize: 10,
                                 fontWeight: pw.FontWeight.bold,
+                                font: boldFont,
                               ),
                             ),
                           ],
@@ -251,16 +329,17 @@ class ExpenseExportService {
                           style: pw.TextStyle(
                             fontSize: 12,
                             fontWeight: pw.FontWeight.bold,
+                            font: boldFont,
                           ),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           'Total Records: ${expenses.length}',
-                          style: const pw.TextStyle(fontSize: 10),
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                         pw.Text(
                           'Total Amount: Rs ${totalAmount.toStringAsFixed(2)}',
-                          style: const pw.TextStyle(fontSize: 10),
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                       ],
                     ),
@@ -269,17 +348,20 @@ class ExpenseExportService {
                       children: [
                         pw.Text(
                           'Prepared via میاں ٹریڈرز',
-                          style: const pw.TextStyle(
+                          textDirection: pw.TextDirection.rtl,
+                          style: pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
+                            font: regularFont,
                           ),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           _formatDateTime(now),
-                          style: const pw.TextStyle(
+                          style: pw.TextStyle(
                             fontSize: 9,
                             color: PdfColors.grey700,
+                            font: regularFont,
                           ),
                         ),
                       ],
@@ -293,25 +375,20 @@ class ExpenseExportService {
       );
     }
 
-    // ═══════════════════════════════════════
-    // 🖨️ SHARE PDF
-    // ═══════════════════════════════════════
-    final bytes = await pdf.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Expense_Report_${_formatDateFile(now)}.pdf',
-    );
-
-    print(
-      '✅ Expense Report PDF exported successfully (${expenses.length} records, $totalPages pages).',
-    );
+    return await pdf.save();
   }
 
   // ═══════════════════════════════════════
   // 🎨 HELPER WIDGETS
   // ═══════════════════════════════════════
 
-  pw.Widget _buildSummaryCard(String label, String value, PdfColor color) {
+  pw.Widget _buildSummaryCard(
+    String label,
+    String value,
+    PdfColor color,
+    pw.Font regular,
+    pw.Font bold,
+  ) {
     return pw.Expanded(
       child: pw.Container(
         padding: const pw.EdgeInsets.all(12),
@@ -329,6 +406,7 @@ class ExpenseExportService {
                 fontSize: 10,
                 color: color,
                 fontWeight: pw.FontWeight.bold,
+                font: bold,
               ),
             ),
             pw.SizedBox(height: 4),
@@ -338,6 +416,7 @@ class ExpenseExportService {
                 fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
                 color: color,
+                font: bold,
               ),
             ),
           ],
@@ -346,7 +425,7 @@ class ExpenseExportService {
     );
   }
 
-  pw.Widget _buildHeaderCell(String text) {
+  pw.Widget _buildHeaderCell(String text, pw.Font font) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(8),
       child: pw.Text(
@@ -355,13 +434,19 @@ class ExpenseExportService {
           fontSize: 11,
           fontWeight: pw.FontWeight.bold,
           color: PdfColors.red900,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),
     );
   }
 
-  pw.Widget _buildDataCell(String text, {bool bold = false, PdfColor? color}) {
+  pw.Widget _buildDataCell(
+    String text, {
+    bool bold = false,
+    PdfColor? color,
+    required pw.Font font,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
@@ -370,6 +455,7 @@ class ExpenseExportService {
           fontSize: 9,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),

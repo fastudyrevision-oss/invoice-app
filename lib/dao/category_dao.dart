@@ -104,10 +104,28 @@ class CategoryDao {
     int offset,
     int limit, {
     bool includeDeleted = false,
+    String? searchQuery,
   }) async {
+    // Better WHERE logic
+    final List<String> whereClauses = [];
+    final List<dynamic> args = [];
+
+    if (!includeDeleted) {
+      whereClauses.add('is_deleted = 0');
+    }
+
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final q = '%${searchQuery.trim()}%';
+      whereClauses.add('(name LIKE ? OR slug LIKE ? OR description LIKE ?)');
+      args.addAll([q, q, q]);
+    }
+
+    final finalWhere = whereClauses.isEmpty ? null : whereClauses.join(' AND ');
+
     final res = await db.query(
       'categories',
-      where: includeDeleted ? null : 'is_deleted = 0',
+      where: finalWhere,
+      whereArgs: args.isEmpty ? null : args,
       orderBy: 'sort_order ASC, name ASC',
       limit: limit,
       offset: offset,

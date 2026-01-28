@@ -6,6 +6,11 @@ import '../models/product_batch.dart';
 import '../models/product.dart';
 import '../models/supplier.dart';
 import '../services/thermal_printer/index.dart';
+import 'purchase_pdf_export_helper.dart';
+import '../../utils/date_helper.dart';
+import '../db/database_helper.dart';
+import '../core/services/audit_logger.dart';
+import '../services/auth_service.dart';
 
 class PurchaseDetailFrame extends StatefulWidget {
   final PurchaseRepository repo;
@@ -26,7 +31,6 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
   late Purchase _purchase;
   Supplier? _supplier;
 
-
   @override
   void initState() {
     super.initState();
@@ -41,52 +45,92 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
   }
 
   Future<void> _addPayment() async {
-    final controller = TextEditingController();
-    final amount = await showDialog<double>(
+    // Enhanced dialog with amount and payment method
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Add Payment"),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "Amount"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context, double.tryParse(controller.text) ?? 0.0);
-            },
-            child: const Text("Add"),
-          ),
-        ],
-      ),
+      builder: (_) => _PaymentInputDialog(maxAmount: _purchase.pending),
     );
 
-    if (amount != null && amount > 0) {
-      final newPaid = _purchase.paid + amount;
-      final newPending = _purchase.total - newPaid;
+    if (result != null) {
+      final amount = result['amount'] as double;
+      final method = result['method'] as String;
+      final reference = result['reference'] as String?;
+      final note = result['note'] as String?;
 
-      final updated = _purchase.copyWith(
-        paid: newPaid,
-        pending: newPending,
-        updatedAt: DateTime.now().toIso8601String(),
-      );
+      try {
+        // Update purchase
+        final newPaid = _purchase.paid + amount;
+        final newPending = _purchase.total - newPaid;
 
-      await widget.repo.updatePurchase(updated);
-
-      if (_supplier != null) {
-        final updatedSupplier = _supplier!.copyWith(
-          pendingAmount: _supplier!.pendingAmount - amount,
+        final updated = _purchase.copyWith(
+          paid: newPaid,
+          pending: newPending,
+          updatedAt: DateTime.now().toIso8601String(),
         );
-        await widget.repo.updateSupplier(updatedSupplier);
-        _supplier = updatedSupplier;
-      }
 
-      setState(() => _purchase = updated);
+        await widget.repo.updatePurchase(updated);
+
+        // Update supplier balance
+        if (_supplier != null) {
+          final updatedSupplier = _supplier!.copyWith(
+            pendingAmount: _supplier!.pendingAmount - amount,
+          );
+          await widget.repo.updateSupplier(updatedSupplier);
+          _supplier = updatedSupplier;
+        }
+
+        // ✅ Create payment record in supplier_payments table
+        final db = await DatabaseHelper.instance.db;
+        final paymentId = DateTime.now().millisecondsSinceEpoch.toString();
+        final paymentData = {
+          'id': paymentId,
+          'supplier_id': _purchase.supplierId,
+          'purchase_id': _purchase.id,
+          'amount': amount,
+          'method': method,
+          'transaction_ref': reference,
+          'note': note ?? 'Payment for Purchase #${_purchase.invoiceNo}',
+          'date': DateTime.now().toIso8601String(),
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+          'deleted': 0,
+          'is_synced': 0,
+        };
+
+        await db.insert('supplier_payments', paymentData);
+
+        // ✅ Add audit log for payment creation
+        await AuditLogger.log(
+          'CREATE',
+          'supplier_payments',
+          recordId: paymentId,
+          userId: AuthService.instance.currentUser?.id ?? 'system',
+          newData: paymentData,
+          txn: db,
+        );
+
+        setState(() => _purchase = updated);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Payment of Rs ${amount.toStringAsFixed(0)} added successfully',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to add payment: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -364,7 +408,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                                                   ),
                                                   const SizedBox(height: 4),
                                                   Text(
-                                                    "Expiry: ${b.expiryDate ?? 'N/A'} | Qty: ${b.qty}",
+                                                    "Expiry: ${b.expiryDate != null ? DateHelper.formatIso(b.expiryDate!) : 'N/A'} | Qty: ${b.qty}",
                                                     style: TextStyle(
                                                       fontSize: 12,
                                                       color:
@@ -496,7 +540,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      "Date: ${_purchase.date.split('T').first}",
+                      "Date: ${DateHelper.formatIso(_purchase.date)}",
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade700,
@@ -581,9 +625,20 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                       ),
                     ),
                     ElevatedButton.icon(
+                      onPressed: _handleUsbPrint,
+                      icon: const Icon(Icons.usb),
+                      label: const Text("USB Print"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    ElevatedButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Print feature available')),
+                          const SnackBar(
+                            content: Text('Print feature available'),
+                          ),
                         );
                       },
                       icon: const Icon(Icons.print),
@@ -601,6 +656,48 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
         );
       },
     );
+  }
+
+  Future<void> _handleUsbPrint() async {
+    // 1. Show loading
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Preparing print data...')));
+
+    try {
+      // 2. Fetch items
+      final items = await widget.repo.getItemsByPurchaseId(_purchase.id);
+
+      // 3. Map to print format (requires fetching product names)
+      final List<Map<String, dynamic>> printItems = [];
+      for (var item in items) {
+        final product = await widget.repo.getProductById(item.productId);
+        printItems.add({
+          'product_name': product?.name ?? 'Item ${item.productId}',
+          'qty': item.qty,
+          'price': item.purchasePrice,
+        });
+      }
+
+      // 4. Generate PDF bytes/file for thermal layout
+      final pdfFile = await generateThermalReceipt(
+        _purchase,
+        items: printItems,
+        supplierName: _supplier?.name,
+      );
+
+      // 5. Trigger System Print Dialog (USB/Default Printer)
+      if (pdfFile != null) {
+        await printPdfFile(pdfFile);
+      }
+    } catch (e) {
+      debugPrint("Print Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Print failed: $e')));
+      }
+    }
   }
 
   /// Helper method to convert purchase items to receipt items
@@ -664,6 +761,132 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
             fontWeight: FontWeight.bold,
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Payment Input Dialog with amount, method, and reference
+class _PaymentInputDialog extends StatefulWidget {
+  final double maxAmount;
+
+  const _PaymentInputDialog({required this.maxAmount});
+
+  @override
+  State<_PaymentInputDialog> createState() => _PaymentInputDialogState();
+}
+
+class _PaymentInputDialogState extends State<_PaymentInputDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _amountController = TextEditingController();
+  final _referenceController = TextEditingController();
+  final _noteController = TextEditingController();
+  String _paymentMethod = 'cash';
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _referenceController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      final amount = double.tryParse(_amountController.text) ?? 0.0;
+      Navigator.pop(context, {
+        'amount': amount,
+        'method': _paymentMethod,
+        'reference': _referenceController.text.trim().isNotEmpty
+            ? _referenceController.text.trim()
+            : null,
+        'note': _noteController.text.trim().isNotEmpty
+            ? _noteController.text.trim()
+            : null,
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Payment'),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: 'Rs ',
+                  helperText: 'Max: Rs ${widget.maxAmount.toStringAsFixed(0)}',
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter an amount';
+                  }
+                  final amount = double.tryParse(value);
+                  if (amount == null || amount <= 0) {
+                    return 'Please enter a valid amount';
+                  }
+                  if (amount > widget.maxAmount) {
+                    return 'Amount exceeds pending (${widget.maxAmount.toStringAsFixed(0)})';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _paymentMethod,
+                decoration: const InputDecoration(
+                  labelText: 'Payment Method',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'bank', child: Text('Bank Transfer')),
+                  DropdownMenuItem(value: 'card', child: Text('Card')),
+                  DropdownMenuItem(value: 'cheque', child: Text('Cheque')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _paymentMethod = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _referenceController,
+                decoration: const InputDecoration(
+                  labelText: 'Reference / Cheque No (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _noteController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Note (Optional)',
+                  hintText: 'Add a note for this payment...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(onPressed: _submit, child: const Text('Add Payment')),
       ],
     );
   }

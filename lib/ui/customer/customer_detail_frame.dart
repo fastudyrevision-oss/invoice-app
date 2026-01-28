@@ -6,6 +6,7 @@ import '../../models/customer_payment.dart';
 import '../../repositories/customer_repository.dart';
 import '../../dao/invoice_dao.dart';
 import '../../db/database_helper.dart';
+import '../customer_payment/customer_payment_dialog.dart';
 
 class CustomerDetailFrame extends StatefulWidget {
   final Customer customer;
@@ -75,64 +76,15 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
     setState(() => _isLoading = false);
   }
 
-  void _showAddPaymentDialog() {
-    final amountController = TextEditingController();
-    final dateController = TextEditingController(
-      text: DateFormat('yyyy-MM-dd').format(DateTime.now()),
-    );
-    final notesController = TextEditingController();
-
-    showDialog(
+  Future<void> _showAddPaymentDialog() async {
+    final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Payment'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              decoration: const InputDecoration(labelText: 'Amount'),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: dateController,
-              decoration: const InputDecoration(labelText: 'Date (YYYY-MM-DD)'),
-            ),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(labelText: 'Notes'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final amount = double.tryParse(amountController.text) ?? 0;
-              if (amount > 0) {
-                final payment = CustomerPayment(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  customerId: widget.customer.id,
-                  amount: amount,
-                  date: dateController.text,
-                  note: notesController.text,
-                  createdAt: DateTime.now().toIso8601String(),
-                  updatedAt: DateTime.now().toIso8601String(),
-                );
-
-                await widget.repository.addPayment(payment);
-                if (ctx.mounted) Navigator.pop(ctx);
-                _loadData();
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+      builder: (ctx) => CustomerPaymentDialog(customers: [widget.customer]),
     );
+
+    if (result == true) {
+      _loadData();
+    }
   }
 
   @override

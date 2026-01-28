@@ -5,9 +5,12 @@ import '../repositories/purchase_repo.dart';
 import 'expiring_batch_detail_frame.dart';
 import 'package:sqflite/sqflite.dart';
 
-
 import '../services/expiring_export_service.dart';
 import '../utils/platform_file_helper.dart';
+import '../utils/date_helper.dart';
+import 'dialogs/stock_disposal_dialog.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import '../services/logger_service.dart';
 
 class ExpiringProductsFrame extends StatefulWidget {
   final Database db;
@@ -59,6 +62,11 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     final onlyInStock = inStockOnly ?? _onlyInStock;
     final expired = showExpired ?? _showExpired;
     final all = showAll ?? _showAll;
+
+    logger.debug(
+      'ExpiringProducts',
+      'Loading expiring batches: days=$filter, onlyInStock=$onlyInStock, showExpired=$expired, showAll=$all',
+    );
 
     var batches = await _repo.getExpiringBatchesDetailed(filter);
 
@@ -135,7 +143,58 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     else
       color = Colors.green.shade100;
 
-    return isDark ? color.withOpacity(0.3) : color;
+    return isDark ? color.withValues(alpha: 0.3) : color;
+  }
+
+  Future<void> _handleExport(String outputType) async {
+    if (_batches.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No data to export')));
+      }
+      return;
+    }
+
+    try {
+      if (outputType == 'print') {
+        final service = ExpiringExportService();
+        await service.printExpiringProducts(_batches);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Sent to printer'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'save') {
+        final service = ExpiringExportService();
+        final file = await service.saveExpiringProductsPdf(_batches);
+        if (mounted && file != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Saved: ${file.path}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'share') {
+        final service = ExpiringExportService();
+        await service.exportToPDF(_batches);
+      } else if (outputType == 'csv') {
+        await _exportCSV();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Export error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _exportCSV() async {
@@ -143,7 +202,7 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     buffer.writeln("Product,Batch,Qty,Expiry Date");
     for (final b in _batches) {
       buffer.writeln(
-        "${b.productName},${b.batchNo},${b.qty},${DateFormat('yyyy-MM-dd').format(b.expiryDate)}",
+        "${b.productName},${b.batchNo},${b.qty},${DateHelper.formatIso(b.expiryDate.toIso8601String())}",
       );
     }
 
@@ -159,27 +218,12 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
       );
 
       if (file != null && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('CSV exported successfully')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CSV exported successfully')),
+        );
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to export CSV: $e')));
-    }
-  }
-
-  Future<void> _exportPDF() async {
-    try {
-      final service = ExpiringExportService();
-      await service.exportToPDF(_batches);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to export PDF: $e')));
+      rethrow; // Handled in _handleExport
     }
   }
 
@@ -220,6 +264,40 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     );
   }
 
+  Widget _buildValueSummary() {
+    double totalValue = 0;
+    for (var b in _batches) {
+      totalValue += b.qty * (b.purchasePrice ?? 0);
+    }
+    final currencyFormat = NumberFormat.currency(symbol: 'Rs. ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            "Value of items in list:",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            currencyFormat.format(totalValue),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -238,6 +316,8 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
+                  _buildValueSummary(),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -256,26 +336,43 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
                       // Actions
                       if (!isMobile) ...[
                         IconButton(
-                          icon: const Icon(Icons.picture_as_pdf),
-                          tooltip: "Export PDF",
-                          onPressed: _exportPDF,
+                          icon: const Icon(Icons.print),
+                          tooltip: "Print List",
+                          onPressed: () => _handleExport('print'),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.save),
+                          tooltip: "Save PDF",
+                          onPressed: () => _handleExport('save'),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.share),
+                          tooltip: "Share PDF",
+                          onPressed: () => _handleExport('share'),
                         ),
                         IconButton(
                           icon: const Icon(Icons.table_chart),
                           tooltip: "Export CSV",
-                          onPressed: _exportCSV,
+                          onPressed: () => _handleExport('csv'),
                         ),
                       ] else
                         PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert),
                           onSelected: (v) {
-                            if (v == 'pdf') _exportPDF();
-                            if (v == 'csv') _exportCSV();
+                            _handleExport(v);
                           },
                           itemBuilder: (ctx) => [
                             const PopupMenuItem(
-                              value: 'pdf',
-                              child: Text('Export PDF'),
+                              value: 'print',
+                              child: Text('Print List'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'save',
+                              child: Text('Save PDF'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'share',
+                              child: Text('Share PDF'),
                             ),
                             const PopupMenuItem(
                               value: 'csv',
@@ -521,42 +618,67 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
                         final exp = b.expiryDate;
                         final diff = exp.difference(DateTime.now()).inDays;
                         final expired = diff < 0;
-                        return Card(
-                          color: _getTileColor(exp, context),
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            leading: expired
-                                ? const Icon(
-                                    Icons.warning_amber,
-                                    color: Colors.red,
-                                  )
-                                : const Icon(Icons.inventory_2_outlined),
-                            title: Text(
-                              b.productName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                        return Slidable(
+                          endActionPane: ActionPane(
+                            motion: const ScrollMotion(),
+                            children: [
+                              SlidableAction(
+                                onPressed: (ctx) async {
+                                  final result = await showDialog<bool>(
+                                    context: context,
+                                    builder: (_) =>
+                                        StockDisposalDialog(batch: b),
+                                  );
+                                  if (result == true) {
+                                    _loadExpiring();
+                                  }
+                                },
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                icon: Icons.delete_forever,
+                                label: 'Dispose',
                               ),
+                            ],
+                          ),
+                          child: Card(
+                            color: _getTileColor(exp, context),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
                             ),
-                            subtitle: Text(
-                              "Batch: ${b.batchNo}, Qty: ${b.qty}, Expiry: ${DateFormat('yyyy-MM-dd').format(exp)}"
-                              "\n${expired ? 'Expired ${-diff} days ago' : 'Expires in $diff days'}",
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      BatchDetailFrame(batch: b, db: widget.db),
+                            child: ListTile(
+                              leading: expired
+                                  ? const Icon(
+                                      Icons.warning_amber,
+                                      color: Colors.red,
+                                    )
+                                  : const Icon(Icons.inventory_2_outlined),
+                              title: Text(
+                                b.productName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              );
-                            },
+                              ),
+                              subtitle: Text(
+                                "Batch: ${b.batchNo}, Qty: ${b.qty}, Expiry: ${DateHelper.formatIso(b.expiryDate.toIso8601String())}"
+                                "\n${expired ? 'Expired ${-diff} days ago' : 'Expires in $diff days'}",
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BatchDetailFrame(
+                                      batch: b,
+                                      db: widget.db,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         );
                       },

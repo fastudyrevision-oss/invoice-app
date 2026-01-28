@@ -4,6 +4,7 @@ class ManualEntry {
   final double amount;
   final String type; // 'income' or 'expense'
   final DateTime date;
+  final String category; // Added for better classification
 
   ManualEntry({
     required this.id,
@@ -11,6 +12,7 @@ class ManualEntry {
     required this.amount,
     required this.type,
     required this.date,
+    this.category = 'General',
   });
 
   Map<String, dynamic> toMap() {
@@ -20,6 +22,7 @@ class ManualEntry {
       'amount': amount,
       'type': type,
       'date': date.toIso8601String(),
+      'category': category,
     };
   }
 
@@ -30,6 +33,7 @@ class ManualEntry {
       amount: map['amount'],
       type: map['type'],
       date: DateTime.parse(map['date']),
+      category: map['category'] ?? 'General',
     );
   }
 }

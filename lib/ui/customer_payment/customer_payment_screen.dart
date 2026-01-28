@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../dao/customer_payment_dao.dart';
+import '../../models/customer_payment.dart';
 import '../../dao/customer_dao.dart';
 import '../../models/customer.dart';
 import 'customer_payment_dialog.dart';
@@ -93,12 +94,14 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
     }
   }
 
-  Future<void> _deletePayment(String id) async {
+  Future<void> _deletePayment(Map<String, dynamic> payment) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Payment'),
-        content: const Text('Are you sure you want to delete this payment?'),
+        content: const Text(
+          'Are you sure you want to delete this payment? This will also revert the adjusted balances on the invoice and customer.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -106,7 +109,10 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete & Revert Balances',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -114,11 +120,17 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
 
     if (confirm == true) {
       try {
-        await _paymentDao.delete(id);
+        await _paymentDao.deleteWithBalanceUpdate(
+          CustomerPayment.fromMap(payment),
+        );
         _loadData();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment deleted successfully')),
+            const SnackBar(
+              content: Text(
+                'Payment deleted and balances reverted successfully',
+              ),
+            ),
           );
         }
       } catch (e) {
@@ -347,7 +359,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                   ),
                   const SizedBox(width: 8),
                   TextButton.icon(
-                    onPressed: () => _deletePayment(payment['id']),
+                    onPressed: () => _deletePayment(payment),
                     icon: const Icon(Icons.delete_outline, size: 18),
                     label: const Text("Delete"),
                     style: TextButton.styleFrom(foregroundColor: Colors.red),

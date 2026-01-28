@@ -10,17 +10,21 @@ import '../data/models/profit_loss_model.dart';
 import '../data/models/category_profit.dart';
 import '../data/models/supplier_profit.dart';
 import '../data/models/product_profit.dart';
+import '../data/models/customer_profit.dart';
 import '../data/repository/profit_loss_repo.dart';
 import 'profit_loss_chart.dart';
 import 'manual_entry_dialog.dart';
 import '../data/models/manual_entry.dart';
 import 'widgets/summary_card.dart'; // Import the new widget
 import '../../../../utils/responsive_utils.dart';
+import '../../../core/services/audit_logger.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/logger_service.dart';
 
 // ---------------------- ENUM ----------------------
 enum PLFilterType { daily, weekly, monthly, yearly, custom }
 
-enum PLDataType { summary, category, product, supplier }
+enum PLDataType { summary, category, product, supplier, customer }
 
 // ---------------------- CONTROLLER ----------------------
 class ProfitLossUIController {
@@ -87,6 +91,9 @@ class ProfitLossUIController {
       case PLDataType.supplier:
         final suppliers = await repo.loadSupplierProfit(rangeStart, rangeEnd);
         return ProfitLossModel.fromSupplierList(suppliers);
+      case PLDataType.customer:
+        final customers = await repo.loadCustomerProfit(rangeStart, rangeEnd);
+        return ProfitLossModel(customerProfits: customers);
     }
   }
 
@@ -196,6 +203,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
   List<CategoryProfit> categories = [];
   List<ProductProfit> products = [];
   List<SupplierProfit> suppliers = [];
+  List<CustomerProfit> customerProfits = [];
+  List<Map<String, dynamic>> recentTransactions = [];
   List<ManualEntry> manualEntries = [];
   List<ManualEntry> filteredManualEntries = [];
 
@@ -275,12 +284,23 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
         end: customEnd,
       );
 
+      final customerData = await widget.controller.getData(
+        selected,
+        start: customStart,
+        end: customEnd,
+        type: PLDataType.customer,
+      );
+
+      final recentTx = await widget.controller.repo.loadRecentTransactions(10);
+
       setState(() {
         summaryData = summary;
         previousSummaryData = prevSummary;
         categories = categoryData.categories;
         products = productData.products;
         suppliers = supplierData.suppliers;
+        customerProfits = customerData.customerProfits;
+        recentTransactions = recentTx;
         manualEntries = entries;
         filteredManualEntries = entries;
         loading = false;
@@ -304,7 +324,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf),
-                onPressed: summaryData != null ? _exportPDF : null,
+                onPressed: summaryData != null ? _showPDFOptionsDialog : null,
               ),
             ],
           ),
@@ -327,7 +347,18 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                               const SizedBox(height: 12),
                               if (summaryData != null) _buildSummaryCards(),
                               const SizedBox(height: 16),
+                              if (summaryData != null) _buildTrendAnalysis(),
+                              const SizedBox(height: 16),
+                              if (summaryData != null)
+                                _buildCompanyProfitability(),
+                              const SizedBox(height: 16),
                               if (summaryData != null) _buildDetailedCards(),
+                              const SizedBox(height: 16),
+                              _buildCategoryInsights(),
+                              const SizedBox(height: 16),
+                              _buildSupplierInsights(),
+                              const SizedBox(height: 16),
+                              if (summaryData != null) _buildExpenseBreakdown(),
                               const SizedBox(height: 16),
                               if (summaryData != null)
                                 ProfitLossSummaryChart(
@@ -336,6 +367,10 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                                 ),
                               const SizedBox(height: 16),
                               _buildChartsGrid(isMobile),
+                              const SizedBox(height: 16),
+                              _buildCustomerInsights(),
+                              const SizedBox(height: 16),
+                              _buildRecentTransactions(),
                               const SizedBox(height: 16),
                               _buildManualEntriesSection(),
                               const SizedBox(height: 80),
@@ -549,7 +584,77 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        if (summaryData!.netExpiredLoss > 0)
+          SummaryCard(
+            title: "Expired Stock Loss",
+            value: summaryData!.netExpiredLoss,
+            color: Colors.brown,
+            subtitle:
+                "Write-offs: Rs ${summaryData!.expiredStockLoss.toStringAsFixed(2)}, Refunds: Rs ${summaryData!.expiredStockRefunds.toStringAsFixed(2)}",
+          ),
       ],
+    );
+  }
+
+  Widget _buildExpenseBreakdown() {
+    final breakdown = summaryData!.expenseBreakdown;
+    if (breakdown.isEmpty) return const SizedBox();
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.pie_chart_outline, color: Colors.red, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Expense Breakdown',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            ...breakdown.entries.map((e) {
+              final val = e.value;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(e.key, style: TextStyle(color: Colors.grey.shade700)),
+                    Text(
+                      'Rs ${val.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Total Expenses',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Rs ${summaryData!.totalExpenses.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -560,7 +665,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 8,
       mainAxisSpacing: 8,
-      childAspectRatio: isMobile ? 1.5 : 0.9,
+      childAspectRatio: isMobile ? 1.2 : 0.85,
       children: [
         if (categories.isNotEmpty) CategoryProfitChart(categories: categories),
         if (products.isNotEmpty) ProductProfitChart(products: products),
@@ -630,8 +735,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: isExpense
-                          ? Colors.red.withOpacity(0.1)
-                          : Colors.green.withOpacity(0.1),
+                          ? Colors.red.withValues(alpha: 0.1)
+                          : Colors.green.withValues(alpha: 0.1),
                       child: Icon(
                         isExpense ? Icons.arrow_downward : Icons.arrow_upward,
                         color: isExpense ? Colors.red : Colors.green,
@@ -801,21 +906,573 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
-  Future<void> _exportPDF() async {
-    if (summaryData == null) return;
-
-    await PDFExporter.exportDashboard(
-      summary: summaryData!,
-      categories: categories,
-      products: products,
-      suppliers: suppliers,
+  Widget _buildRecentTransactions() {
+    if (recentTransactions.isEmpty) return const SizedBox();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Recent Transactions",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            TextButton(onPressed: fetchAll, child: const Text("Refresh")),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: recentTransactions.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final tx = recentTransactions[index];
+              final isSale = tx['type'] == 'sale';
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: isSale
+                      ? Colors.green.withValues(alpha: 0.1)
+                      : Colors.red.withValues(alpha: 0.1),
+                  child: Icon(
+                    isSale ? Icons.arrow_upward : Icons.arrow_downward,
+                    color: isSale ? Colors.green : Colors.red,
+                    size: 18,
+                  ),
+                ),
+                title: Text(isSale ? "Sale" : "Purchase"),
+                subtitle: Text(
+                  DateFormat(
+                    'yyyy-MM-dd HH:mm',
+                  ).format(DateTime.parse(tx['date'])),
+                ),
+                trailing: Text(
+                  "Rs ${tx['total'].toStringAsFixed(2)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
+  }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PDF exported to Documents folder')),
-      );
+  Widget _buildCustomerInsights() {
+    if (customerProfits.isEmpty) return const SizedBox();
+    // Support only Top 10
+    final topCustomers = customerProfits.take(10).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Top 10 Customers by Profit",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: topCustomers.length,
+            itemBuilder: (context, index) {
+              final cp = topCustomers[index];
+              return Container(
+                width: 250,
+                margin: const EdgeInsets.only(right: 12),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cp.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Spacer(),
+                        _buildInsightRow("Sales", cp.totalSales, Colors.blue),
+                        const SizedBox(height: 4),
+                        _buildInsightRow("Cost", cp.totalCost, Colors.orange),
+                        const Divider(),
+                        _buildInsightRow(
+                          "Profit",
+                          cp.profit,
+                          Colors.green,
+                          bold: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrendAnalysis() {
+    if (summaryData == null || previousSummaryData == null) {
+      return const SizedBox();
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Trend Analysis (vs Previous Period)",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _trendCard(
+              "Sales",
+              summaryData!.totalSales,
+              previousSummaryData!.totalSales,
+              Colors.blue,
+            ),
+            const SizedBox(width: 12),
+            _trendCard(
+              "Profit",
+              isCogsBased
+                  ? summaryData!.totalProfit
+                  : (summaryData!.totalSales -
+                        summaryData!.totalPurchases -
+                        summaryData!.totalExpenses),
+              isCogsBased
+                  ? previousSummaryData!.totalProfit
+                  : (previousSummaryData!.totalSales -
+                        previousSummaryData!.totalPurchases -
+                        previousSummaryData!.totalExpenses),
+              Colors.green,
+            ),
+            const SizedBox(width: 12),
+            _trendCard(
+              "Expenses",
+              summaryData!.totalExpenses,
+              previousSummaryData!.totalExpenses,
+              Colors.red,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _trendCard(
+    String label,
+    double current,
+    double previous,
+    Color color,
+  ) {
+    final diff = current - previous;
+    final percent = previous > 0 ? (diff / previous) * 100 : 0.0;
+    final isPositive = diff >= 0;
+
+    return Expanded(
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Rs ${current.toStringAsFixed(0)}",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(
+                    isPositive ? Icons.trending_up : Icons.trending_down,
+                    size: 14,
+                    color: isPositive ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    "${percent.abs().toStringAsFixed(1)}%",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isPositive ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompanyProfitability() {
+    if (summaryData == null) return const SizedBox();
+    final netProfit = isCogsBased
+        ? summaryData!.totalProfit
+        : (summaryData!.totalSales -
+              summaryData!.totalPurchases -
+              summaryData!.totalExpenses);
+    final margin = summaryData!.totalSales > 0
+        ? (netProfit / summaryData!.totalSales) * 100
+        : 0.0;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Colors.blue[900],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.business, color: Colors.white, size: 40),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Company Profitability Margin",
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  Text(
+                    "${margin.toStringAsFixed(1)}%",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  "Status",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                Text(
+                  margin > 15
+                      ? "Excellent"
+                      : margin > 5
+                      ? "Good"
+                      : "Critical",
+                  style: TextStyle(
+                    color: margin > 5 ? Colors.greenAccent : Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryInsights() {
+    if (categories.isEmpty) return const SizedBox();
+    final topCategories = categories.take(10).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Top 10 Categories by Profit",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 140,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: topCategories.length,
+            itemBuilder: (context, index) {
+              final cat = topCategories[index];
+              return Container(
+                width: 200,
+                margin: const EdgeInsets.only(right: 12),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          cat.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Rs ${cat.profit.toStringAsFixed(0)}",
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const Text("Profit", style: TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSupplierInsights() {
+    if (suppliers.isEmpty) return const SizedBox();
+    final topSuppliers = suppliers.take(10).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Top 10 Suppliers (Purchase Value)",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 160,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: topSuppliers.length,
+            itemBuilder: (context, index) {
+              final s = topSuppliers[index];
+              return Container(
+                width: 220,
+                margin: const EdgeInsets.only(right: 12),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          s.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                        ),
+                        const Spacer(),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Purchases:",
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            Text(
+                              "Rs ${s.totalPurchases.toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Pending:",
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            Text(
+                              "Rs ${s.pendingToSupplier.toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInsightRow(
+    String label,
+    double value,
+    Color color, {
+    bool bold = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(
+          "Rs ${value.toStringAsFixed(0)}",
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showPDFOptionsDialog() {
+    final messenger = ScaffoldMessenger.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => _PLReportOptionsDialog(
+        onExport: (options) async {
+          Navigator.pop(dialogCtx);
+          setState(() => loading = true);
+          try {
+            await PDFExporter.exportDashboard(
+              summary: summaryData!,
+              previousSummary: previousSummaryData,
+              isCogsBased: isCogsBased,
+              categories: options['Categories'] == true ? categories : [],
+              products: options['Products'] == true ? products : [],
+              suppliers: options['Suppliers'] == true ? suppliers : [],
+              customerProfits: options['Customers'] == true
+                  ? customerProfits
+                  : [],
+            );
+
+            // 📝 ADD AUDIT LOG
+            await AuditLogger.log(
+              'PDF_EXPORT',
+              'profit_loss_report',
+              recordId: 'PL-${DateTime.now().millisecondsSinceEpoch}',
+              userId: AuthService.instance.currentUser?.id ?? 'system',
+              newData: options,
+            );
+
+            // 📝 ADD SYSTEM LOG
+            logger.info(
+              'ProfitLoss',
+              'P&L Report exported as PDF',
+              context: options,
+            );
+
+            if (mounted) {
+              messenger.showSnackBar(
+                const SnackBar(content: Text('PDF Exported Successfully')),
+              );
+            }
+          } catch (e, st) {
+            logger.error(
+              'ProfitLoss',
+              'PDF Export failed',
+              error: e,
+              stackTrace: st,
+            );
+            if (mounted) {
+              messenger.showSnackBar(
+                SnackBar(content: Text('Export failed: $e')),
+              );
+            }
+          } finally {
+            if (mounted) {
+              setState(() => loading = false);
+            }
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _PLReportOptionsDialog extends StatefulWidget {
+  final Function(Map<String, bool>) onExport;
+  const _PLReportOptionsDialog({required this.onExport});
+
+  @override
+  State<_PLReportOptionsDialog> createState() => _PLReportOptionsDialogState();
+}
+
+class _PLReportOptionsDialogState extends State<_PLReportOptionsDialog> {
+  final Map<String, bool> _options = {
+    'Summary': true,
+    'Trends': true,
+    'Analysis': true,
+    'Categories': true,
+    'Products': true,
+    'Suppliers': true,
+    'Customers': true,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Export Options"),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _options.keys.map((key) {
+            return CheckboxListTile(
+              title: Text(key),
+              value: _options[key],
+              onChanged: (val) => setState(() => _options[key] = val ?? false),
+            );
+          }).toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () => widget.onExport(_options),
+          child: const Text("Export PDF"),
+        ),
+      ],
+    );
   }
 }
 
@@ -823,40 +1480,71 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
 class PDFExporter {
   static Future<void> exportDashboard({
     required ProfitLossModel summary,
+    ProfitLossModel? previousSummary,
+    required bool isCogsBased,
     required List<CategoryProfit> categories,
     required List<ProductProfit> products,
     required List<SupplierProfit> suppliers,
+    required List<CustomerProfit> customerProfits,
   }) async {
     try {
-      // Debug logging
-      debugPrint(
-        "Exporting PDF: sales=${_sanitizeValue(summary.totalSales)}, "
-        "profit=${_sanitizeValue(summary.totalProfit)}, "
-        "expenses=${_sanitizeValue(summary.totalExpenses)}",
-      );
-
       final pdf = pw.Document();
 
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          build: (pw.Context ctx) {
-            return [
-              pw.Header(
-                level: 0,
-                child: pw.Text(
-                  "Profit & Loss Dashboard",
-                  style: pw.TextStyle(
-                    fontSize: 24,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 20),
-
-              // Summary Cards Row 1
+          margin: const pw.EdgeInsets.all(32),
+          header: (ctx) => pw.Column(
+            children: [
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        "Profit & Loss Report",
+                        style: pw.TextStyle(
+                          fontSize: 24,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue900,
+                        ),
+                      ),
+                      pw.Text(
+                        isCogsBased
+                            ? "(COGS Based)"
+                            : "(Purchase Based / Cash Profit)",
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontStyle: pw.FontStyle.italic,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  pw.Text(
+                    DateFormat('dd MMM yyyy').format(DateTime.now()),
+                    style: const pw.TextStyle(color: PdfColors.grey700),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(color: PdfColors.blue900, thickness: 2),
+              pw.SizedBox(height: 20),
+            ],
+          ),
+          build: (pw.Context ctx) {
+            final netProfit = isCogsBased
+                ? summary.totalProfit
+                : (summary.totalSales -
+                      summary.totalPurchases -
+                      summary.totalExpenses);
+
+            return [
+              // Summary Section
+              pw.Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
                   _summaryCardPdf(
                     "Total Sales",
@@ -864,26 +1552,18 @@ class PDFExporter {
                     PdfColors.blue,
                   ),
                   _summaryCardPdf(
-                    "COGS Profit",
-                    summary.totalProfit,
+                    isCogsBased ? "Net Profit" : "Cash Profit",
+                    netProfit,
                     PdfColors.green,
                   ),
                   _summaryCardPdf(
-                    "Expenses",
+                    "Total Expenses",
                     summary.totalExpenses,
                     PdfColors.red,
                   ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-
-              // Summary Cards Row 2
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
                   _summaryCardPdf(
-                    "Discounts",
-                    summary.totalDiscounts,
+                    "Total Purchases",
+                    summary.totalPurchases,
                     PdfColors.orange,
                   ),
                   _summaryCardPdf(
@@ -898,13 +1578,50 @@ class PDFExporter {
                   ),
                 ],
               ),
-              pw.SizedBox(height: 20),
-              pw.Divider(),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 30),
 
-              // Detailed Financial Breakdown
+              // Trend Analysis Section
+              if (previousSummary != null) ...[
+                pw.Text(
+                  "Trend Analysis (vs Previous Period)",
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.TableHelper.fromTextArray(
+                  headers: ["Metric", "Current", "Previous", "Change", "%"],
+                  data: [
+                    _trendRow(
+                      "Sales",
+                      summary.totalSales,
+                      previousSummary.totalSales,
+                    ),
+                    _trendRow(
+                      "Profit",
+                      netProfit,
+                      isCogsBased
+                          ? previousSummary.totalProfit
+                          : (previousSummary.totalSales -
+                                previousSummary.totalPurchases -
+                                previousSummary.totalExpenses),
+                    ),
+                    _trendRow(
+                      "Expenses",
+                      summary.totalExpenses,
+                      previousSummary.totalExpenses,
+                    ),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellAlignment: pw.Alignment.centerLeft,
+                ),
+                pw.SizedBox(height: 30),
+              ],
+
+              // Detailed Profit Calculation logic
               pw.Text(
-                "Financial Breakdown",
+                "Profit Calculation Methodology",
                 style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
@@ -912,131 +1629,78 @@ class PDFExporter {
               ),
               pw.SizedBox(height: 10),
               pw.TableHelper.fromTextArray(
-                headers: ["Metric", "Amount"],
-                data: [
-                  [
-                    "Gross Sales",
-                    _safeMoneyFormat(
-                      summary.totalSales + summary.totalDiscounts,
-                    ),
-                  ],
-                  ["Less: Discounts", _safeMoneyFormat(summary.totalDiscounts)],
-                  ["Net Sales", _safeMoneyFormat(summary.totalSales)],
-                  ["", ""],
-                  ["Less: COGS", _safeMoneyFormat(summary.totalPurchaseCost)],
-                  [
-                    "Gross Profit (COGS-based)",
-                    _safeMoneyFormat(
-                      summary.totalSales - summary.totalPurchaseCost,
-                    ),
-                  ],
-                  ["", ""],
-                  [
-                    "Less: Total Expenses",
-                    _safeMoneyFormat(summary.totalExpenses),
-                  ],
-                  [
-                    "Net Profit (COGS-based)",
-                    _safeMoneyFormat(summary.totalProfit),
-                  ],
-                ],
-                headerStyle: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 11,
-                ),
-                cellStyle: const pw.TextStyle(fontSize: 10),
-                cellAlignment: pw.Alignment.centerLeft,
-              ),
-              pw.SizedBox(height: 15),
-
-              // Profit Calculation Comparison
-              pw.Text(
-                "Profit Calculation Comparison",
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 10),
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  // COGS-Based
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey400),
-                        borderRadius: pw.BorderRadius.circular(4),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            "COGS-Based (Standard)",
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.blue900,
-                            ),
-                          ),
-                          pw.SizedBox(height: 8),
-                          _buildCalcRow("Sales", summary.totalSales),
-                          _buildCalcRow("- COGS", summary.totalPurchaseCost),
-                          _buildCalcRow("- Expenses", summary.totalExpenses),
-                          pw.Divider(height: 4),
-                          _buildCalcRow(
-                            "= Net Profit",
-                            summary.totalProfit,
-                            bold: true,
+                headers: ["Component", "Calculation", "Amount"],
+                data: isCogsBased
+                    ? [
+                        [
+                          "Gross Sales",
+                          "Direct Revenue",
+                          _safeMoneyFormat(
+                            summary.totalSales + summary.totalDiscounts,
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-                  pw.SizedBox(width: 10),
-                  // Purchase-Based
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey400),
-                        borderRadius: pw.BorderRadius.circular(4),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            "Purchase-Based (Cash Flow)",
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.purple900,
-                            ),
-                          ),
-                          pw.SizedBox(height: 8),
-                          _buildCalcRow("Sales", summary.totalSales),
-                          _buildCalcRow("- Purchases", summary.totalPurchases),
-                          _buildCalcRow("- Expenses", summary.totalExpenses),
-                          pw.Divider(height: 4),
-                          _buildCalcRow(
-                            "= Cash Profit",
-                            summary.totalSales -
-                                summary.totalPurchases -
-                                summary.totalExpenses,
-                            bold: true,
+                        [
+                          "- Discounts",
+                          "Customer Deductions",
+                          _safeMoneyFormat(summary.totalDiscounts),
+                        ],
+                        [
+                          "Net Sales (A)",
+                          "Revenue - Discounts",
+                          _safeMoneyFormat(summary.totalSales),
+                        ],
+                        [
+                          "- COGS (B)",
+                          "Cost of Goods Sold",
+                          _safeMoneyFormat(summary.totalPurchaseCost),
+                        ],
+                        [
+                          "Gross Profit (A-B)",
+                          "Trading Margin",
+                          _safeMoneyFormat(
+                            summary.totalSales - summary.totalPurchaseCost,
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-                ],
+                        [
+                          "- Expenses (C)",
+                          "Operating Costs",
+                          _safeMoneyFormat(summary.totalExpenses),
+                        ],
+                        [
+                          "Net Profit",
+                          "(A - B - C)",
+                          _safeMoneyFormat(summary.totalProfit),
+                        ],
+                      ]
+                    : [
+                        [
+                          "Total Sales (A)",
+                          "Cash & Credits Generated",
+                          _safeMoneyFormat(summary.totalSales),
+                        ],
+                        [
+                          "- Purchases (B)",
+                          "Inventory Acquisition",
+                          _safeMoneyFormat(summary.totalPurchases),
+                        ],
+                        [
+                          "- Expenses (C)",
+                          "Operating Costs",
+                          _safeMoneyFormat(summary.totalExpenses),
+                        ],
+                        [
+                          "Cash Profit",
+                          "(A - B - C)",
+                          _safeMoneyFormat(netProfit),
+                        ],
+                      ],
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
-              pw.SizedBox(height: 15),
+              pw.SizedBox(height: 30),
 
               // Cash Flow Analysis
               pw.Text(
-                "Cash Flow Analysis",
+                "Cash Flow & Liquidity Analysis",
                 style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
@@ -1044,34 +1708,37 @@ class PDFExporter {
               ),
               pw.SizedBox(height: 10),
               pw.TableHelper.fromTextArray(
-                headers: ["Metric", "Amount"],
+                headers: ["Cash Position", "Description", "Value"],
                 data: [
                   [
-                    "Cash Received (Paid)",
-                    _safeMoneyFormat(
-                      summary.totalSales - summary.pendingFromCustomers,
-                    ),
+                    "Cash Received",
+                    "Actual cash collected from sales",
+                    _safeMoneyFormat(summary.totalReceived),
                   ],
                   [
-                    "Receivables (Pending)",
+                    "Receivables",
+                    "Pending payments from customers",
                     _safeMoneyFormat(summary.pendingFromCustomers),
                   ],
-                  ["Total Sales Value", _safeMoneyFormat(summary.totalSales)],
-                  ["", ""],
                   [
-                    "Payables (Pending to Suppliers)",
+                    "Payables",
+                    "Pending payments to suppliers",
                     _safeMoneyFormat(summary.pendingToSuppliers),
                   ],
-                  ["In-Hand Cash", _safeMoneyFormat(summary.inHandCash)],
+                  [
+                    "Net Cash Position",
+                    "Cash Received - Pending Payables",
+                    _safeMoneyFormat(
+                      summary.totalReceived - summary.pendingToSuppliers,
+                    ),
+                  ],
                 ],
-                headerStyle: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 11,
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey200,
                 ),
-                cellStyle: const pw.TextStyle(fontSize: 10),
-                cellAlignment: pw.Alignment.centerLeft,
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
-              pw.SizedBox(height: 15),
+              pw.SizedBox(height: 30),
 
               // Purchase & Inventory Analysis
               pw.Text(
@@ -1083,46 +1750,50 @@ class PDFExporter {
               ),
               pw.SizedBox(height: 10),
               pw.TableHelper.fromTextArray(
-                headers: ["Metric", "Amount", "Note"],
+                headers: ["Metric", "Description", "Value"],
                 data: [
                   [
-                    "Total Purchases Made",
+                    "Total Purchases",
+                    "Raw stock acquisition cost",
                     _safeMoneyFormat(summary.totalPurchases),
-                    "All purchases in period",
                   ],
                   [
-                    "COGS (Goods Sold)",
+                    "COGS (Used)",
+                    "Stock consumed in sales",
                     _safeMoneyFormat(summary.totalPurchaseCost),
-                    "Cost of items sold",
                   ],
                   [
-                    "Inventory Added",
+                    "Inventory Delta",
+                    "New stock added to warehouse (Purchases - COGS)",
                     _safeMoneyFormat(
                       summary.totalPurchases - summary.totalPurchaseCost,
                     ),
-                    "Stock remaining",
                   ],
                 ],
-                headerStyle: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 11,
-                ),
-                cellStyle: const pw.TextStyle(fontSize: 9),
-                cellAlignment: pw.Alignment.centerLeft,
               ),
-              pw.SizedBox(height: 20),
-              pw.Divider(),
+              pw.SizedBox(height: 30),
 
-              // Charts
-              pw.SizedBox(height: 20),
+              // Performance Chart
+              pw.Text(
+                "Key Performance Chart",
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 10),
               pw.Container(
-                height: 200,
+                height: 150,
                 child: pw.Chart(
                   grid: pw.CartesianGrid(
                     xAxis: pw.FixedAxis(
                       [0, 1, 2, 3],
-                      format: (v) =>
-                          ["Sales", "COGS", "Exp", "Profit"][v.toInt()],
+                      format: (v) => [
+                        "Sales",
+                        isCogsBased ? "COGS" : "Purchases",
+                        "Exp",
+                        "Profit",
+                      ][v.toInt()],
                     ),
                     yAxis: pw.FixedAxis(
                       _generateYAxisTicks(summary),
@@ -1138,19 +1809,21 @@ class PDFExporter {
                           _sanitizeValue(summary.totalSales),
                         ),
                       ],
-                      width: 30,
-                      legend: "Sales",
+                      width: 25,
                     ),
                     pw.BarDataSet(
                       color: PdfColors.orange,
                       data: [
                         pw.PointChartValue(
                           1,
-                          _sanitizeValue(summary.totalPurchaseCost),
+                          _sanitizeValue(
+                            isCogsBased
+                                ? summary.totalPurchaseCost
+                                : summary.totalPurchases,
+                          ),
                         ),
                       ],
-                      width: 30,
-                      legend: "COGS",
+                      width: 25,
                     ),
                     pw.BarDataSet(
                       color: PdfColors.red,
@@ -1160,69 +1833,91 @@ class PDFExporter {
                           _sanitizeValue(summary.totalExpenses),
                         ),
                       ],
-                      width: 30,
-                      legend: "Expenses",
+                      width: 25,
                     ),
                     pw.BarDataSet(
                       color: PdfColors.green,
-                      data: [
-                        pw.PointChartValue(
-                          3,
-                          _sanitizeValue(summary.totalProfit),
-                        ),
-                      ],
-                      width: 30,
-                      legend: "Profit",
+                      data: [pw.PointChartValue(3, _sanitizeValue(netProfit))],
+                      width: 25,
                     ),
                   ],
                 ),
               ),
-              pw.SizedBox(height: 20),
+              pw.SizedBox(height: 40),
 
-              // Detailed Tables
-              pw.Text(
-                "Category-wise Profit",
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.TableHelper.fromTextArray(
-                headers: ["Category", "Profit"],
-                data: categories
-                    .map((c) => [c.name, _safeMoneyFormat(c.profit)])
-                    .toList(),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                cellAlignment: pw.Alignment.centerLeft,
-              ),
-              pw.SizedBox(height: 20),
-
-              pw.Text(
-                "Product-wise Profit (Top 10)",
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.TableHelper.fromTextArray(
-                headers: ["Product", "Profit"],
-                data: products
-                    .take(10)
-                    .map((p) => [p.name, _safeMoneyFormat(p.profit)])
-                    .toList(),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                cellAlignment: pw.Alignment.centerLeft,
-              ),
-
-              if (suppliers.isNotEmpty) ...[
-                pw.SizedBox(height: 20),
+              // Top Listings (Hard-limited to 10)
+              if (categories.isNotEmpty) ...[
                 pw.Text(
-                  "Supplier Purchases (Top 10)",
+                  "Top 10 Categories by Profit",
                   style: pw.TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
+                pw.SizedBox(height: 5),
+                pw.TableHelper.fromTextArray(
+                  headers: ["Category", "Profit"],
+                  data: categories
+                      .take(10)
+                      .map((c) => [c.name, _safeMoneyFormat(c.profit)])
+                      .toList(),
+                ),
+                pw.SizedBox(height: 20),
+              ],
+
+              if (products.isNotEmpty) ...[
+                pw.Text(
+                  "Top 10 Products by Profit",
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 5),
+                pw.TableHelper.fromTextArray(
+                  headers: ["Product", "Profit"],
+                  data: products
+                      .take(10)
+                      .map((p) => [p.name, _safeMoneyFormat(p.profit)])
+                      .toList(),
+                ),
+                pw.SizedBox(height: 20),
+              ],
+
+              if (customerProfits.isNotEmpty) ...[
+                pw.Text(
+                  "Top 10 Customers by Profit",
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 5),
+                pw.TableHelper.fromTextArray(
+                  headers: ["Customer", "Sales", "Profit"],
+                  data: customerProfits
+                      .take(10)
+                      .map(
+                        (c) => [
+                          c.name,
+                          _safeMoneyFormat(c.totalSales),
+                          _safeMoneyFormat(c.profit),
+                        ],
+                      )
+                      .toList(),
+                ),
+                pw.SizedBox(height: 20),
+              ],
+
+              if (suppliers.isNotEmpty) ...[
+                pw.Text(
+                  "Top 10 Suppliers (Purchase Value)",
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 5),
                 pw.TableHelper.fromTextArray(
                   headers: ["Supplier", "Purchases", "Pending"],
                   data: suppliers
@@ -1235,8 +1930,6 @@ class PDFExporter {
                         ],
                       )
                       .toList(),
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  cellAlignment: pw.Alignment.centerLeft,
                 ),
               ],
             ];
@@ -1245,7 +1938,9 @@ class PDFExporter {
       );
 
       final dir = await getApplicationDocumentsDirectory();
-      final file = File("${dir.path}/profit_loss_dashboard.pdf");
+      final file = File(
+        "${dir.path}/profit_loss_report_${DateTime.now().millisecondsSinceEpoch}.pdf",
+      );
       await file.writeAsBytes(await pdf.save());
     } catch (e, st) {
       debugPrint("PDF export failed: $e\n$st");
@@ -1253,85 +1948,58 @@ class PDFExporter {
     }
   }
 
-  // Helper to sanitize values and prevent NaN
-  static double _sanitizeValue(num? value) {
-    if (value == null) return 0.0;
-    final doubleVal = value.toDouble();
-    if (doubleVal.isNaN || doubleVal.isInfinite) {
-      return 0.0;
-    }
-    return doubleVal;
+  static List<String> _trendRow(String label, double current, double previous) {
+    final diff = current - previous;
+    final percent = previous > 0 ? (diff / previous) * 100 : 0.0;
+    return [
+      label,
+      "Rs ${current.toStringAsFixed(0)}",
+      "Rs ${previous.toStringAsFixed(0)}",
+      "${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(0)}",
+      "${percent.toStringAsFixed(1)}%",
+    ];
   }
 
-  // Safe format for money (prevents errors if value is NaN/null)
+  static double _sanitizeValue(num? value) {
+    if (value == null) return 0.0;
+    final d = value.toDouble();
+    return (d.isNaN || d.isInfinite) ? 0.0 : d;
+  }
+
   static String _safeMoneyFormat(num? value) {
-    final v = _sanitizeValue(value);
-    return "Rs ${v.toStringAsFixed(2)}";
+    return "Rs ${_sanitizeValue(value).toStringAsFixed(0)}";
   }
 
   static List<num> _generateYAxisTicks(ProfitLossModel summary) {
-    // Collect only finite values
-    final numbers = <double>[
-      _sanitizeValue(summary.totalSales),
-      _sanitizeValue(summary.totalPurchaseCost),
-      _sanitizeValue(summary.totalExpenses),
-      _sanitizeValue(summary.totalProfit),
-    ];
-
-    final maxVal = numbers.reduce((curr, next) => curr > next ? curr : next);
-
+    final maxVal = [
+      summary.totalSales,
+      summary.totalPurchases,
+      summary.totalExpenses,
+    ].reduce((a, b) => a > b ? a : b);
     if (maxVal <= 0) return [0, 100];
-
     final step = maxVal / 4;
-    return [0, step, step * 2, step * 3, step * 4]; // 5 ticks
-  }
-
-  static pw.Widget _buildCalcRow(
-    String label,
-    double value, {
-    bool bold = false,
-  }) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(
-            fontSize: 10,
-            fontWeight: bold ? pw.FontWeight.bold : null,
-          ),
-        ),
-        pw.Text(
-          _safeMoneyFormat(value),
-          style: pw.TextStyle(
-            fontSize: 10,
-            fontWeight: bold ? pw.FontWeight.bold : null,
-          ),
-        ),
-      ],
-    );
+    return [0, step, step * 2, step * 3, step * 4];
   }
 
   static pw.Widget _summaryCardPdf(String title, num? value, PdfColor color) {
-    final safeVal = _sanitizeValue(value);
     return pw.Container(
-      width: 150,
-      padding: const pw.EdgeInsets.all(10),
+      width: 155,
+      padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.grey400),
+        border: pw.Border.all(color: PdfColors.grey300),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
       ),
       child: pw.Column(
         children: [
           pw.Text(
             title,
-            style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
           ),
-          pw.SizedBox(height: 5),
+          pw.SizedBox(height: 4),
           pw.Text(
-            _safeMoneyFormat(safeVal),
+            _safeMoneyFormat(value),
             style: pw.TextStyle(
-              fontSize: 18,
+              fontSize: 12,
               fontWeight: pw.FontWeight.bold,
               color: color,
             ),

@@ -5,6 +5,7 @@ import '../../models/invoice.dart';
 import '../../models/customer.dart';
 import '../../dao/customer_dao.dart';
 import '../../db/database_helper.dart';
+import '../../utils/date_helper.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Invoice invoice;
@@ -72,7 +73,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             onSelected: (value) async {
               try {
                 invoice.customerName ??= _customer?.name ?? "Unknown";
-                
+
                 if (value == 'pdf') {
                   final File? pdfFile = await generateInvoicePdf(
                     invoice,
@@ -112,9 +113,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               } catch (e) {
                 debugPrint("❌ Error: $e");
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Failed: $e")),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text("Failed: $e")));
                 }
               }
             },
@@ -183,7 +184,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text("Customer: ${_customer?.name ?? 'Unknown'}"),
-                      Text("Date: ${invoice.date}"),
+                      Text("Date: ${DateHelper.formatIso(invoice.date)}"),
                     ],
                   ),
                 ),

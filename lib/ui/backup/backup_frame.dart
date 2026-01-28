@@ -11,6 +11,7 @@ import 'package:csv/csv.dart';
 import '../../services/auth_service.dart';
 import '../../utils/responsive_utils.dart';
 import '../../utils/platform_file_helper.dart';
+import '../../services/logger_service.dart';
 
 //I am using here the syncTimeService to track last sync times for tables and for preparing bulk sysnc data i am using BulkSyncService.
 //For now it is  just exposting or  prearing bulk sync for products table. You can extend it later to other tables as needed.
@@ -23,7 +24,7 @@ class BackupRestoreScreen extends StatefulWidget {
   const BackupRestoreScreen({super.key, this.onRestoreSuccess});
 
   @override
-  _BackupRestoreScreenState createState() => _BackupRestoreScreenState();
+  State<BackupRestoreScreen> createState() => _BackupRestoreScreenState();
 }
 
 class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
@@ -55,11 +56,13 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       final dbPath = await DatabaseHelper.instance.dbPath;
       if (dbPath == null) {
         // Web: handle differently
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Backup/restore is not supported on Web"),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Backup/restore is not supported on Web"),
+            ),
+          );
+        }
         return;
       }
       final dir = await getApplicationDocumentsDirectory();
@@ -75,9 +78,12 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         const SnackBar(content: Text('Backup completed successfully')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Backup failed: $e')));
+      logger.error('BackupScreen', 'Backup failed', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Backup failed: $e')));
+      }
     } finally {
       setState(() => _loading = false);
     }
@@ -100,11 +106,13 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         await DatabaseHelper.instance.close();
         if (dbPath == null) {
           // Web: handle differently
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Backup/restore is not supported on Web"),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Backup/restore is not supported on Web"),
+              ),
+            );
+          }
           return;
         }
 
@@ -114,9 +122,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         // Re-initialize DB
         await DatabaseHelper.instance.init();
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Database restored successfully')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database restored successfully')),
+          );
+        }
 
         // ✅ Notify parent to refresh connections
         if (mounted) {
@@ -124,9 +134,12 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+      logger.error('BackupScreen', 'Restore failed', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+      }
     } finally {
       setState(() => _loading = false);
     }
@@ -143,15 +156,22 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       final file = File(p.join(dir.path, '$table-bulk.json'));
       await file.writeAsString(jsonData);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Bulk sync data for "$table" prepared at ${file.path}'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Bulk sync data for "$table" prepared at ${file.path}',
+            ),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to prepare bulk sync: $e')),
-      );
+      logger.error('BackupScreen', 'Failed to prepare bulk sync', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to prepare bulk sync: $e')),
+        );
+      }
     } finally {
       setState(() => _loading = false);
     }
@@ -239,30 +259,37 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         final seeder = DatabaseSeederService();
         await seeder.seedAll(
           onProgress: (status) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(status),
-                duration: const Duration(milliseconds: 500),
-              ),
-            );
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(status),
+                  duration: const Duration(milliseconds: 500),
+                ),
+              );
+            }
           },
         );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Data Seeding Completed! Please restart app or restore to refresh cache.",
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Data Seeding Completed! Please restart app or restore to refresh cache.",
+              ),
             ),
-          ),
-        );
+          );
+        }
 
         // Notify to refresh
         widget.onRestoreSuccess?.call();
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Seeding failed: $e')));
+        logger.error('BackupScreen', 'Seeding failed', error: e);
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Seeding failed: $e')));
+        }
       } finally {
         setState(() => _loading = false);
       }
@@ -292,20 +319,20 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             end: Alignment.bottomRight,
                             colors: [
                               Colors.white,
-                              Colors.blue.withOpacity(0.05),
+                              Colors.blue.withValues(alpha: 0.05),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.blue.withOpacity(0.2),
+                              color: Colors.blue.withValues(alpha: 0.2),
                               spreadRadius: 1,
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(
-                            color: Colors.blue.withOpacity(0.3),
+                            color: Colors.blue.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                         ),
@@ -403,20 +430,20 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             end: Alignment.bottomRight,
                             colors: [
                               Colors.white,
-                              Colors.green.withOpacity(0.05),
+                              Colors.green.withValues(alpha: 0.05),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.green.withOpacity(0.2),
+                              color: Colors.green.withValues(alpha: 0.2),
                               spreadRadius: 1,
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(
-                            color: Colors.green.withOpacity(0.3),
+                            color: Colors.green.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                         ),
@@ -516,20 +543,20 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             end: Alignment.bottomRight,
                             colors: [
                               Colors.white,
-                              Colors.purple.withOpacity(0.05),
+                              Colors.purple.withValues(alpha: 0.05),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.purple.withOpacity(0.2),
+                              color: Colors.purple.withValues(alpha: 0.2),
                               spreadRadius: 1,
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(
-                            color: Colors.purple.withOpacity(0.3),
+                            color: Colors.purple.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                         ),
@@ -557,15 +584,17 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                                         for (var t in tables) {
                                           await _prepareBulkSync(t);
                                         }
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              "All tables prepared!",
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                "All tables prepared!",
+                                              ),
                                             ),
-                                          ),
-                                        );
+                                          );
+                                        }
                                       },
                                       icon: const Icon(Icons.sync),
                                       label: const Text(
@@ -619,20 +648,20 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             end: Alignment.bottomRight,
                             colors: [
                               Colors.white,
-                              Colors.red.withOpacity(0.05),
+                              Colors.red.withValues(alpha: 0.05),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.red.withOpacity(0.2),
+                              color: Colors.red.withValues(alpha: 0.2),
                               spreadRadius: 1,
                               blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
                           border: Border.all(
-                            color: Colors.red.withOpacity(0.3),
+                            color: Colors.red.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                         ),

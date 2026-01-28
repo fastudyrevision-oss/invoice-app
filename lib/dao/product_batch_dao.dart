@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/product_batch.dart';
 import '../dao/product_dao.dart';
+import '../services/logger_service.dart';
 
 class ProductBatchDao {
   final DatabaseExecutor db;
@@ -97,28 +98,140 @@ class ProductBatchDao {
     return result.map((e) => ProductBatch.fromMap(e)).toList();
   }
 
-  /// ✅ FIFO stock deduction (supports supplier & expiry-based order)
-  Future<List<Map<String, dynamic>>> deductFromBatches(
-    String productId,
-    int qtyToDeduct, {
-    bool trackUsage = false,
+  /// ✅ Get available batches (respecting expiry setting)
+  Future<List<ProductBatch>> getAvailableBatches(
+    String productId, {
+    bool includeExpired = true,
   }) async {
-    if (qtyToDeduct <= 0) return [];
-
-    final batches = await db.query(
+    final now = DateTime.now();
+    final result = await db.query(
       "product_batches",
       where: "product_id = ? AND qty > 0",
       whereArgs: [productId],
       orderBy: "expiry_date ASC, created_at ASC",
     );
 
+    final allBatches = result.map((row) => ProductBatch.fromMap(row)).toList();
+
+    // Debug logging
+    logger.debug(
+      'ProductBatchDao',
+      'Fetching batches for $productId. IncludeExpired: $includeExpired',
+    );
+    logger.debug(
+      'ProductBatchDao',
+      'Found ${allBatches.length} total batches.',
+    );
+
+    if (includeExpired) {
+      return allBatches;
+    }
+
+    return allBatches.where((b) {
+      if (b.expiryDate == null || b.expiryDate!.trim().isEmpty) return true;
+
+      DateTime? expiry;
+      // Try standard format yyyy-MM-dd
+      expiry = DateTime.tryParse(b.expiryDate!);
+
+      // Try dd/MM/yyyy or dd-MM-yyyy fallback
+      if (expiry == null) {
+        try {
+          // crude manual parse if standard fails
+          final parts = b.expiryDate!.split(RegExp(r'[-/]'));
+          if (parts.length == 3) {
+            // Assume dd/mm/yyyy if year is last
+            if (parts[2].length == 4) {
+              expiry = DateTime(
+                int.parse(parts[2]),
+                int.parse(parts[1]),
+                int.parse(parts[0]),
+              );
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // If still unparseable, treat as EXPIRED (safety first)
+      if (expiry == null) {
+        logger.warning(
+          'ProductBatchDao',
+          'Could not parse expiry date "${b.expiryDate}". Treating as expired.',
+        );
+        return false;
+      }
+
+      final isValid = expiry.isAfter(now) || isSameDay(expiry, now);
+
+      if (!isValid) {
+        logger.debug(
+          'ProductBatchDao',
+          'Excluding expired batch ${b.id} (Expiry: ${b.expiryDate}, Now: $now)',
+        );
+      }
+
+      return isValid;
+    }).toList();
+  }
+
+  bool isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  /// ✅ Targeted stock deduction for specific batch (e.g., disposal/return)
+  Future<void> deductFromSpecificBatch(String batchId, int qtyToDeduct) async {
+    if (qtyToDeduct <= 0) return;
+
+    final result = await db.query(
+      "product_batches",
+      where: "id = ?",
+      whereArgs: [batchId],
+    );
+
+    if (result.isEmpty) throw Exception("Batch not found: $batchId");
+
+    final batch = ProductBatch.fromMap(result.first);
+    if (batch.qty < qtyToDeduct) {
+      throw Exception("Insufficient quantity in batch ${batch.batchNo}");
+    }
+
+    final newQty = batch.qty - qtyToDeduct;
+
+    await db.update(
+      "product_batches",
+      {"qty": newQty, "updated_at": DateTime.now().toIso8601String()},
+      where: "id = ?",
+      whereArgs: [batchId],
+    );
+
+    // Sync main product quantity
+    final productDao = ProductDao(db);
+    await productDao.refreshProductQuantityFromBatches(batch.productId);
+  }
+
+  /// ✅ FIFO stock deduction (supports supplier & expiry-based order)
+  Future<List<Map<String, dynamic>>> deductFromBatches(
+    String productId,
+    int qtyToDeduct, {
+    bool trackUsage = false,
+    bool includeExpired = true, // New flag
+  }) async {
+    if (qtyToDeduct <= 0) return [];
+
+    // Re-use logic: fetch all positive batches first
+    final batches = await getAvailableBatches(
+      productId,
+      includeExpired: includeExpired,
+    );
+
     int remaining = qtyToDeduct;
     final reserved = <Map<String, dynamic>>[];
 
-    for (final batchMap in batches) {
+    for (final batch in batches) {
       if (remaining <= 0) break;
 
-      final batch = ProductBatch.fromMap(batchMap);
       final deductQty = remaining > batch.qty ? batch.qty : remaining;
       final newQty = batch.qty - deductQty;
 

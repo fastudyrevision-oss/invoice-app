@@ -4,10 +4,10 @@ import 'package:path_provider/path_provider.dart';
 
 /// 📋 Log Levels (In order of severity)
 enum LogLevel {
-  debug,    // 🔍 Detailed diagnostic information
-  info,     // ℹ️ General informational messages
-  warning,  // ⚠️ Warning messages (recoverable issues)
-  error,    // ❌ Error messages (app can still function)
+  debug, // 🔍 Detailed diagnostic information
+  info, // ℹ️ General informational messages
+  warning, // ⚠️ Warning messages (recoverable issues)
+  error, // ❌ Error messages (app can still function)
   critical, // 🔴 Critical errors (app may crash or stop functioning)
 }
 
@@ -65,7 +65,7 @@ class LogEntry {
 }
 
 /// 🎯 Centralized Logging Service
-/// 
+///
 /// Features:
 /// - Multiple log levels
 /// - File logging support
@@ -73,7 +73,7 @@ class LogEntry {
 /// - Stack trace capture
 /// - Performance monitoring
 /// - Log rotation
-/// 
+///
 /// Usage:
 /// ```dart
 /// final logger = LoggerService.instance;
@@ -83,22 +83,23 @@ class LogEntry {
 /// ```
 class LoggerService {
   static final LoggerService _instance = LoggerService._internal();
-  
+
   factory LoggerService() => _instance;
-  
+
   LoggerService._internal();
-  
+
   static LoggerService get instance => _instance;
 
   // Configuration
-  final List<LogEntry> _logs = [];
+  final List<LogEntry> _logs = []; // Managed as a circular buffer
+  final int _maxLogCount = 1000;
   LogLevel _minimumLevel = LogLevel.debug;
   bool _enableConsoleLogging = true;
   bool _enableFileLogging = true;
   bool _enableContextCapture = true;
   bool _initialized = false;
   File? _logFile;
-  
+
   // Performance tracking
   final Map<String, int> _performanceMarkers = {};
   final Map<String, Duration> _performanceMetrics = {};
@@ -119,6 +120,8 @@ class LoggerService {
 
     if (_enableFileLogging) {
       await _initializeFileLogging();
+      // Load previous logs to provide context on startup
+      await _loadLogsFromFile();
     }
 
     _initialized = true;
@@ -130,7 +133,7 @@ class LoggerService {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final logDir = Directory('${dir.path}/logs');
-      
+
       if (!await logDir.exists()) {
         await logDir.create(recursive: true);
       }
@@ -149,36 +152,99 @@ class LoggerService {
     }
   }
 
+  /// Load logs from the current log file
+  Future<void> _loadLogsFromFile() async {
+    if (_logFile == null || !await _logFile!.exists()) return;
+
+    try {
+      final lines = await _logFile!.readAsLines();
+      // We only load the last 500 lines to avoid slow startup
+      final start = lines.length > 500 ? lines.length - 500 : 0;
+
+      for (var i = start; i < lines.length; i++) {
+        final line = lines[i];
+        if (line.trim().isEmpty) continue;
+
+        final parsed = _parseLogLine(line);
+        if (parsed != null) {
+          _addLogEntry(parsed, persistToFile: false);
+        }
+      }
+      debugPrint('📖 Loaded ${_logs.length} historical logs');
+    } catch (e) {
+      debugPrint('⚠️ Failed to load historical logs: $e');
+    }
+  }
+
+  LogEntry? _parseLogLine(String line) {
+    // Format: [YYYY-MM-DD HH:MM:SS.mmm] LEVEL [TAG] MESSAGE
+    try {
+      if (!line.startsWith('[')) return null;
+
+      final closeBracket = line.indexOf(']');
+      if (closeBracket == -1) return null;
+
+      final dateStr = line.substring(1, closeBracket);
+      final timestamp = DateTime.tryParse(dateStr);
+
+      if (timestamp == null) return null;
+
+      final remainder = line.substring(closeBracket + 1).trim();
+      // Expecting: LEVEL [TAG] MESSAGE
+
+      final parts = remainder.split(' ');
+      if (parts.isEmpty) return null;
+
+      // Parse level (approximation)
+      var level = LogLevel.info;
+      final levelStr = parts[0]; // e.g., ℹ️, 🔍, ⚠️, ❌, 🔴
+
+      if (levelStr.contains('DEBUG')) {
+        level = LogLevel.debug;
+      } else if (levelStr.contains('INFO'))
+        level = LogLevel.info;
+      else if (levelStr.contains('WARN'))
+        level = LogLevel.warning;
+      else if (levelStr.contains('ERROR'))
+        level = LogLevel.error;
+      else if (levelStr.contains('CRIT'))
+        level = LogLevel.critical;
+
+      // Extract Tag
+      final openTag = remainder.indexOf('[', parts[0].length);
+      final closeTag = remainder.indexOf(']', openTag);
+
+      String tag = 'Unknown';
+      String message = remainder;
+
+      if (openTag != -1 && closeTag != -1) {
+        tag = remainder.substring(openTag + 1, closeTag);
+        message = remainder.substring(closeTag + 1).trim();
+      }
+
+      return LogEntry(
+        timestamp: timestamp,
+        level: level,
+        tag: tag,
+        message: message,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // Logging Methods
   // ═══════════════════════════════════════════════════════════════
 
   /// Log debug message (detailed diagnostic info)
-  void debug(
-    String tag,
-    String message, {
-    Map<String, dynamic>? context,
-  }) {
-    _log(
-      level: LogLevel.debug,
-      tag: tag,
-      message: message,
-      context: context,
-    );
+  void debug(String tag, String message, {Map<String, dynamic>? context}) {
+    _log(level: LogLevel.debug, tag: tag, message: message, context: context);
   }
 
   /// Log info message
-  void info(
-    String tag,
-    String message, {
-    Map<String, dynamic>? context,
-  }) {
-    _log(
-      level: LogLevel.info,
-      tag: tag,
-      message: message,
-      context: context,
-    );
+  void info(String tag, String message, {Map<String, dynamic>? context}) {
+    _log(level: LogLevel.info, tag: tag, message: message, context: context);
   }
 
   /// Log warning message
@@ -233,6 +299,26 @@ class LoggerService {
     );
   }
 
+  /// Static generic crash logger for main.dart usage
+  static void logCrash(Object error, StackTrace stack) {
+    try {
+      // Use instance if available, otherwise direct print
+      if (_instance._initialized) {
+        _instance.critical(
+          'CRASH',
+          'Uncaught Exception',
+          error: error,
+          stackTrace: stack,
+        );
+      } else {
+        // Fallback if not initialized
+        debugPrint('☠️ CRASH (Logger not init): $error\n$stack');
+      }
+    } catch (e) {
+      debugPrint('☠️ Failed to log crash: $e');
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // Private Logging Implementation
   // ═══════════════════════════════════════════════════════════════
@@ -266,11 +352,20 @@ class LoggerService {
       context: _enableContextCapture ? context : null,
     );
 
+    _addLogEntry(entry);
+  }
+
+  void _addLogEntry(LogEntry entry, {bool persistToFile = true}) {
     _logs.add(entry);
 
-    // Console logging
-    if (_enableConsoleLogging) {
-      if (stackTrace != null) {
+    // Memory Limit Management (Circular Buffer)
+    if (_logs.length > _maxLogCount) {
+      _logs.removeAt(0); // Remove oldest
+    }
+
+    // Console logging (only for new logs)
+    if (persistToFile && _enableConsoleLogging) {
+      if (entry.stackTrace != null) {
         debugPrint(entry.formatWithTrace());
       } else {
         debugPrint(entry.format());
@@ -278,7 +373,7 @@ class LoggerService {
     }
 
     // File logging
-    if (_enableFileLogging && _logFile != null) {
+    if (persistToFile && _enableFileLogging && _logFile != null) {
       _writeToFile(entry);
     }
   }
@@ -286,11 +381,12 @@ class LoggerService {
   /// Write log entry to file
   Future<void> _writeToFile(LogEntry entry) async {
     try {
-      if (_logFile != null && await _logFile!.exists()) {
+      if (_logFile != null) {
         final logStr = entry.formatWithTrace();
         await _logFile!.writeAsString(
           '$logStr\n',
           mode: FileMode.append,
+          flush: true, // Ensure write is flushed immediately for crashes
         );
       }
     } catch (e) {
@@ -325,7 +421,7 @@ class LoggerService {
 
     final logTag = tag ?? 'Performance';
     final durationStr = _formatDuration(duration);
-    
+
     if (duration.inMilliseconds > 1000) {
       warning(logTag, '$operationName took $durationStr (slow operation)');
     } else {
@@ -363,13 +459,16 @@ class LoggerService {
   /// Get logs within time range
   List<LogEntry> getLogsByTimeRange(DateTime start, DateTime end) {
     return _logs
-        .where((log) => log.timestamp.isAfter(start) && log.timestamp.isBefore(end))
+        .where(
+          (log) => log.timestamp.isAfter(start) && log.timestamp.isBefore(end),
+        )
         .toList();
   }
 
   /// Get recent logs
   List<LogEntry> getRecentLogs({int count = 100}) {
-    final sorted = _logs.toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final sorted = _logs.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return sorted.take(count).toList();
   }
 
@@ -389,7 +488,10 @@ class LoggerService {
   Future<File?> exportLogs({String? filename}) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final timestamp = DateTime.now().toString().replaceAll(' ', '_').replaceAll(':', '-');
+      final timestamp = DateTime.now()
+          .toString()
+          .replaceAll(' ', '_')
+          .replaceAll(':', '-');
       final file = File('${dir.path}/logs_export_$timestamp.txt');
 
       final content = _logs.map((log) => log.formatWithTrace()).join('\n');
@@ -406,14 +508,16 @@ class LoggerService {
   /// Get log statistics
   Map<String, dynamic> getStatistics() {
     final allLogs = _logs;
-    
+
     return {
       'totalLogs': allLogs.length,
       'debugCount': allLogs.where((l) => l.level == LogLevel.debug).length,
       'infoCount': allLogs.where((l) => l.level == LogLevel.info).length,
       'warningCount': allLogs.where((l) => l.level == LogLevel.warning).length,
       'errorCount': allLogs.where((l) => l.level == LogLevel.error).length,
-      'criticalCount': allLogs.where((l) => l.level == LogLevel.critical).length,
+      'criticalCount': allLogs
+          .where((l) => l.level == LogLevel.critical)
+          .length,
       'oldestLog': allLogs.isNotEmpty ? allLogs.first.timestamp : null,
       'newestLog': allLogs.isNotEmpty ? allLogs.last.timestamp : null,
       'uniqueTags': allLogs.map((l) => l.tag).toSet().toList(),
@@ -424,15 +528,25 @@ class LoggerService {
   /// Print log statistics to console
   void printStatistics() {
     final stats = getStatistics();
-    debugPrint('\n📊 ═══════════════════════════════════════════════════════════');
+    debugPrint(
+      '\n📊 ═══════════════════════════════════════════════════════════',
+    );
     debugPrint('📊 LOG STATISTICS');
-    debugPrint('📊 ═══════════════════════════════════════════════════════════');
+    debugPrint(
+      '📊 ═══════════════════════════════════════════════════════════',
+    );
     debugPrint('📊 Total Logs: ${stats['totalLogs']}');
-    debugPrint('📊 Debug: ${stats['debugCount']} | Info: ${stats['infoCount']} | Warning: ${stats['warningCount']}');
-    debugPrint('📊 Error: ${stats['errorCount']} | Critical: ${stats['criticalCount']}');
+    debugPrint(
+      '📊 Debug: ${stats['debugCount']} | Info: ${stats['infoCount']} | Warning: ${stats['warningCount']}',
+    );
+    debugPrint(
+      '📊 Error: ${stats['errorCount']} | Critical: ${stats['criticalCount']}',
+    );
     debugPrint('📊 Time Span: ${stats['oldestLog']} to ${stats['newestLog']}');
     debugPrint('📊 Unique Tags: ${(stats['uniqueTags'] as List).join(', ')}');
-    debugPrint('📊 ═══════════════════════════════════════════════════════════\n');
+    debugPrint(
+      '📊 ═══════════════════════════════════════════════════════════\n',
+    );
   }
 }
 

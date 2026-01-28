@@ -17,8 +17,21 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _descriptionController;
   late TextEditingController _amountController;
+  late TextEditingController _categoryController;
   late String _type;
   late DateTime _date;
+
+  final List<String> _commonCategories = [
+    'General',
+    'Electricity',
+    'Rent',
+    'Water',
+    'Internet',
+    'Transport',
+    'Salary',
+    'Repair',
+    'Other',
+  ];
 
   @override
   void initState() {
@@ -29,6 +42,9 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
     _amountController = TextEditingController(
       text: widget.entry?.amount.toString() ?? '',
     );
+    _categoryController = TextEditingController(
+      text: widget.entry?.category ?? 'General',
+    );
     _type = widget.entry?.type ?? 'income';
     _date = widget.entry?.date ?? DateTime.now();
   }
@@ -37,6 +53,7 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
   void dispose() {
     _descriptionController.dispose();
     _amountController.dispose();
+    _categoryController.dispose();
     super.dispose();
   }
 
@@ -48,6 +65,7 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
         amount: double.parse(_amountController.text),
         type: _type,
         date: _date,
+        category: _categoryController.text,
       );
 
       if (widget.entry == null) {
@@ -88,6 +106,32 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
                   if (double.tryParse(value!) == null) return 'Invalid number';
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+              Autocomplete<String>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text == '') {
+                    return const Iterable<String>.empty();
+                  }
+                  return _commonCategories.where((String option) {
+                    return option.toLowerCase().contains(
+                      textEditingValue.text.toLowerCase(),
+                    );
+                  });
+                },
+                fieldViewBuilder:
+                    (context, controller, focusNode, onFieldSubmitted) {
+                      _categoryController = controller; // Sync controllers
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                          hintText: 'e.g. Rent, Electricity',
+                        ),
+                        onFieldSubmitted: (value) => onFieldSubmitted(),
+                      );
+                    },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(

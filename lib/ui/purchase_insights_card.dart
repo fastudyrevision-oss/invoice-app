@@ -12,12 +12,14 @@ class PurchaseInsightCard extends StatefulWidget {
   final List<Purchase> purchases;
   final bool loading;
   final DateTime? lastUpdated;
+  final Map<String, dynamic>? stats; // Added stats field
 
   const PurchaseInsightCard({
     super.key,
     required this.purchases,
     required this.loading,
     required this.lastUpdated,
+    this.stats, // Added to constructor
   });
 
   @override
@@ -49,16 +51,15 @@ class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
       );
     }
 
-    final total = widget.purchases.length;
-    final pendingCount = widget.purchases
-        .where((p) => _safeDouble(p.pending) > 0)
-        .length;
+    final total = widget.stats?['total'] ?? widget.purchases.length;
+    final pendingCount =
+        widget.stats?['pendingCount'] ??
+        widget.purchases.where((p) => _safeDouble(p.pending) > 0).length;
     final paidCount = total - pendingCount;
 
-    final totalAmount = widget.purchases.fold<double>(
-      0.0,
-      (s, p) => s + _safeDouble(p.total),
-    );
+    final totalAmount =
+        (widget.stats?['totalAmount'] as num?)?.toDouble() ??
+        widget.purchases.fold<double>(0.0, (s, p) => s + _safeDouble(p.total));
 
     final avgPurchase = total > 0 ? totalAmount / total : 0.0;
 
@@ -241,14 +242,14 @@ class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
 
       if (pdfFile != null) {
         await shareOrPrintPdf(pdfFile);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✅ PDF saved: ${pdfFile.path}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('✅ PDF saved: ${pdfFile.path}')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Failed to generate PDF')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('❌ Failed to generate PDF')));
     }
   }
 }

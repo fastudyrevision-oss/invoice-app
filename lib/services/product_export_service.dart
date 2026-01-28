@@ -1,18 +1,112 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
 import '../models/product.dart';
+import '../utils/unified_print_helper.dart';
+import '../utils/pdf_font_helper.dart';
+import '../services/logger_service.dart';
 
 class ProductExportService {
+  /// Print product list directly
+  Future<void> printProductList(
+    List<Product> products, {
+    String? categoryName,
+    String? supplierName,
+    bool lowStockOnly = false,
+  }) async {
+    logger.info(
+      'ProductExport',
+      'Printing Product Report',
+      context: {'count': products.length, 'lowStock': lowStockOnly},
+    );
+    final pdfBytes = await _generatePdf(
+      products,
+      categoryName: categoryName,
+      supplierName: supplierName,
+      lowStockOnly: lowStockOnly,
+    );
+
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Product_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Save product list PDF to file
+  Future<File?> saveProductListPdf(
+    List<Product> products, {
+    String? categoryName,
+    String? supplierName,
+    bool lowStockOnly = false,
+  }) async {
+    logger.info(
+      'ProductExport',
+      'Saving Product Report PDF',
+      context: {'count': products.length},
+    );
+    final pdfBytes = await _generatePdf(
+      products,
+      categoryName: categoryName,
+      supplierName: supplierName,
+      lowStockOnly: lowStockOnly,
+    );
+
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Product_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Product Report',
+    );
+  }
+
   /// Export product list to beautiful PDF with multi-page support
-  Future<void> exportToPDF(List<Product> products) async {
+  Future<void> exportToPDF(
+    List<Product> products, {
+    String? categoryName,
+    String? supplierName,
+    bool lowStockOnly = false,
+  }) async {
+    logger.info(
+      'ProductExport',
+      'Exporting Product Report',
+      context: {'count': products.length},
+    );
+    final pdfBytes = await _generatePdf(
+      products,
+      categoryName: categoryName,
+      supplierName: supplierName,
+      lowStockOnly: lowStockOnly,
+    );
+
+    await UnifiedPrintHelper.sharePdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Product_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+
+    logger.info(
+      'ProductExport',
+      'Product Report PDF exported successfully',
+      context: {'count': products.length},
+    );
+  }
+
+  Future<Uint8List> _generatePdf(
+    List<Product> products, {
+    String? categoryName,
+    String? supplierName,
+    bool lowStockOnly = false,
+  }) async {
     if (products.isEmpty) {
-      print('⚠️ No products to export.');
-      return;
+      return Uint8List(0);
     }
 
     final pdf = pw.Document();
     final now = DateTime.now();
+
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
 
     // Calculate summary statistics
     final totalStockValue = products.fold<double>(
@@ -23,6 +117,12 @@ class ProductExportService {
         .where((p) => p.quantity <= p.minStock)
         .length;
     final totalQuantity = products.fold<int>(0, (sum, p) => sum + p.quantity);
+
+    // Build filter summary
+    final List<String> activeFilters = [];
+    if (categoryName != null) activeFilters.add('Category: $categoryName');
+    if (supplierName != null) activeFilters.add('Supplier: $supplierName');
+    if (lowStockOnly) activeFilters.add('Low Stock Only');
 
     // Group products into pages (25 per page for wider table)
     const itemsPerPage = 25;
@@ -63,14 +163,16 @@ class ProductExportService {
                           fontSize: 22,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
                       pw.Text(
                         'Page ${pageIndex + 1} of $totalPages',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 11,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                     ],
@@ -80,9 +182,10 @@ class ProductExportService {
                     children: [
                       pw.Text(
                         'Generated: ${_formatDateTime(now)}',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                           fontSize: 9,
                           color: PdfColors.white,
+                          font: regularFont,
                         ),
                       ),
                       pw.SizedBox(height: 4),
@@ -92,6 +195,7 @@ class ProductExportService {
                           fontSize: 10,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
+                          font: boldFont,
                         ),
                       ),
                     ],
@@ -101,6 +205,41 @@ class ProductExportService {
             ),
 
             pw.SizedBox(height: 16),
+
+            // Active Filters Section (only on first page)
+            if (pageIndex == 0 && activeFilters.isNotEmpty) ...[
+              pw.Container(
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.green50,
+                  borderRadius: pw.BorderRadius.circular(6),
+                  border: pw.Border.all(color: PdfColors.green200),
+                ),
+                child: pw.Row(
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.Text(
+                      'Filters: ',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.green900,
+                        fontSize: 10,
+                        font: boldFont,
+                      ),
+                    ),
+                    pw.Text(
+                      activeFilters.join(', '),
+                      style: pw.TextStyle(
+                        color: PdfColors.green900,
+                        fontSize: 10,
+                        font: regularFont,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 16),
+            ],
 
             // ═══════════════════════════════════════
             // 📊 SUMMARY CARDS (Only on first page)
@@ -112,18 +251,24 @@ class ProductExportService {
                     'Total Stock Value',
                     'Rs ${totalStockValue.toStringAsFixed(2)}',
                     PdfColors.green700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 10),
                   _buildSummaryCard(
                     'Total Quantity',
                     '$totalQuantity units',
                     PdfColors.blue700,
+                    regularFont,
+                    boldFont,
                   ),
                   pw.SizedBox(width: 10),
                   _buildSummaryCard(
                     'Low Stock Items',
                     '$lowStockCount products',
                     PdfColors.red700,
+                    regularFont,
+                    boldFont,
                   ),
                 ],
               ),
@@ -150,14 +295,14 @@ class ProductExportService {
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.green50),
                   children: [
-                    _buildHeaderCell('#'),
-                    _buildHeaderCell('Product'),
-                    _buildHeaderCell('Category'),
-                    _buildHeaderCell('Qty'),
-                    _buildHeaderCell('Cost'),
-                    _buildHeaderCell('Sell'),
-                    _buildHeaderCell('Profit/U'),
-                    _buildHeaderCell('Reorder'),
+                    _buildHeaderCell('#', boldFont),
+                    _buildHeaderCell('Product', boldFont),
+                    _buildHeaderCell('Category', boldFont),
+                    _buildHeaderCell('Qty', boldFont),
+                    _buildHeaderCell('Cost', boldFont),
+                    _buildHeaderCell('Sell', boldFont),
+                    _buildHeaderCell('Profit/U', boldFont),
+                    _buildHeaderCell('Reorder', boldFont),
                   ],
                 ),
                 // Data Rows
@@ -175,29 +320,38 @@ class ProductExportService {
                           : (isEven ? PdfColors.white : PdfColors.grey50),
                     ),
                     children: [
-                      _buildDataCell((index + 1).toString(), fontSize: 8),
+                      _buildDataCell(
+                        (index + 1).toString(),
+                        font: regularFont,
+                        fontSize: 8,
+                      ),
                       _buildDataCell(
                         product.name,
                         bold: isLowStock,
                         fontSize: 8,
+                        font: isLowStock ? boldFont : regularFont,
                       ),
                       _buildDataCell(
                         product.categoryId.toString(),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                       _buildDataCell(
                         product.quantity.toString(),
                         bold: isLowStock,
                         color: isLowStock ? PdfColors.red900 : null,
                         fontSize: 8,
+                        font: isLowStock ? boldFont : regularFont,
                       ),
                       _buildDataCell(
                         product.costPrice.toStringAsFixed(2),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                       _buildDataCell(
                         product.sellPrice.toStringAsFixed(2),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                       _buildDataCell(
                         profit.toStringAsFixed(2),
@@ -205,10 +359,12 @@ class ProductExportService {
                             ? PdfColors.green900
                             : PdfColors.red900,
                         fontSize: 8,
+                        font: regularFont,
                       ),
                       _buildDataCell(
                         product.minStock.toString(),
                         fontSize: 8,
+                        font: regularFont,
                       ),
                     ],
                   );
@@ -240,20 +396,23 @@ class ProductExportService {
                           style: pw.TextStyle(
                             fontSize: 11,
                             fontWeight: pw.FontWeight.bold,
+                            font: boldFont,
                           ),
                         ),
                         pw.SizedBox(height: 3),
                         pw.Text(
                           'Total Products: ${products.length} | Total Stock Value: Rs ${totalStockValue.toStringAsFixed(2)}',
-                          style: const pw.TextStyle(fontSize: 9),
+                          style: pw.TextStyle(fontSize: 9, font: regularFont),
                         ),
                       ],
                     ),
                     pw.Text(
                       'Prepared via میاں ٹریڈرز',
-                      style: const pw.TextStyle(
+                      textDirection: pw.TextDirection.rtl,
+                      style: pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey700,
+                        font: regularFont,
                       ),
                     ),
                   ],
@@ -265,25 +424,20 @@ class ProductExportService {
       );
     }
 
-    // ═══════════════════════════════════════
-    // 🖨️ SHARE PDF
-    // ═══════════════════════════════════════
-    final bytes = await pdf.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Product_Report_${_formatDate(now)}.pdf',
-    );
-
-    print(
-      '✅ Product Report PDF exported successfully (${products.length} records, $totalPages pages).',
-    );
+    return await pdf.save();
   }
 
   // ═══════════════════════════════════════
   // 🎨 HELPER WIDGETS
   // ═══════════════════════════════════════
 
-  pw.Widget _buildSummaryCard(String label, String value, PdfColor color) {
+  pw.Widget _buildSummaryCard(
+    String label,
+    String value,
+    PdfColor color,
+    pw.Font regular,
+    pw.Font bold,
+  ) {
     return pw.Expanded(
       child: pw.Container(
         padding: const pw.EdgeInsets.all(10),
@@ -301,6 +455,7 @@ class ProductExportService {
                 fontSize: 9,
                 color: color,
                 fontWeight: pw.FontWeight.bold,
+                font: bold,
               ),
             ),
             pw.SizedBox(height: 3),
@@ -310,6 +465,7 @@ class ProductExportService {
                 fontSize: 13,
                 fontWeight: pw.FontWeight.bold,
                 color: color,
+                font: bold,
               ),
             ),
           ],
@@ -318,7 +474,7 @@ class ProductExportService {
     );
   }
 
-  pw.Widget _buildHeaderCell(String text) {
+  pw.Widget _buildHeaderCell(String text, pw.Font font) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
@@ -327,6 +483,7 @@ class ProductExportService {
           fontSize: 10,
           fontWeight: pw.FontWeight.bold,
           color: PdfColors.green900,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),
@@ -338,6 +495,7 @@ class ProductExportService {
     bool bold = false,
     PdfColor? color,
     double fontSize = 9,
+    required pw.Font font,
   }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(4),
@@ -347,6 +505,7 @@ class ProductExportService {
           fontSize: fontSize,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
+          font: font,
         ),
         textAlign: pw.TextAlign.center,
       ),

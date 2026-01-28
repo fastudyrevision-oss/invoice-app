@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 
+import '../../services/preferences_service.dart';
 import '../../models/invoice_item.dart';
 import '../../models/customer.dart';
 import '../../models/product.dart';
@@ -12,7 +13,6 @@ import '../../dao/product_batch_dao.dart';
 import '../../dao/invoice_dao.dart';
 import '../../dao/invoice_item_dao.dart';
 import '../../models/invoice.dart';
-import '../../models/product_batch.dart';
 import '../../db/database_helper.dart';
 
 class OrderFormScreen extends StatefulWidget {
@@ -88,9 +88,18 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       return;
     }
 
+    final prefs = PreferencesService.instance;
+    final includeExpired = await prefs.getIncludeExpiredInOrders();
+
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
-    final batches = await batchDao.getBatchesByProduct(_selectedProduct!.id);
+
+    // ✅ Use new method to get filtered batches
+    final batches = await batchDao.getAvailableBatches(
+      _selectedProduct!.id,
+      includeExpired: includeExpired,
+    );
+
     final totalStock = batches.fold<int>(0, (sum, b) => sum + b.qty);
 
     setState(() => _availableStock = totalStock);
@@ -105,6 +114,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       ).showSnackBar(const SnackBar(content: Text("Invalid product selected")));
       return;
     }
+
+    // Refresh stock check before adding
+    await _loadAvailableStock();
 
     if (_availableStock <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -131,32 +143,16 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
+    final prefs = PreferencesService.instance;
+    final includeExpired = await prefs.getIncludeExpiredInOrders();
 
-    final batches = await batchDao.getBatchesByProduct(_selectedProduct!.id);
-    batches.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-    final originalQtys = {for (var b in batches) b.id: b.qty};
-
-    int remainingQty = qty;
-    final List<ProductBatch> updatedBatches = [];
-
-    for (final batch in batches) {
-      if (remainingQty <= 0) break;
-      final deduction = batch.qty >= remainingQty ? remainingQty : batch.qty;
-      batch.qty -= deduction;
-      remainingQty -= deduction;
-      updatedBatches.add(batch);
-    }
-
-    await Future.wait(updatedBatches.map(batchDao.updateBatch));
-
-    final reservedBatches = updatedBatches
-        .map((b) {
-          final deducted = (originalQtys[b.id] ?? 0) - b.qty;
-          return {'batchId': b.id, 'qty': deducted};
-        })
-        .where((b) => ((b['qty'] ?? 0) as num) > 0)
-        .toList();
+    // ✅ Use centralized DAO deduction logic
+    final reservedBatches = await batchDao.deductFromBatches(
+      _selectedProduct!.id,
+      qty,
+      trackUsage: true,
+      includeExpired: includeExpired,
+    );
 
     final item = InvoiceItem(
       id: _uuid.v4(),
@@ -284,23 +280,38 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
 
+    final dialogFormKey = GlobalKey<FormState>();
+
     final result = await showDialog<Customer>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Add New Customer"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Customer Name"),
-            ),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: "Phone Number"),
-            ),
-          ],
+        content: Form(
+          key: dialogFormKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: "Customer Name *"),
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? "Required" : null,
+              ),
+              TextFormField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: "Phone Number"),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    if (!RegExp(r'^[0-9+]+$').hasMatch(value)) {
+                      return 'Invalid number';
+                    }
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -309,23 +320,24 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final name = nameController.text.trim();
-              final phone = phoneController.text.trim();
-              if (name.isEmpty) return;
+              if (dialogFormKey.currentState!.validate()) {
+                final name = nameController.text.trim();
+                final phone = phoneController.text.trim();
 
-              final db = await DatabaseHelper.instance.db;
-              final customerDao = CustomerDao(db);
-              final now = DateTime.now().toIso8601String();
-              final newCustomer = Customer(
-                id: const Uuid().v4(),
-                name: name,
-                phone: phone,
-                pendingAmount: 0,
-                createdAt: now,
-                updatedAt: now,
-              );
-              await customerDao.insertCustomer(newCustomer);
-              Navigator.pop(context, newCustomer);
+                final db = await DatabaseHelper.instance.db;
+                final customerDao = CustomerDao(db);
+                final now = DateTime.now().toIso8601String();
+                final newCustomer = Customer(
+                  id: const Uuid().v4(),
+                  name: name,
+                  phone: phone,
+                  pendingAmount: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                );
+                await customerDao.insertCustomer(newCustomer);
+                Navigator.pop(context, newCustomer);
+              }
             },
             child: const Text("Save"),
           ),

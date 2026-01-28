@@ -8,6 +8,7 @@ class ProductInsightsCard extends StatelessWidget {
   final bool loading;
   final DateTime? lastUpdated;
   final int categoriesCount;
+  final Map<String, dynamic>? stats;
 
   const ProductInsightsCard({
     super.key,
@@ -15,19 +16,24 @@ class ProductInsightsCard extends StatelessWidget {
     this.loading = false,
     this.lastUpdated,
     this.categoriesCount = 0,
+    this.stats,
   });
 
   @override
   Widget build(BuildContext context) {
     // Calculate metrics
-    final totalProducts = products.length;
-    final lowStockCount = products
-        .where((p) => p.quantity <= p.minStock && p.minStock > 0)
-        .length;
-    final totalInventoryValue = products.fold<double>(
-      0.0,
-      (sum, p) => sum + (p.quantity * p.costPrice),
-    );
+    final totalProducts = stats?['totalProducts'] ?? products.length;
+    final lowStockCount =
+        stats?['lowStockCount'] ??
+        products
+            .where((p) => p.quantity <= p.minStock && p.minStock > 0)
+            .length;
+    final totalInventoryValue =
+        (stats?['totalValue'] as num?)?.toDouble() ??
+        products.fold<double>(
+          0.0,
+          (sum, p) => sum + (p.quantity * p.costPrice),
+        );
 
     final metrics = [
       InsightMetric(

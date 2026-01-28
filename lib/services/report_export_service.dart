@@ -1,10 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart'; // Fix for PdfColors
 import 'package:printing/printing.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
-import 'package:intl/intl.dart';
 import 'package:file_selector/file_selector.dart';
 // Import your report models
 import 'package:invoice_app/models/reports/supplier_report.dart';
@@ -13,22 +13,38 @@ import 'package:invoice_app/models/reports/expense_report.dart';
 import 'package:invoice_app/models/reports/expiry_report.dart';
 import 'package:invoice_app/models/reports/payment_report.dart';
 import 'package:invoice_app/models/reports/combined_payment_entry.dart';
+import '../utils/unified_print_helper.dart';
+import '../utils/pdf_font_helper.dart';
+import '../utils/date_helper.dart';
+import '../services/logger_service.dart';
 
 class ReportExportService {
-  final _dateFmt = DateFormat('yyyy-MM-dd');
+  // Use DateHelper via this getter or directly
+  String _formatDate(DateTime dt) => DateHelper.formatDate(dt);
 
   // =====================================================
-  // -------------------- PDF EXPORTS --------------------
-  // =====================================================
-
   Future<void> exportSupplierReportPdf(List<SupplierReport> reports) async {
+    LoggerService.instance.info(
+      'ReportExport',
+      'Exporting Supplier Report PDF',
+      context: {'count': reports.length},
+    );
     final pdf = pw.Document();
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
 
     pdf.addPage(
       pw.Page(
         build: (context) {
           return pw.TableHelper.fromTextArray(
             headers: ['Supplier', 'Total Purchases', 'Paid', 'Balance'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
             data: reports
                 .map(
                   (r) => [
@@ -48,12 +64,26 @@ class ReportExportService {
   }
 
   Future<void> exportProductReportPdf(List<ProductReport> reports) async {
+    LoggerService.instance.info(
+      'ReportExport',
+      'Exporting Product Report PDF',
+      context: {'count': reports.length},
+    );
     final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
     pdf.addPage(
       pw.Page(
         build: (context) {
           return pw.TableHelper.fromTextArray(
             headers: ['Product', 'Qty Purchased', 'Total Spent'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
             data: reports
                 .map(
                   (r) => [
@@ -71,12 +101,26 @@ class ReportExportService {
   }
 
   Future<void> exportExpenseReportPdf(List<ExpenseReport> reports) async {
+    LoggerService.instance.info(
+      'ReportExport',
+      'Exporting Expense Report PDF',
+      context: {'count': reports.length},
+    );
     final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
     pdf.addPage(
       pw.Page(
         build: (context) {
           return pw.TableHelper.fromTextArray(
             headers: ['Category', 'Total Spent'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
             data: reports
                 .map((r) => [r.category, r.totalSpent.toStringAsFixed(2)])
                 .toList(),
@@ -88,18 +132,32 @@ class ReportExportService {
   }
 
   Future<void> exportExpiryReportPdf(List<ExpiryReport> reports) async {
+    LoggerService.instance.info(
+      'ReportExport',
+      'Exporting Expiry Report PDF',
+      context: {'count': reports.length},
+    );
     final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
     pdf.addPage(
       pw.Page(
         build: (context) {
           return pw.TableHelper.fromTextArray(
             headers: ['Product', 'Batch', 'Expiry Date', 'Qty'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
             data: reports
                 .map(
                   (r) => [
                     r.productName,
                     r.batchNo,
-                    _dateFmt.format(r.expiryDate),
+                    _formatDate(r.expiryDate),
                     r.qty.toStringAsFixed(0),
                   ],
                 )
@@ -112,12 +170,26 @@ class ReportExportService {
   }
 
   Future<void> exportPaymentReportPdf(List<PaymentReport> reports) async {
+    LoggerService.instance.info(
+      'ReportExport',
+      'Exporting Payment Report PDF',
+      context: {'count': reports.length},
+    );
     final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
     pdf.addPage(
       pw.Page(
         build: (context) {
           return pw.TableHelper.fromTextArray(
             headers: ['Supplier', 'Reference', 'Debit', 'Credit', 'Date'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
             data: reports
                 .map(
                   (r) => [
@@ -125,7 +197,7 @@ class ReportExportService {
                     r.reference,
                     r.debit.toStringAsFixed(2),
                     r.credit.toStringAsFixed(2),
-                    _dateFmt.format(r.date),
+                    _formatDate(r.date),
                   ],
                 )
                 .toList(),
@@ -140,6 +212,9 @@ class ReportExportService {
     List<CombinedPaymentEntry> entries,
   ) async {
     final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
 
     // Calculate totals
     double totalIn = 0;
@@ -165,9 +240,13 @@ class ReportExportService {
                     style: pw.TextStyle(
                       fontSize: 24,
                       fontWeight: pw.FontWeight.bold,
+                      font: boldFont,
                     ),
                   ),
-                  pw.Text(_dateFmt.format(DateTime.now())),
+                  pw.Text(
+                    _formatDate(DateTime.now()),
+                    style: pw.TextStyle(font: regularFont),
+                  ),
                 ],
               ),
             ),
@@ -176,6 +255,11 @@ class ReportExportService {
             pw.TableHelper.fromTextArray(
               context: context,
               headers: ['Total Money In', 'Total Money Out', 'Net Cash Flow'],
+              headerStyle: pw.TextStyle(
+                font: boldFont,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellStyle: pw.TextStyle(font: regularFont),
               data: [
                 [
                   totalIn.toStringAsFixed(2),
@@ -183,7 +267,6 @@ class ReportExportService {
                   net.toStringAsFixed(2),
                 ],
               ],
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.grey300,
               ),
@@ -200,10 +283,15 @@ class ReportExportService {
                 'Money Out',
                 'Money In',
               ],
+              headerStyle: pw.TextStyle(
+                font: boldFont,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellStyle: pw.TextStyle(font: regularFont),
               data: entries
                   .map(
                     (e) => [
-                      _dateFmt.format(e.date),
+                      _formatDate(e.date),
                       e.type.toUpperCase(),
                       e.entityName,
                       e.reference,
@@ -212,7 +300,6 @@ class ReportExportService {
                     ],
                   )
                   .toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.grey300,
               ),
@@ -227,6 +314,417 @@ class ReportExportService {
       ),
     );
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+  }
+
+  // =====================================================
+  // -------------------- DIRECT PRINT METHODS -----------
+  // =====================================================
+
+  /// Print supplier report directly to printer
+  Future<void> printSupplierReport(List<SupplierReport> reports) async {
+    final pdfBytes = await _generateSupplierReportPdf(reports);
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Supplier_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Print product report directly to printer
+  Future<void> printProductReport(List<ProductReport> reports) async {
+    final pdfBytes = await _generateProductReportPdf(reports);
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Product_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Print expense report directly to printer
+  Future<void> printExpenseReport(List<ExpenseReport> reports) async {
+    final pdfBytes = await _generateExpenseReportPdf(reports);
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Expense_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Print expiry report directly to printer
+  Future<void> printExpiryReport(List<ExpiryReport> reports) async {
+    final pdfBytes = await _generateExpiryReportPdf(reports);
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Expiry_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Print payment report directly to printer
+  Future<void> printPaymentReport(List<PaymentReport> reports) async {
+    final pdfBytes = await _generatePaymentReportPdf(reports);
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Payment_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Print combined cash flow report directly to printer
+  Future<void> printCombinedCashFlowReport(
+    List<CombinedPaymentEntry> entries,
+  ) async {
+    final pdfBytes = await _generateCombinedCashFlowPdf(entries);
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Cash_Flow_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  // =====================================================
+  // -------------------- SAVE PDF METHODS ---------------
+  // =====================================================
+
+  /// Save supplier report PDF to file
+  Future<File?> saveSupplierReportPdf(List<SupplierReport> reports) async {
+    final pdfBytes = await _generateSupplierReportPdf(reports);
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Supplier_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Supplier Report',
+    );
+  }
+
+  /// Save product report PDF to file
+  Future<File?> saveProductReportPdf(List<ProductReport> reports) async {
+    final pdfBytes = await _generateProductReportPdf(reports);
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Product_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Product Report',
+    );
+  }
+
+  /// Save expense report PDF to file
+  Future<File?> saveExpenseReportPdf(List<ExpenseReport> reports) async {
+    final pdfBytes = await _generateExpenseReportPdf(reports);
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Expense_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Expense Report',
+    );
+  }
+
+  /// Save expiry report PDF to file
+  Future<File?> saveExpiryReportPdf(List<ExpiryReport> reports) async {
+    final pdfBytes = await _generateExpiryReportPdf(reports);
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Expiry_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Expiry Report',
+    );
+  }
+
+  /// Save payment report PDF to file
+  Future<File?> savePaymentReportPdf(List<PaymentReport> reports) async {
+    final pdfBytes = await _generatePaymentReportPdf(reports);
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Payment_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Payment Report',
+    );
+  }
+
+  /// Save combined cash flow report PDF to file
+  Future<File?> saveCombinedCashFlowPdf(
+    List<CombinedPaymentEntry> entries,
+  ) async {
+    final pdfBytes = await _generateCombinedCashFlowPdf(entries);
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Cash_Flow_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Cash Flow Report',
+    );
+  }
+
+  // =====================================================
+  // -------------------- PRIVATE PDF GENERATORS ---------
+  // =====================================================
+
+  /// Generate supplier report PDF bytes
+  Future<Uint8List> _generateSupplierReportPdf(
+    List<SupplierReport> reports,
+  ) async {
+    final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.TableHelper.fromTextArray(
+            headers: ['Supplier', 'Total Purchases', 'Paid', 'Balance'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
+            data: reports
+                .map(
+                  (r) => [
+                    r.supplierName,
+                    r.totalPurchases.toStringAsFixed(2),
+                    r.totalPaid.toStringAsFixed(2),
+                    r.balance.toStringAsFixed(2),
+                  ],
+                )
+                .toList(),
+          );
+        },
+      ),
+    );
+
+    return await pdf.save();
+  }
+
+  /// Generate product report PDF bytes
+  Future<Uint8List> _generateProductReportPdf(
+    List<ProductReport> reports,
+  ) async {
+    final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.TableHelper.fromTextArray(
+            headers: ['Product', 'Qty Purchased', 'Total Spent'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
+            data: reports
+                .map(
+                  (r) => [
+                    r.productName,
+                    r.totalQtyPurchased.toStringAsFixed(0),
+                    r.totalSpent.toStringAsFixed(2),
+                  ],
+                )
+                .toList(),
+          );
+        },
+      ),
+    );
+    return await pdf.save();
+  }
+
+  /// Generate expense report PDF bytes
+  Future<Uint8List> _generateExpenseReportPdf(
+    List<ExpenseReport> reports,
+  ) async {
+    final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.TableHelper.fromTextArray(
+            headers: ['Category', 'Total Spent'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
+            data: reports
+                .map((r) => [r.category, r.totalSpent.toStringAsFixed(2)])
+                .toList(),
+          );
+        },
+      ),
+    );
+    return await pdf.save();
+  }
+
+  /// Generate expiry report PDF bytes
+  Future<Uint8List> _generateExpiryReportPdf(List<ExpiryReport> reports) async {
+    final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.TableHelper.fromTextArray(
+            headers: ['Product', 'Batch', 'Expiry Date', 'Qty'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
+            data: reports
+                .map(
+                  (r) => [
+                    r.productName,
+                    r.batchNo,
+                    _formatDate(r.expiryDate),
+                    r.qty.toStringAsFixed(0),
+                  ],
+                )
+                .toList(),
+          );
+        },
+      ),
+    );
+    return await pdf.save();
+  }
+
+  /// Generate payment report PDF bytes
+  Future<Uint8List> _generatePaymentReportPdf(
+    List<PaymentReport> reports,
+  ) async {
+    final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.TableHelper.fromTextArray(
+            headers: ['Supplier', 'Reference', 'Debit', 'Credit', 'Date'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: pw.TextStyle(font: regularFont),
+            data: reports
+                .map(
+                  (r) => [
+                    r.supplierName,
+                    r.reference,
+                    r.debit.toStringAsFixed(2),
+                    r.credit.toStringAsFixed(2),
+                    _formatDate(r.date),
+                  ],
+                )
+                .toList(),
+          );
+        },
+      ),
+    );
+    return await pdf.save();
+  }
+
+  /// Generate combined cash flow report PDF bytes
+  Future<Uint8List> _generateCombinedCashFlowPdf(
+    List<CombinedPaymentEntry> entries,
+  ) async {
+    final pdf = pw.Document();
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    // Calculate totals
+    double totalIn = 0;
+    double totalOut = 0;
+
+    for (var e in entries) {
+      totalIn += e.moneyIn;
+      totalOut += e.moneyOut;
+    }
+    final net = totalIn - totalOut;
+
+    pdf.addPage(
+      pw.MultiPage(
+        build: (context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Cash Flow Report',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      font: boldFont,
+                    ),
+                  ),
+                  pw.Text(
+                    _formatDate(DateTime.now()),
+                    style: pw.TextStyle(font: regularFont),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            // Summary Table
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: ['Total Money In', 'Total Money Out', 'Net Cash Flow'],
+              headerStyle: pw.TextStyle(
+                font: boldFont,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellStyle: pw.TextStyle(font: regularFont),
+              data: [
+                [
+                  totalIn.toStringAsFixed(2),
+                  totalOut.toStringAsFixed(2),
+                  net.toStringAsFixed(2),
+                ],
+              ],
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            // Detailed Table
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: [
+                'Date',
+                'Type',
+                'Name',
+                'Reference',
+                'Money Out',
+                'Money In',
+              ],
+              headerStyle: pw.TextStyle(
+                font: boldFont,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellStyle: pw.TextStyle(font: regularFont),
+              data: entries
+                  .map(
+                    (e) => [
+                      _formatDate(e.date),
+                      e.type.toUpperCase(),
+                      e.entityName,
+                      e.reference,
+                      e.moneyOut > 0 ? e.moneyOut.toStringAsFixed(2) : '-',
+                      e.moneyIn > 0 ? e.moneyIn.toStringAsFixed(2) : '-',
+                    ],
+                  )
+                  .toList(),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+    return await pdf.save();
   }
 
   // =====================================================
@@ -275,7 +773,7 @@ class ReportExportService {
     final rows = [
       ['Product', 'Batch', 'Expiry Date', 'Qty'],
       ...reports.map(
-        (r) => [r.productName, r.batchNo, _dateFmt.format(r.expiryDate), r.qty],
+        (r) => [r.productName, r.batchNo, _formatDate(r.expiryDate), r.qty],
       ),
     ];
     return _writeCsv(rows, path);
@@ -293,7 +791,7 @@ class ReportExportService {
           r.reference,
           r.debit,
           r.credit,
-          _dateFmt.format(r.date),
+          _formatDate(r.date),
         ],
       ),
     ];
@@ -368,7 +866,7 @@ class ReportExportService {
       sheet.appendRow([
         r.productName,
         r.batchNo,
-        _dateFmt.format(r.expiryDate),
+        _formatDate(r.expiryDate),
         r.qty,
       ]);
     }
@@ -388,7 +886,7 @@ class ReportExportService {
         r.reference,
         r.debit,
         r.credit,
-        _dateFmt.format(r.date),
+        _formatDate(r.date),
       ]);
     }
     return _writeExcel(excel, path);

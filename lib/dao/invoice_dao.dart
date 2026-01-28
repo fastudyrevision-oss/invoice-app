@@ -132,6 +132,37 @@ class InvoiceDao {
   }
 
   // =========================
+  // UPDATE PENDING AMOUNT (SAFE TRANSACTION)
+  // =========================
+  Future<void> updatePendingAmount(String id, double delta) async {
+    final result = await db.query(
+      'invoices',
+      columns: ['pending', 'paid'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (result.isNotEmpty) {
+      final currentPending = (result.first['pending'] as num).toDouble();
+      final currentPaid = (result.first['paid'] as num).toDouble();
+
+      final newPending = currentPending + delta;
+      final newPaid = currentPaid - delta;
+
+      await db.update(
+        'invoices',
+        {
+          'pending': newPending,
+          'paid': newPaid,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
+  // =========================
   // DELETE
   // =========================
   Future<int> delete(String id) async {

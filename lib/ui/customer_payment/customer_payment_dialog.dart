@@ -31,7 +31,8 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
   late double _amount;
   late String _method;
   late DateTime _date;
-  late String? _transactionRef;
+  late String? _selectedInvoiceId;
+  late String? _transactionReference;
   late String? _note;
 
   List<Invoice> _pendingInvoices = [];
@@ -56,38 +57,66 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
       _amount = (widget.paymentData!['amount'] as num).toDouble();
       _method = widget.paymentData!['method'] ?? 'cash';
       _date = DateTime.parse(widget.paymentData!['date']);
-      _transactionRef = widget.paymentData!['transaction_ref'];
+
+      // ✅ Fix: Remove transaction_ref fallback. Only use invoice_id.
+      _selectedInvoiceId = widget.paymentData!['invoice_id'];
+
+      _transactionReference = widget.paymentData!['transaction_ref'];
       _note = widget.paymentData!['note'];
     } else {
       // Add mode
+      // ... (existing add mode init)
       _selectedCustomerId = widget.customers.isNotEmpty
           ? widget.customers.first.id
           : null;
       _amount = 0.0;
       _method = 'cash';
       _date = DateTime.now();
-      _transactionRef = null;
+      _selectedInvoiceId = null;
+      _transactionReference = null;
       _note = null;
     }
 
     if (_selectedCustomerId != null) {
-      _loadPendingInvoices(_selectedCustomerId!);
+      // ✅ Pass the selectedInvoiceId so we can fetch it even if it's fully paid
+      _loadPendingInvoices(
+        _selectedCustomerId!,
+        linkedInvoiceId: _selectedInvoiceId,
+      );
     }
   }
 
-  Future<void> _loadPendingInvoices(String customerId) async {
+  Future<void> _loadPendingInvoices(
+    String customerId, {
+    String? linkedInvoiceId,
+  }) async {
     setState(() => _isLoadingInvoices = true);
     try {
       final db = await DatabaseHelper.instance.db;
       final invoiceDao = InvoiceDao(db);
+
+      // 1. Get all pending invoices
       final invoices = await invoiceDao.getPendingByCustomerId(customerId);
+
+      // 2. ✅ If we have a linked invoice (Edit mode), ensure it's in the list
+      // ignoring 'pending' status (it might be fully paid now)
+      if (linkedInvoiceId != null &&
+          !invoices.any((i) => i.id == linkedInvoiceId)) {
+        final linkedInvoice = await invoiceDao.getById(linkedInvoiceId);
+        if (linkedInvoice != null) {
+          invoices.add(linkedInvoice);
+          // Sort or prepend? Maybe prepend to make it visible
+          invoices.sort((a, b) => b.date.compareTo(a.date));
+        }
+      }
+
       setState(() {
         _pendingInvoices = invoices;
         _isLoadingInvoices = false;
       });
     } catch (e) {
       setState(() => _isLoadingInvoices = false);
-      // Handle error silently or log
+      debugPrint("Error loading invoices: $e");
     }
   }
 
@@ -101,35 +130,96 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
     }
 
     _formKey.currentState!.save();
+
+    // ✅ Real Edit check: Must have paymentData AND it must contain an 'id'
+    final isRealEdit =
+        widget.paymentData != null && widget.paymentData!.containsKey('id');
+
+    // ✅ Overpayment validation for specific invoices
+    if (_selectedInvoiceId != null) {
+      // Handle case where selected invoice might not be in _pendingInvoices list (edge case)
+      // Though our fix above should prevent this.
+      final selectedInv = _pendingInvoices.firstWhere(
+        (i) => i.id == _selectedInvoiceId,
+        orElse: () => Invoice(
+          id: 'unknown',
+          customerId: '',
+          customerName: '',
+          total: 0,
+          pending: 0,
+          date: '',
+          createdAt: '',
+          updatedAt: '',
+        ),
+      );
+
+      if (selectedInv.id != 'unknown') {
+        // In edit mode, we account for the existing payment amount
+        double maxAllowed = selectedInv.pending;
+        if (isRealEdit) {
+          final oldAmount = (widget.paymentData!['amount'] as num).toDouble();
+          maxAllowed += oldAmount;
+        }
+
+        if (_amount > maxAllowed) {
+          // ... (existing overpayment dialog logic)
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Overpayment Warning'),
+              content: Text(
+                'You are paying Rs ${_amount.toStringAsFixed(2)} for an invoice with only Rs ${maxAllowed.toStringAsFixed(2)} pending. This will result in a negative balance for this invoice. Is this intended?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Correct Amount'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Proceed Anyway'),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) return;
+        }
+      }
+    }
+
     setState(() => _isSaving = true);
 
     try {
       final payment = CustomerPayment(
-        id: widget.paymentData?['id'] ?? const Uuid().v4(),
+        id: isRealEdit ? widget.paymentData!['id'] : const Uuid().v4(),
         customerId: _selectedCustomerId!,
+        invoiceId: _selectedInvoiceId, // ✅ Link to specific invoice
         amount: _amount,
         method: _method,
         date: _date.toIso8601String().split('T')[0],
-        transactionRef: _transactionRef?.isEmpty == true
-            ? null
-            : _transactionRef,
+        transactionRef: _transactionReference,
         note: _note?.isEmpty == true ? null : _note,
       );
 
-      if (widget.paymentData != null) {
-        await _paymentDao.update(payment);
-      } else {
-        await _paymentDao.insert(payment);
-      }
+      final oldPayment = isRealEdit
+          ? CustomerPayment.fromMap(widget.paymentData!)
+          : null;
+
+      // ✅ Use the new transacted processPayment method
+      await _paymentDao.processPayment(
+        payment: payment,
+        isUpdate: isRealEdit,
+        oldPayment: oldPayment,
+      );
 
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.paymentData != null
-                  ? 'Payment updated successfully'
-                  : 'Payment added successfully',
+              isRealEdit
+                  ? 'Payment updated and balances adjusted'
+                  : 'Payment processed and balances updated',
             ),
           ),
         );
@@ -139,7 +229,7 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error saving payment: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error processing payment: $e')));
       }
     }
   }
@@ -217,7 +307,7 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
                       onChanged: (value) {
                         setState(() {
                           _selectedCustomerId = value;
-                          _transactionRef = null; // Reset invoice selection
+                          _selectedInvoiceId = null; // Reset invoice selection
                         });
                         if (value != null) {
                           _loadPendingInvoices(value);
@@ -297,6 +387,27 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
                     ),
                     const SizedBox(height: 20),
 
+                    // Transaction reference (conditional)
+                    if (_method != 'cash') ...[
+                      TextFormField(
+                        initialValue: _transactionReference,
+                        decoration: InputDecoration(
+                          labelText: 'Reference Number / Cheque No',
+                          prefixIcon: const Icon(
+                            Icons.confirmation_number_outlined,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          hintText: 'e.g. Bank TXN ID or Cheque No',
+                        ),
+                        onSaved: (value) => _transactionReference = value,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     // Date
                     InkWell(
                       onTap: () async {
@@ -331,8 +442,10 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
                     // Transaction reference (Invoice Selection)
                     DropdownButtonFormField<String>(
                       initialValue:
-                          _pendingInvoices.any((i) => i.id == _transactionRef)
-                          ? _transactionRef
+                          _pendingInvoices.any(
+                            (i) => i.id == _selectedInvoiceId,
+                          )
+                          ? _selectedInvoiceId
                           : null,
                       decoration: InputDecoration(
                         labelText: 'Link to Invoice (Optional)',
@@ -373,7 +486,7 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
                       ],
                       onChanged: (value) {
                         setState(() {
-                          _transactionRef = value;
+                          _selectedInvoiceId = value;
                           // Optional: Auto-fill amount if an invoice is selected and amount is 0
                           if (value != null && _amount == 0) {
                             final invoice = _pendingInvoices.firstWhere(
@@ -383,7 +496,7 @@ class _CustomerPaymentDialogState extends State<CustomerPaymentDialog> {
                           }
                         });
                       },
-                      onSaved: (value) => _transactionRef = value,
+                      onSaved: (value) => _selectedInvoiceId = value,
                     ),
                     const SizedBox(height: 20),
 

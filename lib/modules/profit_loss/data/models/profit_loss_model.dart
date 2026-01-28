@@ -2,6 +2,7 @@ import '../models/category_profit.dart';
 import '../models/product_profit.dart';
 import '../models/profit_loss_summary.dart';
 import '../models/supplier_profit.dart';
+import '../models/customer_profit.dart';
 
 // =======================
 // MODEL: ProfitLossModel (Unified)
@@ -13,13 +14,20 @@ class ProfitLossModel {
   final double totalProfit;
   final double totalExpenses;
   final double totalDiscounts;
+  final double totalReceived;
   final double pendingFromCustomers;
   final double pendingToSuppliers;
   final double inHandCash;
+  final double expiredStockLoss;
+  final double expiredStockRefunds;
+  final double netExpiredLoss;
 
   final List<ProductProfit> products;
   final List<CategoryProfit> categories;
   final List<SupplierProfit> suppliers;
+  final List<CustomerProfit> customerProfits;
+  final List<Map<String, dynamic>> recentTransactions;
+  final Map<String, double> expenseBreakdown;
 
   ProfitLossModel({
     this.totalSales = 0.0,
@@ -28,12 +36,19 @@ class ProfitLossModel {
     this.totalProfit = 0.0,
     this.totalExpenses = 0.0,
     this.totalDiscounts = 0.0,
+    this.totalReceived = 0.0,
     this.pendingFromCustomers = 0.0,
     this.pendingToSuppliers = 0.0,
     this.inHandCash = 0.0,
+    this.expiredStockLoss = 0.0,
+    this.expiredStockRefunds = 0.0,
+    this.netExpiredLoss = 0.0,
     this.products = const [],
     this.categories = const [],
     this.suppliers = const [],
+    this.customerProfits = const [],
+    this.recentTransactions = const [],
+    this.expenseBreakdown = const {},
   });
 
   // Factory from ProfitLossSummary
@@ -45,9 +60,14 @@ class ProfitLossModel {
       totalProfit: s.netProfit,
       totalExpenses: s.totalExpenses,
       totalDiscounts: s.totalDiscounts,
+      totalReceived: s.totalReceived,
       pendingFromCustomers: s.pendingFromCustomers,
       pendingToSuppliers: s.pendingToSuppliers,
       inHandCash: s.inHandCash,
+      expiredStockLoss: s.expiredStockLoss,
+      expiredStockRefunds: s.expiredStockRefunds,
+      netExpiredLoss: s.netExpiredLoss,
+      expenseBreakdown: s.expenseBreakdown,
     );
   }
 

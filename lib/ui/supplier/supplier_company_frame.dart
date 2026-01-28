@@ -33,32 +33,48 @@ class _SupplierCompanyFrameState extends State<SupplierCompanyFrame> {
     final phoneCtrl = TextEditingController(text: company?.phone ?? '');
     final notesCtrl = TextEditingController(text: company?.notes ?? '');
 
+    final formKey = GlobalKey<FormState>();
+
     final result = await showDialog<SupplierCompany>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(company == null ? "Add Company" : "Edit Company"),
         content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: "Name"),
-              ),
-              TextField(
-                controller: addressCtrl,
-                decoration: const InputDecoration(labelText: "Address"),
-              ),
-              TextField(
-                controller: phoneCtrl,
-                decoration: const InputDecoration(labelText: "Phone"),
-              ),
-              TextField(
-                controller: notesCtrl,
-                decoration: const InputDecoration(labelText: "Notes"),
-                maxLines: 2,
-              ),
-            ],
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: "Name *"),
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? "Required" : null,
+                ),
+                TextFormField(
+                  controller: addressCtrl,
+                  decoration: const InputDecoration(labelText: "Address"),
+                ),
+                TextFormField(
+                  controller: phoneCtrl,
+                  decoration: const InputDecoration(labelText: "Phone"),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      if (!RegExp(r'^[0-9+]+$').hasMatch(value)) {
+                        return 'Invalid phone number';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: notesCtrl,
+                  decoration: const InputDecoration(labelText: "Notes"),
+                  maxLines: 2,
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -68,24 +84,26 @@ class _SupplierCompanyFrameState extends State<SupplierCompanyFrame> {
           ),
           TextButton(
             onPressed: () {
-              final newCompany = SupplierCompany(
-                id: company?.id ?? const Uuid().v4(),
-                name: nameCtrl.text.trim(),
-                address: addressCtrl.text.trim().isEmpty
-                    ? null
-                    : addressCtrl.text.trim(),
-                phone: phoneCtrl.text.trim().isEmpty
-                    ? null
-                    : phoneCtrl.text.trim(),
-                notes: notesCtrl.text.trim().isEmpty
-                    ? null
-                    : notesCtrl.text.trim(),
-                createdAt:
-                    company?.createdAt ?? DateTime.now().toIso8601String(),
-                updatedAt: DateTime.now().toIso8601String(),
-                deleted: company?.deleted ?? 0,
-              );
-              Navigator.pop(ctx, newCompany);
+              if (formKey.currentState!.validate()) {
+                final newCompany = SupplierCompany(
+                  id: company?.id ?? const Uuid().v4(),
+                  name: nameCtrl.text.trim(),
+                  address: addressCtrl.text.trim().isEmpty
+                      ? null
+                      : addressCtrl.text.trim(),
+                  phone: phoneCtrl.text.trim().isEmpty
+                      ? null
+                      : phoneCtrl.text.trim(),
+                  notes: notesCtrl.text.trim().isEmpty
+                      ? null
+                      : notesCtrl.text.trim(),
+                  createdAt:
+                      company?.createdAt ?? DateTime.now().toIso8601String(),
+                  updatedAt: DateTime.now().toIso8601String(),
+                  deleted: company?.deleted ?? 0,
+                );
+                Navigator.pop(ctx, newCompany);
+              }
             },
             child: const Text("Save"),
           ),

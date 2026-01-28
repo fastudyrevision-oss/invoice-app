@@ -11,6 +11,7 @@ import 'supplier_company_frame.dart';
 import 'supplier_insights_card.dart';
 import '../common/unified_search_bar.dart';
 import '../../utils/responsive_utils.dart';
+import '../../services/logger_service.dart';
 
 class SupplierFrame extends StatefulWidget {
   final SupplierRepository repo;
@@ -88,6 +89,11 @@ class _SupplierFrameState extends State<SupplierFrame> {
     if (_isLoading || !_hasMore) return;
 
     setState(() => _isLoading = true);
+    logger.info(
+      'SupplierFrame',
+      'Loading next supplier page',
+      context: {'page': _currentPage},
+    );
 
     try {
       final nextPage = await widget.repo.getSuppliersPaged(
@@ -132,8 +138,13 @@ class _SupplierFrameState extends State<SupplierFrame> {
         _currentPage++;
         if (nextPage.length < _pageSize) _hasMore = false;
       });
-    } catch (e) {
-      debugPrint("Error loading suppliers: $e");
+    } catch (e, stackTrace) {
+      logger.error(
+        'SupplierFrame',
+        'Error loading suppliers',
+        error: e,
+        stackTrace: stackTrace,
+      );
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -191,7 +202,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
     _resetAndLoad();
   }
 
-  Future<void> _exportToPDF() async {
+  Future<void> _handleExport(String outputType) async {
     if (_suppliers.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -200,28 +211,91 @@ class _SupplierFrameState extends State<SupplierFrame> {
     }
 
     final exportService = SupplierExportService();
-    await exportService.exportToPDF(
-      _suppliers,
-      searchKeyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
-      companyName: _selectedCompany?.name,
-      pendingFilter: _pendingFilter,
-      minCredit: double.tryParse(_minCreditCtrl.text),
-      maxCredit: double.tryParse(_maxCreditCtrl.text),
-      minPending: double.tryParse(_minPendingCtrl.text),
-      maxPending: double.tryParse(_maxPendingCtrl.text),
-      showDeleted: _showDeleted,
-    );
+    // Common arguments
+    final companyName = _selectedCompany?.name;
+    final minCredit = double.tryParse(_minCreditCtrl.text);
+    final maxCredit = double.tryParse(_maxCreditCtrl.text);
+    final minPending = double.tryParse(_minPendingCtrl.text);
+    final maxPending = double.tryParse(_maxPendingCtrl.text);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PDF exported successfully!')),
+    try {
+      if (outputType == 'print') {
+        logger.info('SupplierFrame', 'Printing supplier list');
+        await exportService.printSupplierList(
+          _suppliers,
+          searchKeyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+          companyName: companyName,
+          pendingFilter: _pendingFilter,
+          minCredit: minCredit,
+          maxCredit: maxCredit,
+          minPending: minPending,
+          maxPending: maxPending,
+          showDeleted: _showDeleted,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Sent to printer'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'save') {
+        logger.info('SupplierFrame', 'Saving supplier list PDF');
+        final file = await exportService.saveSupplierListPdf(
+          _suppliers,
+          searchKeyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+          companyName: companyName,
+          pendingFilter: _pendingFilter,
+          minCredit: minCredit,
+          maxCredit: maxCredit,
+          minPending: minPending,
+          maxPending: maxPending,
+          showDeleted: _showDeleted,
+        );
+        if (mounted && file != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Saved: ${file.path}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'share') {
+        logger.info('SupplierFrame', 'Sharing supplier list PDF');
+        await exportService.exportToPDF(
+          _suppliers,
+          searchKeyword: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+          companyName: companyName,
+          pendingFilter: _pendingFilter,
+          minCredit: minCredit,
+          maxCredit: maxCredit,
+          minPending: minPending,
+          maxPending: maxPending,
+          showDeleted: _showDeleted,
+        );
+      }
+    } catch (e, stackTrace) {
+      logger.error(
+        'SupplierFrame',
+        'Export error',
+        error: e,
+        stackTrace: stackTrace,
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Export error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Widget _buildFilterBar() {
     return Container(
-      color: Theme.of(context).primaryColor.withOpacity(0.05),
+      color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
       child: Column(
         children: [
           Padding(
@@ -251,10 +325,9 @@ class _SupplierFrameState extends State<SupplierFrame> {
                     selectedItem: _selectedCompany ?? allCompaniesOption,
                     itemAsString: (c) => c.name,
                     compareFn: (a, b) => a.id == b.id,
-                    popupProps: PopupProps.menu(
+                    popupProps: const PopupProps.modalBottomSheet(
                       showSearchBox: true,
-                      fit: FlexFit.loose,
-                      constraints: const BoxConstraints(maxHeight: 300),
+                      constraints: BoxConstraints(maxHeight: 500),
                     ),
                     decoratorProps: DropDownDecoratorProps(
                       decoration: InputDecoration(
@@ -361,8 +434,10 @@ class _SupplierFrameState extends State<SupplierFrame> {
                   ? [
                       PopupMenuButton<String>(
                         onSelected: (value) {
-                          if (value == 'export') {
-                            _exportToPDF();
+                          if (value == 'print' ||
+                              value == 'save' ||
+                              value == 'share') {
+                            _handleExport(value);
                           } else if (value == 'toggle_deleted') {
                             setState(() {
                               _showDeleted = !_showDeleted;
@@ -372,12 +447,32 @@ class _SupplierFrameState extends State<SupplierFrame> {
                         },
                         itemBuilder: (context) => [
                           const PopupMenuItem(
-                            value: 'export',
+                            value: 'print',
                             child: Row(
                               children: [
-                                Icon(Icons.picture_as_pdf),
+                                Icon(Icons.print),
                                 SizedBox(width: 8),
-                                Text('Export PDF'),
+                                Text('Print List'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'save',
+                            child: Row(
+                              children: [
+                                Icon(Icons.save),
+                                SizedBox(width: 8),
+                                Text('Save PDF'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                Icon(Icons.share),
+                                SizedBox(width: 8),
+                                Text('Share PDF'),
                               ],
                             ),
                           ),
@@ -404,9 +499,19 @@ class _SupplierFrameState extends State<SupplierFrame> {
                     ]
                   : [
                       IconButton(
-                        icon: const Icon(Icons.picture_as_pdf),
-                        tooltip: 'Export to PDF',
-                        onPressed: _exportToPDF,
+                        icon: const Icon(Icons.print),
+                        tooltip: 'Print List',
+                        onPressed: () => _handleExport('print'),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.save),
+                        tooltip: 'Save PDF',
+                        onPressed: () => _handleExport('save'),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share),
+                        tooltip: 'Share PDF',
+                        onPressed: () => _handleExport('share'),
                       ),
                       const SizedBox(width: 10),
                       IconButton(
@@ -493,7 +598,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.grey.withOpacity(0.1),
+                                    color: Colors.grey.withValues(alpha: 0.1),
                                     spreadRadius: 1,
                                     blurRadius: 6,
                                     offset: const Offset(0, 3),

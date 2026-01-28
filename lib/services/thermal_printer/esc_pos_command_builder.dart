@@ -3,14 +3,14 @@ import 'package:image/image.dart' as img;
 import 'dart:convert';
 
 /// 🖨️ ESC/POS Command Builder for BC-85AC (80mm Thermal Printer)
-/// 
+///
 /// Generates raw ESC/POS byte sequences for:
 /// - Image printing (imageRaster mode)
 /// - Text printing
 /// - Formatting (bold, centering, etc.)
 /// - Paper control (cut, feed)
 /// - Printer initialization
-/// 
+///
 /// Reference: ESC/POS Specification v1.14+
 
 /// Text alignment options for ESC/POS
@@ -23,11 +23,11 @@ class EscPosCommandBuilder {
   // ESC/POS Command Codes (BC-85AC compatible)
   // ═══════════════════════════════════════════════════════════════
 
-  static const int ESC = 0x1B; // Escape character
-  static const int GS = 0x1D; // Group Separator (for image printing)
-  static const int CR = 0x0D; // Carriage Return
-  static const int LF = 0x0A; // Line Feed
-  static const int NULL_BYTE = 0x00;
+  static const int esc = 0x1B; // Escape character
+  static const int gs = 0x1D; // Group Separator (for image printing)
+  static const int cr = 0x0D; // Carriage Return
+  static const int lf = 0x0A; // Line Feed
+  static const int nullByte = 0x00;
 
   // ═══════════════════════════════════════════════════════════════
   // Initialization & Reset
@@ -35,29 +35,29 @@ class EscPosCommandBuilder {
 
   /// Initialize printer (reset to defaults)
   void reset() {
-    _buffer.addAll([ESC, 0x40]); // ESC @
+    _buffer.addAll([esc, 0x40]); // ESC @
   }
 
   /// Set print mode (normal text)
   void setNormalMode() {
-    _buffer.addAll([ESC, 0x21, 0x00]); // ESC ! 0
+    _buffer.addAll([esc, 0x21, 0x00]); // ESC ! 0
   }
 
   /// Set bold mode
   void setBoldMode(bool enabled) {
     if (enabled) {
-      _buffer.addAll([ESC, 0x45, 0x01]); // ESC E 1 (emphasize on)
+      _buffer.addAll([esc, 0x45, 0x01]); // ESC E 1 (emphasize on)
     } else {
-      _buffer.addAll([ESC, 0x45, 0x00]); // ESC E 0 (emphasize off)
+      _buffer.addAll([esc, 0x45, 0x00]); // ESC E 0 (emphasize off)
     }
   }
 
   /// Double height text
   void setDoubleHeight(bool enabled) {
     if (enabled) {
-      _buffer.addAll([ESC, 0x21, 0x10]); // ESC ! 10h (double height)
+      _buffer.addAll([esc, 0x21, 0x10]); // ESC ! 10h (double height)
     } else {
-      _buffer.addAll([ESC, 0x21, 0x00]); // ESC ! 0 (normal height)
+      _buffer.addAll([esc, 0x21, 0x00]); // ESC ! 0 (normal height)
     }
   }
 
@@ -79,7 +79,7 @@ class EscPosCommandBuilder {
         alignCode = 2;
         break;
     }
-    _buffer.addAll([ESC, 0x61, alignCode]); // ESC a <alignment>
+    _buffer.addAll([esc, 0x61, alignCode]); // ESC a <alignment>
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -100,7 +100,7 @@ class EscPosCommandBuilder {
   /// Line feed (move to next line)
   void lineFeed({int lines = 1}) {
     for (int i = 0; i < lines; i++) {
-      _buffer.add(LF);
+      _buffer.add(lf);
     }
   }
 
@@ -116,7 +116,7 @@ class EscPosCommandBuilder {
 
   /// Print image using raster/bitmap mode
   /// This is the ONLY way to print Urdu/Arabic with proper text shaping in ESC/POS
-  /// 
+  ///
   /// [imageBytes]: PNG or other image format bytes
   /// [maxWidth]: Maximum print width in pixels (384 for 80mm @ 96dpi)
   void printImage(Uint8List imageBytes, {int maxWidth = 384}) {
@@ -144,10 +144,10 @@ class EscPosCommandBuilder {
   }
 
   /// Internal: Convert image to ESC/POS raster format (GS v 0 mode)
-  /// 
+  ///
   /// ESC/POS Raster Format (GS v 0):
-  /// GS v 0 <mode> <xL> <xH> <yL> <yH> <data>
-  /// 
+  /// GS v 0 &lt;mode&gt; &lt;xL&gt; &lt;xH&gt; &lt;yL&gt; &lt;yH&gt; &lt;data&gt;
+  ///
   /// Where:
   /// - mode: 0 = normal, 1 = double-width, 2 = double-height, 3 = double both
   /// - x: width in pixels
@@ -176,8 +176,8 @@ class EscPosCommandBuilder {
     final heightHigh = (dataHeight >> 8) & 0xFF;
 
     // Build command
-    _buffer.addAll([GS, 0x2A, widthLow, widthHigh]); // GS * <width>
-    _buffer.addAll([GS, 0x2B, heightLow, heightHigh]); // GS + <height>
+    _buffer.addAll([gs, 0x2A, widthLow, widthHigh]); // GS * <width>
+    _buffer.addAll([gs, 0x2B, heightLow, heightHigh]); // GS + <height>
 
     // Add bitmap data
     _buffer.addAll(bitmapData);
@@ -237,17 +237,17 @@ class EscPosCommandBuilder {
 
   /// Feed paper (move down specified lines)
   void feedLines(int lines) {
-    _buffer.addAll([ESC, 0x4A, lines]); // ESC J <lines>
+    _buffer.addAll([esc, 0x4A, lines]); // ESC J <lines>
   }
 
   /// Full cut (cut all the way through)
   void fullCut() {
-    _buffer.addAll([GS, 0x56, 0x00]); // GS V 0 (full cut)
+    _buffer.addAll([gs, 0x56, 0x00]); // GS V 0 (full cut)
   }
 
   /// Partial cut (cut partially, leave small connection)
   void partialCut() {
-    _buffer.addAll([GS, 0x56, 0x01]); // GS V 1 (partial cut)
+    _buffer.addAll([gs, 0x56, 0x01]); // GS V 1 (partial cut)
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -267,7 +267,7 @@ class EscPosCommandBuilder {
   int get length => _buffer.length;
 
   /// Print complete receipt workflow
-  /// 
+  ///
   /// This is the recommended sequence for thermal printing:
   /// 1. Reset
   /// 2. Print receipt image

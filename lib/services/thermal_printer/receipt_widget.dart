@@ -98,9 +98,15 @@ class ThermalReceiptWidget extends StatelessWidget {
           // Invoice Details
           _buildDetailRow('Invoice:', invoiceNumber ?? 'N/A'),
           const SizedBox(height: 4),
-          _buildDetailRow('Date:', date ?? DateFormat('dd-MMM-yyyy hh:mm a').format(DateTime.now())),
+          _buildDetailRow(
+            'Date:',
+            date ?? DateFormat('dd-MMM-yyyy hh:mm a').format(DateTime.now()),
+          ),
           const SizedBox(height: 4),
-          _buildDetailRow('Customer/Supplier:', customerOrSupplierName ?? 'N/A'),
+          _buildDetailRow(
+            'Customer/Supplier:',
+            customerOrSupplierName ?? 'N/A',
+          ),
 
           const SizedBox(height: 12),
           _buildDivider(),
@@ -121,14 +127,10 @@ class ThermalReceiptWidget extends StatelessWidget {
           _buildDivider(),
           const SizedBox(height: 4),
           if (paid != null) _buildTotalRow('Paid:', paid!, isBold: true),
-          if (pending != null) _buildTotalRow('Pending:', pending!, isBold: true),
+          if (pending != null)
+            _buildTotalRow('Pending:', pending!, isBold: true),
           const SizedBox(height: 8),
-          _buildTotalRow(
-            'TOTAL:',
-            total,
-            isBold: true,
-            fontSize: 14,
-          ),
+          _buildTotalRow('TOTAL:', total, isBold: true, fontSize: 14),
 
           const SizedBox(height: 12),
           _buildDivider(),
@@ -174,21 +176,14 @@ class ThermalReceiptWidget extends StatelessWidget {
   }
 
   Widget _buildDivider() {
-    return Container(
-      height: 2,
-      color: Colors.black,
-      width: double.infinity,
-    );
+    return Container(height: 2, color: Colors.black, width: double.infinity);
   }
 
   Widget _buildDetailRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, fontFamily: 'Roboto'),
-        ),
+        Text(label, style: const TextStyle(fontSize: 10, fontFamily: 'Roboto')),
         Expanded(
           child: Text(
             value,
@@ -201,7 +196,12 @@ class ThermalReceiptWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildTotalRow(String label, double value, {bool isBold = false, double fontSize = 11}) {
+  Widget _buildTotalRow(
+    String label,
+    double value, {
+    bool isBold = false,
+    double fontSize = 11,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -299,8 +299,7 @@ class ThermalReceiptWidget extends StatelessWidget {
               child: Text(
                 item.name,
                 style: const TextStyle(fontSize: 9, fontFamily: 'Roboto'),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
+                // Removed maxLines to allow proper wrapping for long product names
               ),
             ),
             Expanded(

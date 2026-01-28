@@ -4,7 +4,11 @@ import '../models/category_profit.dart';
 import '../models/product_profit.dart';
 import '../models/profit_loss_summary.dart';
 import '../models/supplier_profit.dart';
+import '../models/customer_profit.dart';
 import '../models/manual_entry.dart';
+import '../../../../dao/stock_disposal_dao.dart';
+import '../../../../db/database_helper.dart';
+import '../../../../services/logger_service.dart';
 
 // =======================
 // REPOSITORY: ProfitLossRepository
@@ -45,6 +49,43 @@ class ProfitLossRepository {
 
     final inHand = paidInvoices + manualIncome - paidPurchases - totalExpenses;
 
+    // Calculate expired stock losses (with error handling for missing table)
+    double expiredStockLoss = 0.0;
+    double expiredStockRefunds = 0.0;
+    double netExpiredLoss = 0.0;
+
+    try {
+      final db = await DatabaseHelper.instance.db;
+      final disposalDao = StockDisposalDao(db);
+      final disposalLosses = await disposalDao.getTotalLoss(
+        start: start,
+        end: end,
+      );
+
+      expiredStockLoss =
+          disposalLosses['write_offs']! + disposalLosses['rejected_returns']!;
+      expiredStockRefunds = disposalLosses['received_refunds']!;
+      netExpiredLoss = disposalLosses['net_loss']!;
+    } catch (e) {
+      // Table might not exist yet, ignore and use default values (0.0)
+      logger.warning(
+        'ProfitLoss',
+        '⚠️ Could not load stock disposal data',
+        error: e,
+      );
+    }
+
+    // Get expense breakdown
+    final breakdown = await dao.getExpenseCategoryBreakdown(start, end);
+    // Add manual entries to breakdown
+    final manualEntries = await manualEntryDao.getByDateRange(start, end);
+    for (var entry in manualEntries) {
+      if (entry.type == 'expense') {
+        breakdown[entry.category] =
+            (breakdown[entry.category] ?? 0) + entry.amount;
+      }
+    }
+
     return ProfitLossSummary(
       totalSales: totalIncome,
       totalCostOfGoods: cogs,
@@ -52,10 +93,15 @@ class ProfitLossRepository {
       totalExpenses: totalExpenses,
       netProfit: net,
       totalDiscounts: discounts,
+      totalReceived: paidInvoices + manualIncome,
       pendingFromCustomers: pendingCustomers,
       pendingToSuppliers: pendingSuppliers,
       totalPurchases: totalPurchases,
       inHandCash: inHand,
+      expiredStockLoss: expiredStockLoss,
+      expiredStockRefunds: expiredStockRefunds,
+      netExpiredLoss: netExpiredLoss,
+      expenseBreakdown: breakdown,
     );
   }
 
@@ -74,4 +120,12 @@ class ProfitLossRepository {
 
   Future<List<ManualEntry>> loadManualEntries(DateTime start, DateTime end) =>
       manualEntryDao.getByDateRange(start, end);
+
+  Future<List<Map<String, dynamic>>> loadRecentTransactions(int limit) =>
+      dao.getRecentTransactions(limit);
+
+  Future<List<CustomerProfit>> loadCustomerProfit(
+    DateTime start,
+    DateTime end,
+  ) => dao.getCustomerWiseProfit(start, end);
 }

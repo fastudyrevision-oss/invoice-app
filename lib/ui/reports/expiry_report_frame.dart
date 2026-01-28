@@ -4,6 +4,7 @@ import 'package:invoice_app/repositories/report_repository.dart';
 import 'package:invoice_app/models/reports/expiry_report.dart';
 import 'package:intl/intl.dart';
 import 'package:invoice_app/services/report_export_service.dart';
+import '../../services/logger_service.dart';
 
 class ExpiryReportFrame extends StatefulWidget {
   const ExpiryReportFrame({super.key});
@@ -23,17 +24,8 @@ class _ExpiryReportFrameState extends State<ExpiryReportFrame> {
     _futureReports = repo.getExpiryReports();
   }
 
-  Future<void> _exportToPdf(List<ExpiryReport> reports) async {
-    await _exportReportService.exportExpiryReportPdf(reports);
-  }
-
   Future<void> _exportToExcel(List<ExpiryReport> reports) async {
     await _exportReportService.exportExpiryReportExcel(reports);
-  }
-
-  Future<void> _printReports(List<ExpiryReport> reports) async {
-    // TODO: Implement printing logic
-    debugPrint("Sending ${reports.length} reports to printer...");
   }
 
   @override
@@ -65,21 +57,92 @@ class _ExpiryReportFrameState extends State<ExpiryReportFrame> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () => _exportToPdf(reports),
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text("Export PDF"),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
                     onPressed: () => _exportToExcel(reports),
                     icon: const Icon(Icons.table_chart),
-                    label: const Text("Export Excel"),
+                    label: const Text("Excel"),
                   ),
                   const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: () => _printReports(reports),
-                    icon: const Icon(Icons.print),
-                    label: const Text("Print"),
+                  IconButton(
+                    icon: const Icon(Icons.print, color: Colors.blue),
+                    tooltip: "Print Report",
+                    onPressed: () async {
+                      try {
+                        logger.info(
+                          'ExpiryReportFrame',
+                          'Printing expiry report',
+                        );
+                        await _exportReportService.printExpiryReport(reports);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Sent to printer'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('❌ Print error: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          logger.error(
+                            'ExpiryReportFrame',
+                            'Print error',
+                            error: e,
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.save, color: Colors.green),
+                    tooltip: "Save PDF",
+                    onPressed: () async {
+                      try {
+                        logger.info(
+                          'ExpiryReportFrame',
+                          'Saving expiry report PDF',
+                        );
+                        final file = await _exportReportService
+                            .saveExpiryReportPdf(reports);
+                        if (context.mounted && file != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('✅ Saved: ${file.path}'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('❌ Save error: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          logger.error(
+                            'ExpiryReportFrame',
+                            'Save PDF error',
+                            error: e,
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.share, color: Colors.orange),
+                    tooltip: "Share PDF",
+                    onPressed: () async {
+                      logger.info(
+                        'ExpiryReportFrame',
+                        'Sharing expiry report PDF',
+                      );
+                      await _exportReportService.exportExpiryReportPdf(reports);
+                    },
                   ),
                 ],
               ),

@@ -1,5 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../../../utils/responsive_utils.dart';
+import '../../../../ui/common/scrollable_chart_wrapper.dart'; // Import the wrapper
 
 import '../data/models/category_profit.dart';
 import '../data/models/product_profit.dart';
@@ -19,18 +21,12 @@ class ProfitLossSummaryChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Data preparation
     final costLabel = isCogsBased ? "COGS" : "Purchases";
     final costValue = isCogsBased
         ? data.totalPurchaseCost
         : data.totalPurchases;
 
-    // Profit calculation for chart
-    // Note: Manual income is not explicitly in the model but is part of netProfit.
-    // We assume netProfit = Sales - COGS - Expenses + ManualIncome
-    // So ManualIncome = netProfit - Sales + COGS + Expenses
-    // For Purchase mode: Profit = Sales - Purchases - Expenses + ManualIncome
-    // We can approximate: Profit(Purchases) = Profit(COGS) + COGS - Purchases
+    // Approximate Profit Calculation
     final profitValue = isCogsBased
         ? data.totalProfit
         : (data.totalProfit + data.totalPurchaseCost - data.totalPurchases);
@@ -55,15 +51,19 @@ class ProfitLossSummaryChart extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
+            // Summary doesn't usually need scrolling as it's fixed 4 bars,
+            // but we ensure it fits nicely.
             SizedBox(
-              height: 220,
+              height: 280,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: _calculateMaxY(bars),
+                  maxY: _calculateMaxY(bars) * 1.5,
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
                       getTooltipColor: (group) => Colors.blueGrey,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         return BarTooltipItem(
@@ -89,30 +89,24 @@ class ProfitLossSummaryChart extends StatelessWidget {
                   ),
                   titlesData: FlTitlesData(
                     show: true,
-                    bottomTitles: AxisTitles(
+                    bottomTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 45,
                         getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index >= 0 && index < bars.length) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                bars[index].label,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            );
-                          }
-                          return const SizedBox();
+                          if (value == 0) return const SizedBox();
+                          return Text(
+                            _compactNumber(value),
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 10,
+                            ),
+                          );
                         },
-                        reservedSize: 30,
                       ),
-                    ),
-                    leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
                     ),
                     topTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
@@ -126,7 +120,7 @@ class ProfitLossSummaryChart extends StatelessWidget {
                     drawVerticalLine: false,
                     horizontalInterval: _calculateInterval(bars),
                     getDrawingHorizontalLine: (value) => FlLine(
-                      color: Colors.grey.withOpacity(0.2),
+                      color: Colors.grey.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     ),
                   ),
@@ -140,15 +134,15 @@ class ProfitLossSummaryChart extends StatelessWidget {
                         BarChartRodData(
                           toY: item.value,
                           color: item.color,
-                          width: 22,
+                          width: 32, // Wider bars for summary
                           borderRadius: const BorderRadius.only(
                             topLeft: Radius.circular(6),
                             topRight: Radius.circular(6),
                           ),
                           backDrawRodData: BackgroundBarChartRodData(
                             show: true,
-                            toY: _calculateMaxY(bars) * 1.1,
-                            color: Colors.grey.withOpacity(0.1),
+                            toY: _calculateMaxY(bars) * 1.6,
+                            color: Colors.grey.withValues(alpha: 0.05),
                           ),
                         ),
                       ],
@@ -163,6 +157,12 @@ class ProfitLossSummaryChart extends StatelessWidget {
     );
   }
 
+  String _compactNumber(double value) {
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
+    return value.toStringAsFixed(0);
+  }
+
   double _calculateMaxY(List<_ChartData> bars) {
     double max = 0;
     for (var b in bars) {
@@ -173,7 +173,7 @@ class ProfitLossSummaryChart extends StatelessWidget {
 
   double _calculateInterval(List<_ChartData> bars) {
     final max = _calculateMaxY(bars);
-    return max / 5;
+    return max == 0 ? 20 : max / 5;
   }
 }
 
@@ -185,12 +185,12 @@ class _ChartData {
 }
 
 /// ---------------------- COMPACT CHART BASE ----------------------
-class _CompactChartBase extends StatelessWidget {
+class _ResponsiveChartBase extends StatelessWidget {
   final String title;
   final List<BarChartGroupData> barGroups;
   final List<String> labels;
 
-  const _CompactChartBase({
+  const _ResponsiveChartBase({
     required this.title,
     required this.barGroups,
     required this.labels,
@@ -203,83 +203,93 @@ class _CompactChartBase extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: BarChart(
-                BarChartData(
-                  maxY: _calculateMaxY(),
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (group) => Colors.blueGrey,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        return BarTooltipItem(
-                          "${labels[group.x.toInt()]}\n",
-                          const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: rod.toY.toStringAsFixed(1),
-                              style: const TextStyle(color: Colors.yellow),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index >= 0 && index < labels.length) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: Text(
-                                labels[index].length > 6
-                                    ? "${labels[index].substring(0, 5)}..."
-                                    : labels[index],
-                                style: const TextStyle(fontSize: 10),
-                                textAlign: TextAlign.center,
+        child: AspectRatio(
+          aspectRatio: ResponsiveUtils.isMobile(context) ? 1.2 : 0.85,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Top ${labels.length} items",
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              // Use Wrapper for horizontal scrolling
+              Expanded(
+                // Added Expanded to make ScrollableChartWrapper take available space
+                child: ScrollableChartWrapper(
+                  itemCount: barGroups.length,
+                  minItemWidth: 60, // Ensure enough space per bar
+                  height: 280,
+                  child: BarChart(
+                    BarChartData(
+                      maxY: _calculateMaxY(),
+                      alignment: BarChartAlignment.center, // or spaceBetween
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipColor: (group) => Colors.blueGrey,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            return BarTooltipItem(
+                              "${labels[group.x.toInt()]}\n",
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight
+                                    .w500, // Changed to w500 for consistency
+                                fontSize: 13,
                               ),
+                              children: [
+                                TextSpan(
+                                  text: rod.toY.toStringAsFixed(1),
+                                  style: const TextStyle(color: Colors.yellow),
+                                ),
+                              ],
                             );
-                          }
-                          return const SizedBox();
-                        },
-                        reservedSize: 20,
+                          },
+                        ),
                       ),
-                    ),
-                    leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        leftTitles: const AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: false,
+                          ), // Clean look for sparklines
+                        ),
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                      ),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: _calculateMaxY() / 4,
+                      ),
+                      borderData: FlBorderData(show: false),
+                      barGroups: barGroups,
+                      groupsSpace: 20, // Add explicit space
                     ),
                   ),
-                  gridData: const FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  barGroups: barGroups,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -292,7 +302,7 @@ class _CompactChartBase extends StatelessWidget {
         if (rod.toY > max) max = rod.toY;
       }
     }
-    return max == 0 ? 100 : max * 1.2; // 20% buffer
+    return max == 0 ? 100 : max * 1.6; // Further increased buffer for tooltips
   }
 }
 
@@ -304,21 +314,26 @@ class CategoryProfitChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Limit to top 5 for compact view
-    final displayList = categories.take(5).toList();
+    // INCREASE LIMIT to 20
+    final displayList = categories.take(20).toList();
 
-    return _CompactChartBase(
-      title: "Top Categories",
+    return _ResponsiveChartBase(
+      title: "Category Profit Performance",
       labels: displayList.map((e) => e.name).toList(),
       barGroups: displayList.asMap().entries.map((e) {
         return BarChartGroupData(
           x: e.key,
           barRods: [
             BarChartRodData(
-              toY: e.value.profit.toDouble(),
-              color: Colors.teal,
-              width: 12,
-              borderRadius: BorderRadius.circular(4),
+              toY: e.value.profit.toDouble() < 0
+                  ? 0
+                  : e.value.profit.toDouble(), // Handle negative visually?
+              color: Colors.teal.shade400,
+              width: 20,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
             ),
           ],
         );
@@ -335,21 +350,26 @@ class ProductProfitChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Limit to top 5
-    final displayList = products.take(5).toList();
+    // INCREASE LIMIT to 20
+    final displayList = products.take(20).toList();
 
-    return _CompactChartBase(
-      title: "Top Products",
+    return _ResponsiveChartBase(
+      title: "Top Products by Profit",
       labels: displayList.map((e) => e.name).toList(),
       barGroups: displayList.asMap().entries.map((e) {
         return BarChartGroupData(
           x: e.key,
           barRods: [
             BarChartRodData(
-              toY: e.value.profit.toDouble(),
-              color: Colors.indigo,
-              width: 12,
-              borderRadius: BorderRadius.circular(4),
+              toY: e.value.profit.toDouble() < 0
+                  ? 0
+                  : e.value.profit.toDouble(),
+              color: Colors.indigo.shade400,
+              width: 20,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
             ),
           ],
         );
@@ -366,11 +386,11 @@ class SupplierProfitChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Limit to top 5
-    final displayList = suppliers.take(5).toList();
+    // INCREASE LIMIT to 20
+    final displayList = suppliers.take(20).toList();
 
-    return _CompactChartBase(
-      title: "Top Suppliers",
+    return _ResponsiveChartBase(
+      title: "Top Suppliers (by Purchase Vol)",
       labels: displayList.map((e) => e.name).toList(),
       barGroups: displayList.asMap().entries.map((e) {
         return BarChartGroupData(
@@ -378,9 +398,12 @@ class SupplierProfitChart extends StatelessWidget {
           barRods: [
             BarChartRodData(
               toY: e.value.totalPurchases.toDouble(),
-              color: Colors.purple,
-              width: 12,
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.purple.shade400,
+              width: 20,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
             ),
           ],
         );

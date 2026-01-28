@@ -5,6 +5,9 @@ import 'expense/expense_insights_card.dart';
 import 'common/unified_search_bar.dart';
 import '../services/expense_export_service.dart';
 import '../utils/responsive_utils.dart';
+import '../services/logger_service.dart';
+
+import '../utils/date_helper.dart';
 
 enum ExpenseSortMode { date, amount }
 
@@ -18,6 +21,7 @@ class ExpenseFrame extends StatefulWidget {
 }
 
 class _ExpenseFrameState extends State<ExpenseFrame> {
+  final _formKey = GlobalKey<FormState>(); // Add FormKey
   final ExpenseExportService _exportService = ExpenseExportService();
   final ExpenseRepository _repo = ExpenseRepository();
   List<Expense> _expenses = [];
@@ -63,12 +67,23 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
   }
 
   Future<void> _loadExpenses() async {
-    final data = await _repo.getAllExpenses();
-    setState(() {
-      _expenses = data;
-      _applyFilterAndSort();
-      _isLoading = false;
-    });
+    try {
+      logger.info('ExpenseFrame', 'Loading all expenses');
+      final data = await _repo.getAllExpenses();
+      setState(() {
+        _expenses = data;
+        _applyFilterAndSort();
+        _isLoading = false;
+      });
+    } catch (e, stackTrace) {
+      logger.error(
+        'ExpenseFrame',
+        'Failed to load expenses',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      setState(() => _isLoading = false);
+    }
   }
 
   void _applyFilterAndSort() {
@@ -124,49 +139,91 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(expense == null ? "Add Expense" : "Edit Expense"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: "Description"),
-            ),
-            TextField(
-              controller: amountController,
-              decoration: const InputDecoration(labelText: "Amount"),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: dateController,
-              decoration: const InputDecoration(labelText: "Date (YYYY-MM-DD)"),
-            ),
-            TextField(
-              controller: categoryController,
-              decoration: const InputDecoration(labelText: "Category"),
-            ),
-          ],
+        content: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: descController,
+                decoration: const InputDecoration(labelText: "Description"),
+                validator: (value) =>
+                    value == null || value.trim().isEmpty ? 'Required' : null,
+              ),
+              TextFormField(
+                controller: amountController,
+                decoration: const InputDecoration(labelText: "Amount"),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Required';
+                  final v = double.tryParse(value);
+                  if (v == null || v <= 0) return 'Must be > 0';
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: dateController,
+                decoration: const InputDecoration(
+                  labelText: "Date (DD-MM-YYYY)",
+                  hintText: "30-12-2026",
+                  suffixIcon: Icon(Icons.calendar_today),
+                ),
+                readOnly: true,
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    dateController.text = DateHelper.formatDate(picked);
+                  }
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Required';
+                  if (!DateHelper.isValidDate(value)) return 'Invalid Format';
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: categoryController,
+                decoration: const InputDecoration(labelText: "Category"),
+                validator: (value) =>
+                    value == null || value.isEmpty ? 'Required' : null,
+              ),
+            ],
+          ),
         ),
         actions: [
           ElevatedButton(
             onPressed: () async {
-              final newExpense = Expense(
-                id:
-                    expense?.id ??
-                    DateTime.now().millisecondsSinceEpoch.toString(),
-                description: descController.text,
-                amount: double.tryParse(amountController.text) ?? 0.0,
-                date: dateController.text,
-                category: categoryController.text,
-              );
+              if (_formKey.currentState!.validate()) {
+                // Parse DD-MM-YYYY to ISO for storage
+                final dateObj = DateHelper.parseDate(dateController.text);
+                final isoDate = dateObj != null
+                    ? dateObj.toIso8601String()
+                    : DateTime.now().toIso8601String();
 
-              if (expense == null) {
-                await _repo.addExpense(newExpense);
-              } else {
-                await _repo.updateExpense(newExpense);
+                final newExpense = Expense(
+                  id:
+                      expense?.id ??
+                      DateTime.now().millisecondsSinceEpoch.toString(),
+                  description: descController.text,
+                  amount: double.tryParse(amountController.text) ?? 0.0,
+                  date: isoDate, // Store as ISO
+                  category: categoryController.text,
+                );
+
+                if (expense == null) {
+                  await _repo.addExpense(newExpense);
+                } else {
+                  await _repo.updateExpense(newExpense);
+                }
+
+                if (context.mounted) Navigator.pop(context);
+                _loadExpenses();
               }
-
-              if (context.mounted) Navigator.pop(context);
-              _loadExpenses();
             },
             child: Text(expense == null ? "Add" : "Update"),
           ),
@@ -268,7 +325,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
         });
         _applyFilters();
       },
-      selectedColor: chipColor.withOpacity(0.2),
+      selectedColor: chipColor.withValues(alpha: 0.2),
       checkmarkColor: chipColor,
       backgroundColor: Colors.white,
     );
@@ -310,6 +367,61 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
     return Colors.grey;
   }
 
+  Future<void> _handleExport(String outputType) async {
+    if (_filteredExpenses.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No expenses to export')));
+      return;
+    }
+
+    try {
+      if (outputType == 'print') {
+        logger.info('ExpenseFrame', 'Printing expense report');
+        await _exportService.printExpenseReport(_filteredExpenses);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Sent to printer'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'save') {
+        logger.info('ExpenseFrame', 'Saving expense report PDF');
+        final file = await _exportService.saveExpenseReportPdf(
+          _filteredExpenses,
+        );
+        if (mounted && file != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Saved: ${file.path}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'share') {
+        logger.info('ExpenseFrame', 'Sharing expense report PDF');
+        await _exportService.exportToPDF(_filteredExpenses);
+      }
+    } catch (e, stackTrace) {
+      logger.error(
+        'ExpenseFrame',
+        'Export error',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Export error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -330,8 +442,10 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     ),
                     PopupMenuButton<String>(
                       onSelected: (value) {
-                        if (value == 'pdf') {
-                          _exportService.exportToPDF(_filteredExpenses);
+                        if (value == 'print' ||
+                            value == 'save' ||
+                            value == 'share') {
+                          _handleExport(value);
                         } else if (value == 'refresh') {
                           setState(() => _currentMax = _pageSize);
                           _loadExpenses();
@@ -339,12 +453,32 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(
-                          value: 'pdf',
+                          value: 'print',
                           child: Row(
                             children: [
-                              Icon(Icons.picture_as_pdf),
+                              Icon(Icons.print),
                               SizedBox(width: 8),
-                              Text('Export PDF'),
+                              Text('Print List'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'save',
+                          child: Row(
+                            children: [
+                              Icon(Icons.save),
+                              SizedBox(width: 8),
+                              Text('Save PDF'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'share',
+                          child: Row(
+                            children: [
+                              Icon(Icons.share),
+                              SizedBox(width: 8),
+                              Text('Share PDF'),
                             ],
                           ),
                         ),
@@ -364,10 +498,19 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                 : [
                     const SizedBox(width: 10),
                     IconButton(
-                      icon: const Icon(Icons.picture_as_pdf),
-                      tooltip: 'Export to PDF',
-                      onPressed: () =>
-                          _exportService.exportToPDF(_filteredExpenses),
+                      icon: const Icon(Icons.print),
+                      tooltip: 'Print List',
+                      onPressed: () => _handleExport('print'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.save),
+                      tooltip: 'Save PDF',
+                      onPressed: () => _handleExport('save'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.share),
+                      tooltip: 'Share PDF',
+                      onPressed: () => _handleExport('share'),
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
@@ -396,8 +539,8 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Theme.of(context).primaryColor.withOpacity(0.1),
-                      Theme.of(context).primaryColor.withOpacity(0.05),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.05),
                     ],
                   ),
                 ),
@@ -588,20 +731,20 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                   end: Alignment.bottomRight,
                                   colors: [
                                     Colors.white,
-                                    categoryColor.withOpacity(0.05),
+                                    categoryColor.withValues(alpha: 0.05),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: categoryColor.withOpacity(0.2),
+                                    color: categoryColor.withValues(alpha: 0.2),
                                     spreadRadius: 1,
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),
                                 ],
                                 border: Border.all(
-                                  color: categoryColor.withOpacity(0.3),
+                                  color: categoryColor.withValues(alpha: 0.3),
                                   width: 1.5,
                                 ),
                               ),
@@ -618,7 +761,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                         gradient: LinearGradient(
                                           colors: [
                                             categoryColor,
-                                            categoryColor.withOpacity(0.6),
+                                            categoryColor.withValues(
+                                              alpha: 0.6,
+                                            ),
                                           ],
                                         ),
                                       ),
@@ -646,8 +791,8 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                     end: Alignment.bottomRight,
                                                     colors: [
                                                       categoryColor,
-                                                      categoryColor.withOpacity(
-                                                        0.7,
+                                                      categoryColor.withValues(
+                                                        alpha: 0.7,
                                                       ),
                                                     ],
                                                   ),
@@ -656,7 +801,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                   boxShadow: [
                                                     BoxShadow(
                                                       color: categoryColor
-                                                          .withOpacity(0.3),
+                                                          .withValues(
+                                                            alpha: 0.3,
+                                                          ),
                                                       blurRadius: 8,
                                                       offset: const Offset(
                                                         0,
@@ -697,14 +844,18 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                           ),
                                                       decoration: BoxDecoration(
                                                         color: categoryColor
-                                                            .withOpacity(0.15),
+                                                            .withValues(
+                                                              alpha: 0.15,
+                                                            ),
                                                         borderRadius:
                                                             BorderRadius.circular(
                                                               6,
                                                             ),
                                                         border: Border.all(
                                                           color: categoryColor
-                                                              .withOpacity(0.3),
+                                                              .withValues(
+                                                                alpha: 0.3,
+                                                              ),
                                                         ),
                                                       ),
                                                       child: Text(
@@ -712,7 +863,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                         style: TextStyle(
                                                           fontSize: 12,
                                                           color: categoryColor
-                                                              .withOpacity(0.9),
+                                                              .withValues(
+                                                                alpha: 0.9,
+                                                              ),
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),
@@ -843,7 +996,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                       boxShadow: [
                                                         BoxShadow(
                                                           color: Colors.red
-                                                              .withOpacity(0.3),
+                                                              .withValues(
+                                                                alpha: 0.3,
+                                                              ),
                                                           blurRadius: 6,
                                                           offset: const Offset(
                                                             0,
@@ -872,12 +1027,12 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                 ),
                                                 decoration: BoxDecoration(
                                                   color: categoryColor
-                                                      .withOpacity(0.1),
+                                                      .withValues(alpha: 0.1),
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   border: Border.all(
                                                     color: categoryColor
-                                                        .withOpacity(0.3),
+                                                        .withValues(alpha: 0.3),
                                                     width: 2,
                                                   ),
                                                 ),
@@ -897,7 +1052,9 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                                       style: TextStyle(
                                                         fontSize: 12,
                                                         color: categoryColor
-                                                            .withOpacity(0.8),
+                                                            .withValues(
+                                                              alpha: 0.8,
+                                                            ),
                                                         fontWeight:
                                                             FontWeight.w600,
                                                       ),

@@ -3,6 +3,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:invoice_app/repositories/report_repository.dart';
 import 'package:invoice_app/models/reports/supplier_report.dart';
 
+import 'package:invoice_app/services/report_export_service.dart';
+
 class SupplierReportFrame extends StatefulWidget {
   const SupplierReportFrame({super.key});
 
@@ -12,6 +14,7 @@ class SupplierReportFrame extends StatefulWidget {
 
 class _SupplierReportFrameState extends State<SupplierReportFrame> {
   final repo = ReportRepository();
+  final _exportService = ReportExportService();
   late Future<List<SupplierReport>> _futureReports;
 
   @override
@@ -57,9 +60,79 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Supplier Report",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  const Text(
+                    "Supplier Report",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  // Export Buttons
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.print, color: Colors.blue),
+                        tooltip: "Print Report",
+                        onPressed: () async {
+                          try {
+                            await _exportService.printSupplierReport(reports);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('✅ Sent to printer'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('❌ Print error: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.save, color: Colors.green),
+                        tooltip: "Save PDF",
+                        onPressed: () async {
+                          try {
+                            final file = await _exportService
+                                .saveSupplierReportPdf(reports);
+                            if (context.mounted && file != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('✅ Saved: ${file.path}'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('❌ Save error: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share, color: Colors.orange),
+                        tooltip: "Share PDF",
+                        onPressed: () async {
+                          await _exportService.exportSupplierReportPdf(reports);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 

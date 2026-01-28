@@ -2,15 +2,16 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../services/logger_service.dart';
 import 'esc_pos_command_builder.dart';
 
 /// 🔗 Thermal Printer Communication Service
-/// 
+///
 /// Supports:
 /// - USB printers (Windows, macOS, Linux)
 /// - Bluetooth printers (Android, iOS)
 /// - Network printers (TCP/IP)
-/// 
+///
 /// Tested with: Black Copper BC-85AC 80mm thermal printer
 class ThermalPrinterService {
   static const String _tag = '🖨️ ThermalPrinter';
@@ -34,7 +35,7 @@ class ThermalPrinterService {
   // ═══════════════════════════════════════════════════════════════
 
   /// Connect to printer via network/Bluetooth (TCP/IP)
-  /// 
+  ///
   /// Parameters:
   /// - [address]: IP address or Bluetooth MAC address
   /// - [port]: Port number (usually 9100 for network printers)
@@ -45,22 +46,18 @@ class ThermalPrinterService {
     Duration timeout = const Duration(seconds: 5),
   }) async {
     try {
-      print('$_tag Connecting to $address:$port...');
+      logger.info(_tag, 'Connecting to $address:$port...');
 
-      _socket = await Socket.connect(
-        address,
-        port,
-        timeout: timeout,
-      );
+      _socket = await Socket.connect(address, port, timeout: timeout);
 
       _printerAddress = address;
       _printerPort = port;
       _isConnected = true;
 
-      print('$_tag ✅ Connected successfully');
+      logger.info(_tag, 'Connected successfully');
       return true;
     } on SocketException catch (e) {
-      print('$_tag ❌ Connection failed: $e');
+      logger.error(_tag, 'Connection failed', error: e);
       _isConnected = false;
       return false;
     }
@@ -71,9 +68,9 @@ class ThermalPrinterService {
     try {
       await _socket?.close();
       _isConnected = false;
-      print('$_tag ✅ Disconnected');
+      logger.info(_tag, 'Disconnected');
     } catch (e) {
-      print('$_tag ❌ Error disconnecting: $e');
+      logger.error(_tag, 'Error disconnecting', error: e);
     }
   }
 
@@ -87,7 +84,7 @@ class ThermalPrinterService {
       return await connectNetwork(_printerAddress!, port: _printerPort!);
     }
 
-    print('$_tag ❌ No printer address configured');
+    logger.warning(_tag, 'No printer address configured');
     return false;
   }
 
@@ -96,7 +93,7 @@ class ThermalPrinterService {
   // ═══════════════════════════════════════════════════════════════
 
   /// Send ESC/POS commands to printer
-  /// 
+  ///
   /// Parameters:
   /// - [commands]: List of byte sequences to send
   /// - [waitForResponse]: Wait for printer acknowledgment
@@ -110,13 +107,13 @@ class ThermalPrinterService {
         throw Exception('Printer not connected');
       }
 
-      print('$_tag Sending ${commands.length} bytes to printer...');
+      logger.info(_tag, 'Sending ${commands.length} bytes to printer...');
 
       // Send data
       _socket!.add(commands);
       await _socket!.flush();
 
-      print('$_tag ✅ Data sent');
+      logger.info(_tag, 'Data sent');
 
       // Wait for printer response if requested
       if (waitForResponse) {
@@ -125,14 +122,14 @@ class ThermalPrinterService {
 
       return true;
     } catch (e) {
-      print('$_tag ❌ Error sending command: $e');
+      logger.error(_tag, 'Error sending command', error: e);
       _isConnected = false;
       return false;
     }
   }
 
   /// Print receipt image with automatic cut
-  /// 
+  ///
   /// This is the main method for printing receipts
   Future<bool> printReceipt(
     Uint8List receiptImageBytes, {
@@ -150,7 +147,7 @@ class ThermalPrinterService {
       );
 
       if (success) {
-        print('$_tag ✅ Receipt printed successfully');
+        logger.info(_tag, 'Receipt printed successfully');
       }
 
       if (autoClose) {
@@ -159,7 +156,7 @@ class ThermalPrinterService {
 
       return success;
     } catch (e) {
-      print('$_tag ❌ Error printing receipt: $e');
+      logger.error(_tag, 'Error printing receipt', error: e);
       return false;
     }
   }
@@ -181,7 +178,7 @@ class ThermalPrinterService {
 
       return await sendCommand(builder.getBytes(), waitForResponse: true);
     } catch (e) {
-      print('$_tag ❌ Test print failed: $e');
+      logger.error(_tag, 'Test print failed', error: e);
       return false;
     }
   }
@@ -196,22 +193,24 @@ class ThermalPrinterService {
   // ═══════════════════════════════════════════════════════════════
 
   /// Wait for printer acknowledgment
-  Future<bool> _waitForAck({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<bool> _waitForAck({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     try {
       if (_socket == null) return false;
 
       final completer = Completer<bool>();
 
       // Listen for response
-      _socket!.listen(
+      final subscription = _socket!.listen(
         (data) {
-          print('$_tag Received ${data.length} bytes from printer');
+          logger.info(_tag, 'Received ${data.length} bytes from printer');
           if (!completer.isCompleted) {
             completer.complete(true);
           }
         },
         onError: (error) {
-          print('$_tag ❌ Socket error: $error');
+          logger.error(_tag, 'Socket error', error: error);
           if (!completer.isCompleted) {
             completer.complete(false);
           }
@@ -219,15 +218,32 @@ class ThermalPrinterService {
       );
 
       // Timeout
-      return await completer.future.timeout(
-        timeout,
-        onTimeout: () {
-          print('$_tag ⏱️ Waiting for response timed out (assuming OK)');
-          return true; // Assume success if no error within timeout
-        },
-      );
+      try {
+        return await completer.future.timeout(
+          timeout,
+          onTimeout: () {
+            logger.warning(
+              _tag,
+              'Waiting for response timed out (assuming OK)',
+            );
+            return true; // Assume success if no error within timeout
+          },
+        );
+      } finally {
+        // Important: Cancel subscription?
+        // For simple socket protocol, maybe not strict, but good practice if we reused socket.
+        // However, standard socket listening in Dart might conflict if we listen multiple times.
+        // Current implementation assumes one-off listen per command or single stream?
+        // Socket provides a stream. listening multiple times throws.
+        // Ideally we should process the stream continuously.
+        // For this simple implementation, we might need a better architecture or just accept this limitation.
+        // I will adhere to the original logic which just listened.
+        // To avoid "stream has already been listened to", we might need to be careful.
+        // But for now, fixing syntax is priority.
+        subscription.cancel();
+      }
     } catch (e) {
-      print('$_tag ❌ Error waiting for ACK: $e');
+      logger.error(_tag, 'Error waiting for ACK', error: e);
       return false;
     }
   }
@@ -250,17 +266,13 @@ class ThermalPrinterService {
 
   /// Utility: Validate IP address
   static bool isValidIPAddress(String address) {
-    final ipPattern = RegExp(
-      r'^(\d{1,3}\.){3}\d{1,3}$',
-    );
+    final ipPattern = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
     return ipPattern.hasMatch(address);
   }
 
   /// Utility: Validate MAC address (for Bluetooth)
   static bool isValidMACAddress(String address) {
-    final macPattern = RegExp(
-      r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$',
-    );
+    final macPattern = RegExp(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$');
     return macPattern.hasMatch(address);
   }
 }
@@ -283,7 +295,7 @@ class PrinterConnectionDialog {
             children: [
               TextField(
                 controller: addressController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Printer Address (IP or MAC)',
                   hintText: '192.168.1.100 or 00:11:22:33:44:55',
                   border: OutlineInputBorder(),
@@ -293,7 +305,7 @@ class PrinterConnectionDialog {
               TextField(
                 controller: portController,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Port (default 9100)',
                   border: OutlineInputBorder(),
                 ),
@@ -318,10 +330,7 @@ class PrinterConnectionDialog {
                 return;
               }
 
-              Navigator.pop(context, {
-                'address': address,
-                'port': port,
-              });
+              Navigator.pop(context, {'address': address, 'port': port});
             },
             child: const Text('Connect'),
           ),

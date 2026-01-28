@@ -7,10 +7,13 @@ import '../../dao/invoice_dao.dart';
 import '../../models/invoice.dart';
 import 'order_detail_screen.dart';
 import 'order_form_screen.dart';
+import '../../dao/customer_dao.dart';
+import '../customer_payment/customer_payment_dialog.dart';
 import '../../db/database_helper.dart';
 import 'order_insights_card.dart';
 import 'pdf_export_helper.dart';
 import '../../utils/responsive_utils.dart';
+import '../../services/logger_service.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -27,8 +30,7 @@ class _OrderListScreenState extends State<OrderListScreen>
   List<Invoice> _filtered = [];
 
   bool _loading = true;
-  final bool _hasMore = true;
-  bool _error = false;
+
   DateTime? _lastUpdated;
 
   final TextEditingController _searchController = TextEditingController();
@@ -77,15 +79,6 @@ class _OrderListScreenState extends State<OrderListScreen>
     }
   }
 
-  String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      return DateFormat('dd MMM yyyy, hh:mm a').format(date);
-    } catch (_) {
-      return dateStr;
-    }
-  }
-
   void _onSearchChanged() {
     // debounce search to avoid frequent filtering
     if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -97,10 +90,10 @@ class _OrderListScreenState extends State<OrderListScreen>
   Future<void> _loadOrders() async {
     setState(() {
       _loading = true;
-      _error = false;
     });
 
     try {
+      logger.info('OrderList', 'Loading all invoices');
       final db = await dbHelper.db;
       final dao = InvoiceDao(db);
       final data = await dao.getAllInvoices();
@@ -115,8 +108,8 @@ class _OrderListScreenState extends State<OrderListScreen>
     } catch (e) {
       setState(() {
         _loading = false;
-        _error = true;
       });
+      logger.error('OrderList', 'Failed to load orders', error: e);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -210,6 +203,11 @@ class _OrderListScreenState extends State<OrderListScreen>
         ).showSnackBar(SnackBar(content: Text('Filter error: $e')));
       }
       results = List.from(_orders);
+      logger.warning(
+        'OrderList',
+        'Filter error caught, showing all orders',
+        error: e,
+      );
     }
 
     setState(() {
@@ -340,134 +338,6 @@ class _OrderListScreenState extends State<OrderListScreen>
     );
   }
 
-  Widget _buildQuickFilters() {
-    final filters = {
-      'today': 'Today',
-      'week': 'This Week',
-      'month': 'This Month',
-    };
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: filters.entries.map((entry) {
-          final active = _quickFilter == entry.key;
-          return ChoiceChip(
-            label: Text(entry.value),
-            selected: active,
-            selectedColor: Theme.of(
-              context,
-            ).colorScheme.primary.withOpacity(0.12),
-            onSelected: (val) {
-              setState(() => _quickFilter = val ? entry.key : null);
-              _applyFilters();
-            },
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildInsightCard() {
-    final total = _filtered.length;
-    final pendingCount = _filtered
-        .where((o) => _safeDouble(o.pending) > 0)
-        .length;
-    final paidCount = total - pendingCount;
-    final revenue = _filtered.fold<double>(
-      0.0,
-      (s, o) => s + _safeDouble(o.total),
-    );
-
-    if (_loading) {
-      // shimmer placeholder for insights
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: SizedBox(height: 88),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Card(
-        elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _insightItem(
-                    Icons.shopping_bag,
-                    "Total",
-                    total.toString(),
-                    Colors.blue,
-                  ),
-                  _insightItem(
-                    Icons.pending_actions,
-                    "Pending",
-                    pendingCount.toString(),
-                    Colors.orange,
-                  ),
-                  _insightItem(
-                    Icons.check_circle,
-                    "Paid",
-                    paidCount.toString(),
-                    Colors.green,
-                  ),
-                  _insightItem(
-                    Icons.attach_money,
-                    "Revenue",
-                    revenue.toStringAsFixed(0),
-                    Colors.purple,
-                  ),
-                ],
-              ),
-              if (_lastUpdated != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    "Last updated: ${DateFormat('dd MMM yyyy, hh:mm a').format(_lastUpdated!)}",
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _insightItem(IconData icon, String label, String value, Color color) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(icon, color: color),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      ],
-    );
-  }
-
   Widget _emptyState() {
     return Center(
       child: Column(
@@ -488,6 +358,7 @@ class _OrderListScreenState extends State<OrderListScreen>
       ),
     );
   }
+
   void _showOrderActions(Invoice invoice) {
     showModalBottomSheet(
       context: context,
@@ -504,7 +375,7 @@ class _OrderListScreenState extends State<OrderListScreen>
               onTap: () async {
                 Navigator.pop(context);
                 final file = await generateInvoicePdf(invoice);
-                if (file != null) {
+                if (file != null && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("✅ Invoice PDF saved successfully"),
@@ -521,11 +392,13 @@ class _OrderListScreenState extends State<OrderListScreen>
                 final file = await generateThermalReceipt(invoice);
                 if (file != null) {
                   await printPdfFile(file);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("✅ Sending to thermal printer..."),
-                    ),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("✅ Sending to thermal printer..."),
+                      ),
+                    );
+                  }
                 }
               },
             ),
@@ -559,21 +432,36 @@ class _OrderListScreenState extends State<OrderListScreen>
     );
   }
 
-  List<Color> _getGradientColors(int index) {
-    final gradients = [
-      [const Color(0xFF4A00E0), const Color(0xFF8E2DE2)], // Violet → Purple
-      [const Color(0xFF00B4DB), const Color(0xFF0083B0)], // Cyan → Blue
-      [const Color(0xFFFF512F), const Color(0xFFF09819)], // Orange → Yellow
-      [const Color(0xFF11998E), const Color(0xFF38EF7D)], // Green → Lime
-      [const Color(0xFFFC466B), const Color(0xFF3F5EFB)], // Pink → Blue
-      [const Color(0xFFFF5F6D), const Color(0xFFFFC371)], // Red → Peach
-    ];
-    return gradients[index % gradients.length];
-  }
+  Future<void> _payInvoice(Invoice invoice) async {
+    try {
+      final customerDao = await CustomerDao.create();
+      final customers = await customerDao.getAllCustomers();
 
-  List<Color> _getNextGradientColors(int index) {
-    // shift by 1 to get the "next" gradient in sequence
-    return _getGradientColors(index + 1);
+      if (!mounted) return;
+
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => CustomerPaymentDialog(
+          customers: customers,
+          paymentData: {
+            'customer_id': invoice.customerId,
+            'amount': invoice.pending,
+            'date': DateTime.now().toIso8601String(),
+            'invoice_id': invoice.id,
+          },
+        ),
+      );
+
+      if (result == true) {
+        _loadOrders();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening payment dialog: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -659,8 +547,8 @@ class _OrderListScreenState extends State<OrderListScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Theme.of(context).primaryColor.withOpacity(0.1),
-                  Theme.of(context).primaryColor.withOpacity(0.05),
+                  Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                  Theme.of(context).primaryColor.withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -755,8 +643,12 @@ class _OrderListScreenState extends State<OrderListScreen>
                                     colors: [
                                       Colors.white,
                                       isPending
-                                          ? Colors.orange.withOpacity(0.05)
-                                          : Colors.green.withOpacity(0.05),
+                                          ? Colors.orange.withValues(
+                                              alpha: 0.05,
+                                            )
+                                          : Colors.green.withValues(
+                                              alpha: 0.05,
+                                            ),
                                     ],
                                   ),
                                   borderRadius: BorderRadius.circular(16),
@@ -766,7 +658,7 @@ class _OrderListScreenState extends State<OrderListScreen>
                                           (isPending
                                                   ? Colors.orange
                                                   : Colors.green)
-                                              .withOpacity(0.2),
+                                              .withValues(alpha: 0.2),
                                       spreadRadius: 1,
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
@@ -777,7 +669,7 @@ class _OrderListScreenState extends State<OrderListScreen>
                                         (isPending
                                                 ? Colors.orange
                                                 : Colors.green)
-                                            .withOpacity(0.3),
+                                            .withValues(alpha: 0.3),
                                     width: 1.5,
                                   ),
                                 ),
@@ -808,25 +700,68 @@ class _OrderListScreenState extends State<OrderListScreen>
                                           ),
                                         ),
                                         child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Icon(
-                                              isPending
-                                                  ? Icons.pending_actions
-                                                  : Icons.check_circle,
-                                              size: 16,
-                                              color: Colors.white,
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  isPending
+                                                      ? Icons.pending_actions
+                                                      : Icons.check_circle,
+                                                  size: 16,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  isPending
+                                                      ? "Payment Pending"
+                                                      : "Fully Paid",
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              isPending
-                                                  ? "Payment Pending"
-                                                  : "Fully Paid",
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
+                                            if (isPending)
+                                              SizedBox(
+                                                height: 24,
+                                                child: TextButton.icon(
+                                                  onPressed: () =>
+                                                      _payInvoice(o),
+                                                  icon: const Icon(
+                                                    Icons.payment,
+                                                    size: 14,
+                                                    color: Colors.white,
+                                                  ),
+                                                  label: const Text(
+                                                    "Pay Now",
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  style: TextButton.styleFrom(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                        ),
+                                                    backgroundColor: Colors
+                                                        .white
+                                                        .withOpacity(0.2),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
-                                            ),
                                           ],
                                         ),
                                       ),
@@ -875,7 +810,9 @@ class _OrderListScreenState extends State<OrderListScreen>
                                                       boxShadow: [
                                                         BoxShadow(
                                                           color: Colors.blue
-                                                              .withOpacity(0.3),
+                                                              .withValues(
+                                                                alpha: 0.3,
+                                                              ),
                                                           blurRadius: 8,
                                                           offset: const Offset(
                                                             0,

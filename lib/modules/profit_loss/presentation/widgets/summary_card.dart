@@ -5,6 +5,7 @@ class SummaryCard extends StatelessWidget {
   final num value;
   final Color color;
   final double? growthPercentage; // Optional: for trend indication
+  final String? subtitle; // Optional: additional info
 
   const SummaryCard({
     super.key,
@@ -12,6 +13,7 @@ class SummaryCard extends StatelessWidget {
     required this.value,
     required this.color,
     this.growthPercentage,
+    this.subtitle,
   });
 
   @override
@@ -42,6 +44,14 @@ class SummaryCard extends StatelessWidget {
                 color: color,
               ),
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle!,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            ],
             if (growthPercentage != null) ...[
               const SizedBox(height: 4),
               Row(

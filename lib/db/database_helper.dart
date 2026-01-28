@@ -10,6 +10,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite_ffi;
 import 'package:sembast/sembast.dart' as sembast;
 import 'package:sembast/sembast_io.dart' as sembast_io;
 import 'package:sembast_web/sembast_web.dart' as sembast_web;
+import '../services/logger_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -44,6 +45,7 @@ class DatabaseHelper {
     "ledger",
     "audit_logs",
     "attachments",
+    "stock_disposal",
   ];
 
   /// ✅ Factory for tests — In-memory SQLite instance
@@ -83,7 +85,7 @@ class DatabaseHelper {
         for (var table in _tables) {
           _stores[table] = sembast.stringMapStoreFactory.store(table);
         }
-        debugPrint("✅ Web database initialized");
+        logger.info('Database', "✅ Web database initialized");
       } else {
         // Desktop FFI initialization
         if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -95,7 +97,7 @@ class DatabaseHelper {
         final dbPath = await sqflite.getDatabasesPath();
         final path = join(dbPath, "invoice_app.db");
 
-        debugPrint("📂 Opening database at: $path");
+        logger.info('Database', "📂 Opening database at: $path");
 
         _db = await sqflite.openDatabase(
           path,
@@ -106,12 +108,12 @@ class DatabaseHelper {
           onCreate: _onCreate,
         );
 
-        debugPrint("✅ Database opened successfully");
+        logger.info('Database', "✅ Database opened successfully");
 
         // Run migrations manually for existing databases (since version is still 1)
         // CRITICAL: Use _db directly, NOT await db (which would cause circular dependency)
         if (_db != null) {
-          debugPrint("🔄 Running database migrations...");
+          logger.info('Database', "🔄 Running database migrations...");
           try {
             await _addColumnIfNotExistsDirect(
               _db!,
@@ -137,18 +139,66 @@ class DatabaseHelper {
               "is_deleted",
               "INTEGER DEFAULT 0",
             );
-            debugPrint("✅ Database migrations completed");
+
+            // Create manual_entries table if it doesn't exist
+            await _createTableIfNotExists(_db!, "manual_entries", '''
+                CREATE TABLE manual_entries (
+                  id TEXT PRIMARY KEY,
+                  description TEXT,
+                  amount REAL,
+                  type TEXT,
+                  date TEXT,
+                  category TEXT DEFAULT 'General'
+                )
+              ''');
+
+            // Create stock_disposal table if it doesn't exist
+            await _createTableIfNotExists(_db!, "stock_disposal", '''
+                CREATE TABLE stock_disposal (
+                  id TEXT PRIMARY KEY,
+                  batch_id TEXT NOT NULL,
+                  product_id TEXT NOT NULL,
+                  supplier_id TEXT,
+                  qty INTEGER NOT NULL,
+                  disposal_type TEXT NOT NULL,
+                  cost_loss REAL NOT NULL,
+                  refund_status TEXT,
+                  refund_amount REAL DEFAULT 0,
+                  notes TEXT,
+                  created_at TEXT NOT NULL,
+                  FOREIGN KEY(batch_id) REFERENCES product_batches(id) ON DELETE CASCADE,
+                  FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,
+                  FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
+                )
+              ''');
+
+            // Add indexes for stock_disposal
+            await _db!.execute(
+              'CREATE INDEX IF NOT EXISTS idx_stock_disposal_batch ON stock_disposal(batch_id)',
+            );
+            await _db!.execute(
+              'CREATE INDEX IF NOT EXISTS idx_stock_disposal_product ON stock_disposal(product_id)',
+            );
+            await _db!.execute(
+              'CREATE INDEX IF NOT EXISTS idx_stock_disposal_supplier ON stock_disposal(supplier_id)',
+            );
+
+            logger.info('Database', "✅ Database migrations completed");
           } catch (e) {
-            debugPrint("⚠️ Migration error (non-fatal): $e");
+            logger.warning('Database', "⚠️ Migration error (non-fatal): $e");
             // Continue anyway - migrations might fail if columns already exist
           }
         }
 
-        debugPrint("✅ SQLite database fully initialized");
+        logger.info('Database', "✅ SQLite database fully initialized");
       }
     } catch (e, stackTrace) {
-      debugPrint("❌ CRITICAL: Database initialization failed: $e");
-      debugPrint("Stack trace: $stackTrace");
+      logger.error(
+        'Database',
+        "❌ CRITICAL: Database initialization failed",
+        error: e,
+        stackTrace: stackTrace,
+      );
       // Set databases to null to ensure app doesn't try to use them
       _db = null;
       _webDb = null;
@@ -500,12 +550,32 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE attachments (
         id TEXT PRIMARY KEY,
-        related_table TEXT,
-        related_id TEXT,
+        entity_type TEXT,
+        entity_id TEXT,
         file_path TEXT,
-        mime_type TEXT,
-        uploaded_by TEXT,
-        uploaded_at TEXT
+        file_name TEXT,
+        file_type TEXT,
+        created_at TEXT
+      )
+    ''');
+
+    // STOCK DISPOSAL
+    await db.execute('''
+      CREATE TABLE stock_disposal (
+        id TEXT PRIMARY KEY,
+        batch_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        supplier_id TEXT,
+        qty INTEGER NOT NULL,
+        disposal_type TEXT NOT NULL,
+        cost_loss REAL NOT NULL,
+        refund_status TEXT,
+        refund_amount REAL DEFAULT 0,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(batch_id) REFERENCES product_batches(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
       )
     ''');
     // SYNC META TABLE
@@ -662,11 +732,14 @@ class DatabaseHelper {
       final result = await db.rawQuery("PRAGMA table_info($table);");
       final exists = result.any((row) => row['name'] == column);
       if (!exists) {
-        debugPrint("➕ Adding column $column to $table");
+        logger.info('Database', "➕ Adding column $column to $table");
         await db.execute("ALTER TABLE $table ADD COLUMN $column $columnType;");
       }
     } catch (e) {
-      debugPrint("⚠️ Failed to add column $column to $table: $e");
+      logger.warning(
+        'Database',
+        "⚠️ Failed to add column $column to $table: $e",
+      );
       // Don't rethrow - column might already exist
     }
   }
@@ -803,5 +876,38 @@ class DatabaseHelper {
   Future<int> rawUpdate(String sql, List<Object?> args) async {
     final dbClient = await db;
     return await dbClient.rawUpdate(sql, args);
+  }
+
+  /// Helper method to create a table if it doesn't exist
+  Future<void> _createTableIfNotExists(
+    sqflite.Database db,
+    String tableName,
+    String createTableSql,
+  ) async {
+    try {
+      // Check if table exists
+      final result = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        [tableName],
+      );
+
+      if (result.isEmpty) {
+        logger.info('Database', "📋 Creating table: $tableName");
+        await db.execute(createTableSql);
+        logger.info('Database', "✅ Table $tableName created successfully");
+      } else {
+        logger.info(
+          'Database',
+          "ℹ️  Table $tableName already exists, skipping creation",
+        );
+      }
+    } catch (e) {
+      logger.error(
+        'Database',
+        "⚠️ Error checking/creating table $tableName",
+        error: e,
+      );
+      rethrow;
+    }
   }
 }

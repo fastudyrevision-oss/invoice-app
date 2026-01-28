@@ -11,6 +11,7 @@ class StockBatch {
   final String? companyName;
   final DateTime? purchaseDate;
   final DateTime? lastSoldDate;
+  final String? categoryName;
 
   // Optional runtime fields for report calculations (not from DB)
   final int? soldByBatch;
@@ -30,6 +31,7 @@ class StockBatch {
     this.companyName,
     this.purchaseDate,
     this.lastSoldDate,
+    this.categoryName,
     this.soldByBatch,
     this.totalSoldForProduct,
     this.currentQty,
@@ -71,6 +73,7 @@ class StockBatch {
       companyName: map['company_name']?.toString(),
       purchaseDate: toDate(map['purchase_date'] ?? map['batch_created_at']),
       lastSoldDate: toDate(map['last_sold_date']),
+      categoryName: map['category_name']?.toString(),
       soldByBatch: toInt(map['sold_by_batch']),
       totalSoldForProduct: toInt(map['total_sold_for_product']),
       currentQty: toInt(map['current_qty']),
@@ -82,6 +85,7 @@ class StockBatch {
       'batch_no': batchNo,
       'product_id': productId,
       'product_name': productName,
+      'category_name': categoryName,
       'purchased_qty': purchasedQty,
       'cost_price': costPrice,
       'sell_price': sellPrice,

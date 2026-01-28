@@ -9,20 +9,25 @@ import '../models/product.dart';
 import '../models/supplier.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/supplier_repo.dart';
+import '../repositories/supplier_payment_repo.dart';
 // 🔹 Import ProductDialog from your file
 import 'product_dialogue_frame.dart';
 import '../utils/responsive_utils.dart';
+import '../utils/date_helper.dart';
+import 'package:intl/intl.dart';
 
 class PurchaseForm extends StatefulWidget {
   final PurchaseRepository repo;
   final ProductRepository productRepo;
   final SupplierRepository supplierRepo;
+  final SupplierPaymentRepository paymentRepo;
 
   const PurchaseForm({
     super.key,
     required this.repo,
     required this.productRepo,
     required this.supplierRepo,
+    required this.paymentRepo,
   });
 
   @override
@@ -32,7 +37,22 @@ class PurchaseForm extends StatefulWidget {
 class _PurchaseFormState extends State<PurchaseForm> {
   final _formKey = GlobalKey<FormState>();
   final _paidCtrl = TextEditingController();
+  final _refCtrl = TextEditingController();
+  String _paymentMethod = 'cash';
   String? _selectedSupplierId;
+  DateTime _selectedDate = DateTime.now();
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
 
   final List<PurchaseItem> _items = [];
   final List<ProductBatch> _batches = [];
@@ -79,17 +99,19 @@ class _PurchaseFormState extends State<PurchaseForm> {
 
     final purchaseId = const Uuid().v4();
     final now = DateTime.now().toIso8601String();
-    final paid = double.tryParse(_paidCtrl.text) ?? 0.0;
-    final pending = _total - paid;
+    final dateStr = _selectedDate.toIso8601String();
+    final paidAmount = double.tryParse(_paidCtrl.text) ?? 0.0;
 
+    // ✅ FIX: Initialize purchase with paid=0, pending=total
+    // This prevents double-counting when addPayment is called
     final purchase = Purchase(
       id: purchaseId,
       supplierId: _selectedSupplierId!,
       invoiceNo: purchaseId,
       total: _total,
-      paid: paid,
-      pending: pending,
-      date: now,
+      paid: 0.0, // ✅ Start at 0, let addPayment handle it
+      pending: _total, // ✅ Full amount is pending initially
+      date: dateStr,
       createdAt: now,
       updatedAt: now,
     );
@@ -107,17 +129,26 @@ class _PurchaseFormState extends State<PurchaseForm> {
       batches: batches,
     );
 
-    // 🔹 Update supplier balance
-    final supplier = await widget.repo.getSupplierById(_selectedSupplierId!);
-    if (supplier != null) {
-      final updatedSupplier = supplier.copyWith(
-        pendingAmount: supplier.pendingAmount + pending,
-      );
-      await widget.repo.updateSupplier(updatedSupplier);
-    }
-    // ✅ Recalculate each product’s average price & stock directly from batches
+    // ✅ Recalculate each product's average price & stock directly from batches
     for (var item in items) {
       await widget.productRepo.recalculateProductFromBatches(item.productId);
+    }
+
+    // 💰 Record formal payment record if any money was paid upfront
+    // addPayment will update the purchase paid/pending AND recalculate supplier balance
+    if (paidAmount > 0) {
+      await widget.paymentRepo.addPayment(
+        _selectedSupplierId!,
+        paidAmount,
+        purchaseId: purchaseId,
+        method: _paymentMethod,
+        transactionRef: _refCtrl.text.trim(),
+        note: "Upfront payment for Purchase #$purchaseId",
+      );
+    } else {
+      // ✅ If no payment, still need to recalculate supplier balance to reflect the new debt
+      // Use centralized calculation to ensure consistency and prevent double-counting
+      await widget.paymentRepo.recalculateSupplierBalance(_selectedSupplierId!);
     }
 
     if (!mounted) return;
@@ -138,6 +169,26 @@ class _PurchaseFormState extends State<PurchaseForm> {
               child: ListView(
                 children: [
                   const SizedBox(height: 10),
+                  // Date Picker Row
+                  InkWell(
+                    onTap: _pickDate,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: "Purchase Date",
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 16,
+                        ),
+                        suffixIcon: Icon(Icons.calendar_today),
+                      ),
+                      child: Text(
+                        DateHelper.formatDate(_selectedDate),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   FutureBuilder<List<Supplier>>(
                     future: widget.repo.getAllSuppliers(),
                     builder: (context, snapshot) {
@@ -154,10 +205,11 @@ class _PurchaseFormState extends State<PurchaseForm> {
                           );
                           return supplier.name;
                         },
-                        popupProps: PopupProps.modalBottomSheet(
+                        popupProps: const PopupProps.modalBottomSheet(
                           showSearchBox: true,
+                          constraints: BoxConstraints(maxHeight: 500),
                           searchFieldProps: TextFieldProps(
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: "Search Supplier",
                               border: OutlineInputBorder(),
                             ),
@@ -182,6 +234,32 @@ class _PurchaseFormState extends State<PurchaseForm> {
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
                   ),
+                  if ((double.tryParse(_paidCtrl.text) ?? 0) > 0) ...[
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: _paymentMethod,
+                      decoration: const InputDecoration(
+                        labelText: "Payment Method",
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'cash', child: Text("Cash")),
+                        DropdownMenuItem(value: 'bank', child: Text("Bank")),
+                        DropdownMenuItem(value: 'card', child: Text("Card")),
+                        DropdownMenuItem(
+                          value: 'cheque',
+                          child: Text("Cheque"),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _paymentMethod = v!),
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _refCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Ref No / Cheque No",
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Text("Total: $_total"),
                   Text(
@@ -310,10 +388,11 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
                       final product = products.firstWhere((p) => p.id == id);
                       return "${product.name} (${product.sku})";
                     },
-                    popupProps: PopupProps.modalBottomSheet(
+                    popupProps: const PopupProps.modalBottomSheet(
                       showSearchBox: true,
+                      constraints: BoxConstraints(maxHeight: 500),
                       searchFieldProps: TextFieldProps(
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: "Search Product",
                           border: OutlineInputBorder(),
                         ),
@@ -373,7 +452,42 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
                   ),
                   TextFormField(
                     controller: _expiryCtrl,
-                    decoration: const InputDecoration(labelText: "Expiry Date"),
+                    decoration: InputDecoration(
+                      labelText: "Expiry Date",
+                      hintText: "yyyy-MM-dd",
+                      helperText:
+                          "Example: ${DateFormat('yyyy-MM-dd').format(DateTime.now().add(const Duration(days: 30)))}",
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.calendar_today),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 365 * 5),
+                            ),
+                          );
+                          if (picked != null) {
+                            _expiryCtrl.text = DateFormat(
+                              'yyyy-MM-dd',
+                            ).format(picked);
+                          }
+                        },
+                      ),
+                    ),
+                    keyboardType: TextInputType.datetime,
+                    validator: (val) {
+                      if (val != null && val.isNotEmpty) {
+                        try {
+                          DateFormat('yyyy-MM-dd').parseStrict(val);
+                        } catch (e) {
+                          return "Invalid format (yyyy-MM-dd)";
+                        }
+                      }
+                      return null;
+                    },
                   ),
                 ],
               ),

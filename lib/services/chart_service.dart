@@ -94,4 +94,97 @@ class ChartService {
       };
     }).toList();
   }
+
+  /// Groups stock data by category for Pie Chart visualization.
+  List<Map<String, dynamic>> getCategoryData(List<StockReport> reports) {
+    if (reports.isEmpty) return [];
+
+    final Map<String, double> categories = {};
+    double totalQty = 0;
+
+    for (var r in reports) {
+      final cat = r.categoryName ?? 'Other';
+      final qty = r.remainingQty.toDouble();
+      categories[cat] = (categories[cat] ?? 0) + qty;
+      totalQty += qty;
+    }
+
+    return categories.entries.map((e) {
+      return {
+        'category': e.key,
+        'quantity': e.value,
+        'percentage': totalQty > 0 ? (e.value / totalQty) * 100 : 0,
+      };
+    }).toList();
+  }
+
+  /// ✅ ABC Analysis (Pareto Principle)
+  /// Classifies products into:
+  /// A - Top 70% of total stock value (Cost)
+  /// B - Next 20%
+  /// C - Remaining 10%
+  Map<String, Map<String, dynamic>> getABCAnalysis(List<StockReport> reports) {
+    if (reports.isEmpty) return {};
+
+    final List<StockReport> sorted = List.from(reports)
+      ..sort((a, b) => b.stockValueCost!.compareTo(a.stockValueCost!));
+
+    double totalValue = reports.fold(
+      0.0,
+      (sum, r) => sum + (r.stockValueCost ?? 0.0),
+    );
+    if (totalValue == 0) return {};
+
+    double runningValue = 0;
+    int aCount = 0;
+    int bCount = 0;
+    int cCount = 0;
+    double aValue = 0;
+    double bValue = 0;
+    double cValue = 0;
+
+    for (var r in sorted) {
+      final val = r.stockValueCost ?? 0;
+      runningValue += val;
+      final percentOfTotal = (runningValue / totalValue) * 100;
+
+      if (percentOfTotal <= 70) {
+        aCount++;
+        aValue += val;
+      } else if (percentOfTotal <= 90) {
+        bCount++;
+        bValue += val;
+      } else {
+        cCount++;
+        cValue += val;
+      }
+    }
+
+    return {
+      'A': {'count': aCount, 'value': aValue, 'label': 'High Value (A)'},
+      'B': {'count': bCount, 'value': bValue, 'label': 'Medium (B)'},
+      'C': {'count': cCount, 'value': cValue, 'label': 'Low Value (C)'},
+    };
+  }
+
+  /// Returns data for a "Stock Value vs Volume" chart
+  List<Map<String, dynamic>> getStockValueVolumeData(
+    List<StockReport> reports,
+  ) {
+    // Take top 20 by value to keep chart readable
+    final sorted = List.from(reports)
+      ..sort((a, b) => b.stockValueCost!.compareTo(a.stockValueCost!));
+
+    return sorted
+        .take(20)
+        .map(
+          (r) => {
+            'name': r.productName,
+            'qty': r.remainingQty,
+            'value': r.stockValueCost,
+            'profit': r.profitValue,
+          },
+        )
+        .toList();
+  }
 }

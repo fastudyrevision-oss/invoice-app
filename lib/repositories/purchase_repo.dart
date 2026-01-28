@@ -182,7 +182,7 @@ class PurchaseRepository {
 
     final result = await db.rawQuery(
       '''
-    SELECT pb.id, pb.batch_no, pb.expiry_date, pb.qty,
+    SELECT pb.id as batch_id, pb.batch_no, pb.expiry_date, pb.qty, pb.purchase_price,
            p.id as product_id, p.name as product_name,
            s.id as supplier_id, s.name as supplier_name,
            pb.purchase_id

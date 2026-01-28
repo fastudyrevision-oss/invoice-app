@@ -11,11 +11,11 @@ import 'receipt_image_generator.dart';
 import 'printer_service.dart';
 
 /// 🎯 High-Level Thermal Printing Facade
-/// 
+///
 /// Use this class for all thermal printing operations
 /// Handles: Receipt generation → Image conversion → Printer communication
 /// Integrates with PrinterSettingsService for persistent configuration
-/// 
+///
 /// Example usage:
 /// ```dart
 /// final service = ThermalPrintingService();
@@ -32,7 +32,7 @@ class ThermalPrintingService {
   // ═══════════════════════════════════════════════════════════════
 
   /// Print an invoice (order) receipt
-  /// 
+  ///
   /// Uses saved printer settings if printerAddress is not provided
   /// Parameters:
   /// - [invoice]: Invoice model
@@ -48,11 +48,15 @@ class ThermalPrintingService {
     BuildContext? context,
   }) async {
     try {
-      logger.info(_tag, '📄 Printing invoice: ${invoice.id}', context: {
-        'invoiceId': invoice.id,
-        'itemCount': items.length,
-        'printer': printerAddress,
-      });
+      logger.info(
+        _tag,
+        '📄 Printing invoice: ${invoice.id}',
+        context: {
+          'invoiceId': invoice.id,
+          'itemCount': items.length,
+          'printer': printerAddress,
+        },
+      );
 
       logger.startPerformanceTimer('print_invoice');
 
@@ -70,10 +74,7 @@ class ThermalPrintingService {
       logger.debug(_tag, 'Using printer: $printerAddress:$printerPort');
 
       // Create receipt widget
-      final receipt = ReceiptFactory.fromInvoice(
-        invoice,
-        items: items,
-      );
+      final receipt = ReceiptFactory.fromInvoice(invoice, items: items);
 
       // Generate image
       logger.debug(_tag, '🖼️  Generating receipt image...');
@@ -82,18 +83,21 @@ class ThermalPrintingService {
         pixelRatio: 2.0,
       );
 
-      logger.debug(_tag, 'Receipt image generated: ${receiptImage.lengthInBytes} bytes');
+      logger.debug(
+        _tag,
+        'Receipt image generated: ${receiptImage.lengthInBytes} bytes',
+      );
 
       // Print
       final success = await _printWithPrinterSelection(
         receiptImage,
         printerAddress: printerAddress,
         printerPort: printerPort,
-        context: context,
+        context: (context != null && context.mounted) ? context : null,
       );
 
       logger.endPerformanceTimer('print_invoice', tag: _tag);
-      
+
       if (success) {
         logger.info(_tag, '✅ Invoice printed successfully');
       } else {
@@ -109,7 +113,7 @@ class ThermalPrintingService {
         tag: _tag,
         context: {'invoiceId': invoice.id},
       );
-      if (context != null) {
+      if (context != null && context.mounted) {
         ErrorMessageService.showError(context, exception);
       }
       return false;
@@ -117,7 +121,7 @@ class ThermalPrintingService {
   }
 
   /// Print a purchase receipt
-  /// 
+  ///
   /// Uses saved printer settings if printerAddress is not provided
   /// Parameters:
   /// - [purchase]: Purchase model
@@ -135,11 +139,15 @@ class ThermalPrintingService {
     BuildContext? context,
   }) async {
     try {
-      logger.info(_tag, '📦 Printing purchase: ${purchase.id}', context: {
-        'purchaseId': purchase.id,
-        'supplier': supplierName,
-        'itemCount': items.length,
-      });
+      logger.info(
+        _tag,
+        '📦 Printing purchase: ${purchase.id}',
+        context: {
+          'purchaseId': purchase.id,
+          'supplier': supplierName,
+          'itemCount': items.length,
+        },
+      );
 
       logger.startPerformanceTimer('print_purchase');
 
@@ -170,18 +178,21 @@ class ThermalPrintingService {
         pixelRatio: 2.0,
       );
 
-      logger.debug(_tag, 'Receipt image generated: ${receiptImage.lengthInBytes} bytes');
+      logger.debug(
+        _tag,
+        'Receipt image generated: ${receiptImage.lengthInBytes} bytes',
+      );
 
       // Print
       final success = await _printWithPrinterSelection(
         receiptImage,
         printerAddress: printerAddress,
         printerPort: printerPort,
-        context: context,
+        context: (context != null && context.mounted) ? context : null,
       );
 
       logger.endPerformanceTimer('print_purchase', tag: _tag);
-      
+
       if (success) {
         logger.info(_tag, '✅ Purchase printed successfully');
       } else {
@@ -197,7 +208,7 @@ class ThermalPrintingService {
         tag: _tag,
         context: {'purchaseId': purchase.id},
       );
-      if (context != null) {
+      if (context != null && context.mounted) {
         ErrorMessageService.showError(context, exception);
       }
       return false;
@@ -205,7 +216,7 @@ class ThermalPrintingService {
   }
 
   /// Print custom receipt
-  /// 
+  ///
   /// Uses saved printer settings if printerAddress is not provided
   Future<bool> printCustom(
     ThermalReceiptWidget receipt, {
@@ -237,18 +248,21 @@ class ThermalPrintingService {
         pixelRatio: 2.0,
       );
 
-      logger.debug(_tag, 'Custom receipt image generated: ${receiptImage.lengthInBytes} bytes');
+      logger.debug(
+        _tag,
+        'Custom receipt image generated: ${receiptImage.lengthInBytes} bytes',
+      );
 
       // Print
       final success = await _printWithPrinterSelection(
         receiptImage,
         printerAddress: printerAddress,
         printerPort: printerPort,
-        context: context,
+        context: (context != null && context.mounted) ? context : null,
       );
 
       logger.endPerformanceTimer('print_custom', tag: _tag);
-      
+
       if (success) {
         logger.info(_tag, '✅ Custom receipt printed successfully');
       } else {
@@ -263,7 +277,7 @@ class ThermalPrintingService {
         stackTrace: st,
         tag: _tag,
       );
-      if (context != null) {
+      if (context != null && context.mounted) {
         ErrorMessageService.showError(context, exception);
       }
       return false;
@@ -290,10 +304,7 @@ class ThermalPrintingService {
       logger.info(_tag, '🔗 Attempting to connect to printer: $address:$port');
       logger.startPerformanceTimer('printer_connection');
 
-      final success = await _printerService.connectNetwork(
-        address,
-        port: port,
-      );
+      final success = await _printerService.connectNetwork(address, port: port);
 
       logger.endPerformanceTimer('printer_connection', tag: _tag);
 
@@ -301,8 +312,11 @@ class ThermalPrintingService {
         // Save to settings
         await _settingsService.setPrinterAddress(address);
         await _settingsService.setPrinterPort(port);
-        logger.info(_tag, '✅ Successfully connected to printer and saved settings');
-        if (context != null) {
+        logger.info(
+          _tag,
+          '✅ Successfully connected to printer and saved settings',
+        );
+        if (context != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('✅ Connected to printer'),
@@ -328,7 +342,7 @@ class ThermalPrintingService {
         tag: _tag,
         context: {'printerAddress': address, 'printerPort': port},
       );
-      if (context != null) {
+      if (context != null && context.mounted) {
         ErrorMessageService.showError(context, exception);
       }
       return false;
@@ -342,7 +356,12 @@ class ThermalPrintingService {
       await _printerService.disconnect();
       logger.info(_tag, '✅ Printer disconnected');
     } catch (e, st) {
-      logger.error(_tag, 'Error disconnecting printer', error: e, stackTrace: st);
+      logger.error(
+        _tag,
+        'Error disconnecting printer',
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 
@@ -364,12 +383,12 @@ class ThermalPrintingService {
       logger.startPerformanceTimer('test_print');
 
       final success = await _printerService.printTest();
-      
+
       logger.endPerformanceTimer('test_print', tag: _tag);
 
       if (success) {
         logger.info(_tag, '✅ Test page printed successfully');
-        if (context != null) {
+        if (context != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('✅ Test page sent to printer'),
@@ -392,7 +411,7 @@ class ThermalPrintingService {
         stackTrace: st,
         tag: _tag,
       );
-      if (context != null) {
+      if (context != null && context.mounted) {
         ErrorMessageService.showError(context, exception);
       }
       return false;
@@ -416,27 +435,25 @@ class ThermalPrintingService {
       logger.info(_tag, 'Auto-connecting to saved printer: $address:$port');
       logger.startPerformanceTimer('auto_connect_printer');
 
-      final success = await _printerService.connectNetwork(
-        address,
-        port: port,
-      );
+      final success = await _printerService.connectNetwork(address, port: port);
 
       logger.endPerformanceTimer('auto_connect_printer', tag: _tag);
 
       if (success) {
-        logger.info(_tag, '✅ Successfully auto-connected to printer: $address:$port');
+        logger.info(
+          _tag,
+          '✅ Successfully auto-connected to printer: $address:$port',
+        );
       } else {
-        logger.warning(_tag, '⚠️ Failed to auto-connect to printer at $address:$port');
+        logger.warning(
+          _tag,
+          '⚠️ Failed to auto-connect to printer at $address:$port',
+        );
       }
 
       return success;
     } catch (e, st) {
-      logger.error(
-        _tag,
-        'Error during auto-connect',
-        error: e,
-        stackTrace: st,
-      );
+      logger.error(_tag, 'Error during auto-connect', error: e, stackTrace: st);
       return false;
     }
   }
@@ -455,8 +472,11 @@ class ThermalPrintingService {
     try {
       // If printer address provided, connect and print
       if (printerAddress != null) {
-        logger.debug(_tag, 'Connecting to specified printer: $printerAddress:$printerPort');
-        
+        logger.debug(
+          _tag,
+          'Connecting to specified printer: $printerAddress:$printerPort',
+        );
+
         final connected = await _printerService.connectNetwork(
           printerAddress,
           port: printerPort,
@@ -476,7 +496,7 @@ class ThermalPrintingService {
       } else if (!_printerService.isConnected) {
         // No printer connected, show setup dialog
         logger.warning(_tag, 'No printer connected, showing setup dialog');
-        
+
         if (context == null) {
           logger.error(_tag, 'No printer connected and no context for dialog');
           throw PrinterException(
@@ -487,13 +507,11 @@ class ThermalPrintingService {
         final printerConfig = await showPrinterSetup(context);
         if (printerConfig == null) {
           logger.warning(_tag, 'User cancelled printer setup');
-          throw PrinterException(
-            message: 'Printer setup cancelled by user',
-          );
+          throw PrinterException(message: 'Printer setup cancelled by user');
         }
 
         logger.debug(_tag, 'Connecting to user-selected printer');
-        
+
         final connected = await _printerService.connectNetwork(
           printerConfig['address'],
           port: printerConfig['port'],
@@ -510,9 +528,12 @@ class ThermalPrintingService {
       }
 
       // Send receipt to printer
-      logger.debug(_tag, 'Sending receipt to printer (${receiptImage.lengthInBytes} bytes)');
+      logger.debug(
+        _tag,
+        'Sending receipt to printer (${receiptImage.lengthInBytes} bytes)',
+      );
       logger.startPerformanceTimer('send_to_printer');
-      
+
       final success = await _printerService.printReceipt(
         receiptImage,
         autoClose: true,
@@ -524,26 +545,18 @@ class ThermalPrintingService {
         logger.info(_tag, '✅ Receipt sent to printer successfully');
       } else {
         logger.warning(_tag, '⚠️ Receipt send failed');
-        throw PrinterException(
-          message: 'Printer did not accept receipt data',
-        );
+        throw PrinterException(message: 'Printer did not accept receipt data');
       }
 
       return success;
     } catch (e, st) {
-      logger.error(
-        _tag,
-        'Error in print sequence',
-        error: e,
-        stackTrace: st,
-      );
+      logger.error(_tag, 'Error in print sequence', error: e, stackTrace: st);
       if (e is! PrinterException) {
         ExceptionHandler.handleException(e, stackTrace: st, tag: _tag);
       }
       rethrow;
     }
   }
-
 }
 
 /// 🏭 Singleton instance for global access

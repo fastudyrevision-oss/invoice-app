@@ -13,6 +13,9 @@ import 'modules/audit_log/presentation/audit_log_screen.dart';
 import 'ui/customer_payment/customer_payment_screen.dart';
 import 'ui/settings/user_management_screen.dart';
 import 'ui/settings/printer_settings_screen.dart';
+import 'ui/settings/logs_frame.dart';
+import 'ui/help/help_frame.dart';
+import 'ui/expired/expired_stock_screen.dart';
 
 import '../repositories/purchase_repo.dart';
 import '../repositories/supplier_repo.dart';
@@ -28,6 +31,7 @@ import 'package:sqflite/sqflite.dart';
 import '../utils/responsive_utils.dart';
 
 import '../services/auth_service.dart';
+import '../services/logger_service.dart';
 
 class MainFrame extends StatefulWidget {
   const MainFrame({super.key});
@@ -61,6 +65,7 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
       gemini: _gemini,
       dbHelper: DatabaseHelper.instance,
     );
+    logger.info('MainFrame', 'AI Services Initialized');
   }
 
   void _updateTabs() {
@@ -104,6 +109,7 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                 repo: _purchaseRepo!,
                 productRepo: _productRepo!,
                 supplierRepo: _supplierRepo!,
+                paymentRepo: _supplierPaymentRepo!,
               ),
         perm: 'purchases_view',
       ),
@@ -171,6 +177,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                 onDataChanged: () => _refreshExpiringCount(),
               ),
         perm: 'expiring_view',
+      ),
+      _TabDef(
+        tab: const Tab(text: "Stock Disposal"),
+        view: const ExpiredStockScreen(),
+        perm: 'expiring_view', // Reuse expiring view permission for now
       ),
     ];
 
@@ -241,6 +252,7 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
       _updateTabs();
       _ensureController();
     });
+    logger.info('MainFrame', 'Repositories Initialized');
 
     await _refreshExpiringCount();
   }
@@ -296,13 +308,23 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     AuthService.instance.logout();
   }
 
-  @override
-void _openPrinterSettings() {
+  void _openPrinterSettings() {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const PrinterSettingsScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const PrinterSettingsScreen()),
     );
+  }
+
+  void _openLogs() {
+    logger.info('MainFrame', 'Opening Logs Frame');
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const LogsFrame()));
+  }
+
+  void _openHelp() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const HelpFrame()));
   }
 
   @override
@@ -317,6 +339,16 @@ void _openPrinterSettings() {
               icon: const Icon(Icons.print),
               tooltip: "Printer Settings",
               onPressed: _openPrinterSettings,
+            ),
+            IconButton(
+              icon: const Icon(Icons.help_outline),
+              tooltip: "Help & Guide",
+              onPressed: _openHelp,
+            ),
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              tooltip: "System Logs",
+              onPressed: _openLogs,
             ),
             IconButton(
               icon: const Icon(Icons.logout),
@@ -350,6 +382,16 @@ void _openPrinterSettings() {
                 icon: const Icon(Icons.print),
                 tooltip: "Printer Settings",
                 onPressed: _openPrinterSettings,
+              ),
+              IconButton(
+                icon: const Icon(Icons.help_outline),
+                tooltip: "Help & Guide",
+                onPressed: _openHelp,
+              ),
+              IconButton(
+                icon: const Icon(Icons.bug_report),
+                tooltip: "System Logs",
+                onPressed: _openLogs,
               ),
               IconButton(
                 icon: const Icon(Icons.logout),

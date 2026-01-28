@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/customer.dart';
-import '../models/customer_payment.dart';
 import '../repositories/customer_repository.dart';
 import '../db/database_helper.dart';
 import 'customer/customer_insights_card.dart';
@@ -8,6 +7,8 @@ import 'customer/customer_detail_frame.dart';
 import 'common/unified_search_bar.dart';
 import '../services/customer_export_service.dart';
 import '../utils/responsive_utils.dart';
+import '../services/logger_service.dart';
+import 'customer_payment/customer_payment_dialog.dart';
 
 // Enum for sort mode
 enum SortMode { name, pending }
@@ -67,6 +68,11 @@ class _CustomerFrameState extends State<CustomerFrame> {
     if (!mounted) return;
 
     setState(() => _isLoadingPage = true);
+    logger.info(
+      'CustomerFrame',
+      'Loading next customer page',
+      context: {'page': _currentPage},
+    );
 
     final sortField = _sortMode == SortMode.name ? 'name' : 'pending_amount';
     final newCustomers = await _repo!.getCustomersPage(
@@ -105,9 +111,65 @@ class _CustomerFrameState extends State<CustomerFrame> {
     _loadNextPage();
   }
 
+  Future<void> _handleExport(String outputType) async {
+    if (_customers.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No data to export')));
+      }
+      return;
+    }
+
+    try {
+      if (outputType == 'print') {
+        logger.info('CustomerFrame', 'Printing customer report');
+        await _exportService.printCustomerReport(_customers);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Sent to printer'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'save') {
+        logger.info('CustomerFrame', 'Saving customer report PDF');
+        final file = await _exportService.saveCustomerReportPdf(_customers);
+        if (mounted && file != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Saved: ${file.path}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (outputType == 'share') {
+        logger.info('CustomerFrame', 'Sharing customer report PDF');
+        await _exportService.exportToPDF(_customers);
+      }
+    } catch (e, stackTrace) {
+      logger.error(
+        'CustomerFrame',
+        'Export error',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Export error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   // ---------------- Dialogs ----------------
 
   void _showAddCustomerDialog() {
+    final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     final emailController = TextEditingController();
@@ -116,38 +178,55 @@ class _CustomerFrameState extends State<CustomerFrame> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Add Customer"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Name"),
-            ),
-            TextField(
-              controller: phoneController,
-              decoration: const InputDecoration(labelText: "Phone"),
-            ),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: "Email"),
-            ),
-          ],
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: "Name *"),
+                validator: (value) =>
+                    value == null || value.trim().isEmpty ? 'Required' : null,
+              ),
+              TextFormField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: "Phone"),
+                keyboardType: TextInputType.phone,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    if (!RegExp(r'^[0-9+]+$').hasMatch(value)) {
+                      return 'Invalid phone number';
+                    }
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: emailController,
+                decoration: const InputDecoration(labelText: "Email"),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
         ),
         actions: [
           ElevatedButton(
             onPressed: () async {
-              final customer = Customer(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                name: nameController.text,
-                phone: phoneController.text,
-                email: emailController.text,
-                pendingAmount: 0.0,
-                createdAt: DateTime.now().toIso8601String(),
-                updatedAt: DateTime.now().toIso8601String(),
-              );
-              await _repo!.addCustomer(customer);
-              if (context.mounted) Navigator.pop(context);
-              _resetPagination();
+              if (formKey.currentState!.validate()) {
+                final customer = Customer(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: nameController.text,
+                  phone: phoneController.text,
+                  email: emailController.text,
+                  pendingAmount: 0.0,
+                  createdAt: DateTime.now().toIso8601String(),
+                  updatedAt: DateTime.now().toIso8601String(),
+                );
+                await _repo!.addCustomer(customer);
+                if (context.mounted) Navigator.pop(context);
+                _resetPagination();
+              }
             },
             child: const Text("Add"),
           ),
@@ -161,6 +240,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
   }
 
   void _showEditCustomerDialog(Customer customer) {
+    final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: customer.name);
     final phoneController = TextEditingController(text: customer.phone);
     final emailController = TextEditingController(text: customer.email ?? "");
@@ -169,39 +249,56 @@ class _CustomerFrameState extends State<CustomerFrame> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Edit Customer"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Name"),
-            ),
-            TextField(
-              controller: phoneController,
-              decoration: const InputDecoration(labelText: "Phone"),
-            ),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: "Email"),
-            ),
-          ],
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: "Name *"),
+                validator: (value) =>
+                    value == null || value.trim().isEmpty ? 'Required' : null,
+              ),
+              TextFormField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: "Phone"),
+                keyboardType: TextInputType.phone,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    if (!RegExp(r'^[0-9+]+$').hasMatch(value)) {
+                      return 'Invalid phone number';
+                    }
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: emailController,
+                decoration: const InputDecoration(labelText: "Email"),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
         ),
         actions: [
           ElevatedButton(
             onPressed: () async {
-              final updatedCustomer = Customer(
-                id: customer.id,
-                name: nameController.text,
-                phone: phoneController.text,
-                email: emailController.text,
-                pendingAmount: customer.pendingAmount,
-                createdAt: customer.createdAt,
-                updatedAt: DateTime.now().toIso8601String(),
-              );
+              if (formKey.currentState!.validate()) {
+                final updatedCustomer = Customer(
+                  id: customer.id,
+                  name: nameController.text,
+                  phone: phoneController.text,
+                  email: emailController.text,
+                  pendingAmount: customer.pendingAmount,
+                  createdAt: customer.createdAt,
+                  updatedAt: DateTime.now().toIso8601String(),
+                );
 
-              await _repo!.updateCustomer(updatedCustomer);
-              if (context.mounted) Navigator.pop(context);
-              _resetPagination();
+                await _repo!.updateCustomer(updatedCustomer);
+                if (context.mounted) Navigator.pop(context);
+                _resetPagination();
+              }
             },
             child: const Text("Update"),
           ),
@@ -214,51 +311,16 @@ class _CustomerFrameState extends State<CustomerFrame> {
     );
   }
 
-  void _showAddPaymentDialog(Customer customer) {
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-
-    showDialog(
+  Future<void> _showAddPaymentDialog(Customer customer) async {
+    final result = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text("Add Payment for ${customer.name}"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              decoration: const InputDecoration(labelText: "Amount"),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(labelText: "Note"),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              final payment = CustomerPayment(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                customerId: customer.id,
-                amount: double.tryParse(amountController.text) ?? 0.0,
-                note: noteController.text,
-                date: DateTime.now().toIso8601String(),
-              );
-              await _repo!.addPayment(payment);
-              if (context.mounted) Navigator.pop(context);
-              _resetPagination();
-            },
-            child: const Text("Add Payment"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-        ],
-      ),
+      builder: (_) => CustomerPaymentDialog(customers: [customer]),
     );
+
+    if (result == true) {
+      // Refresh list to show updated pending amounts
+      _resetPagination();
+    }
   }
 
   // ---------------- Build UI ----------------
@@ -293,21 +355,41 @@ class _CustomerFrameState extends State<CustomerFrame> {
                     // Menu for other actions
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert),
-                      onSelected: (value) {
-                        if (value == 'export') {
-                          _exportService.exportToPDF(_customers);
-                        } else if (value == 'refresh') {
+                      onSelected: (value) async {
+                        if (value == 'refresh') {
                           _resetPagination();
+                        } else {
+                          await _handleExport(value);
                         }
                       },
                       itemBuilder: (context) => [
                         const PopupMenuItem(
-                          value: 'export',
+                          value: 'print',
                           child: Row(
                             children: [
-                              Icon(Icons.picture_as_pdf),
+                              Icon(Icons.print),
                               SizedBox(width: 8),
-                              Text('Export to PDF'),
+                              Text('Print List'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'save',
+                          child: Row(
+                            children: [
+                              Icon(Icons.save),
+                              SizedBox(width: 8),
+                              Text('Save PDF'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'share',
+                          child: Row(
+                            children: [
+                              Icon(Icons.share),
+                              SizedBox(width: 8),
+                              Text('Share PDF'),
                             ],
                           ),
                         ),
@@ -327,9 +409,19 @@ class _CustomerFrameState extends State<CustomerFrame> {
                 : [
                     const SizedBox(width: 10),
                     IconButton(
-                      icon: const Icon(Icons.picture_as_pdf),
-                      tooltip: 'Export to PDF',
-                      onPressed: () => _exportService.exportToPDF(_customers),
+                      icon: const Icon(Icons.print),
+                      tooltip: 'Print List',
+                      onPressed: () => _handleExport('print'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.save),
+                      tooltip: 'Save PDF',
+                      onPressed: () => _handleExport('save'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.share),
+                      tooltip: 'Share PDF',
+                      onPressed: () => _handleExport('share'),
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
@@ -346,7 +438,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
             bottom: PreferredSize(
               preferredSize: Size.fromHeight(appBarBottomHeight),
               child: Container(
-                color: Theme.of(context).primaryColor.withOpacity(0.05),
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
                 child: Column(
                   children: [
                     Padding(
@@ -556,7 +648,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                       child: RefreshIndicator(
                         onRefresh: () async {
                           _resetPagination();
-                          await Future.delayed(const Duration(milliseconds: 500));
+                          await Future.delayed(
+                            const Duration(milliseconds: 500),
+                          );
                         },
                         child: ListView.builder(
                           controller: _scrollController,
@@ -566,7 +660,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                             if (index >= _customers.length) {
                               return const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 16),
-                                child: Center(child: CircularProgressIndicator()),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
                               );
                             }
 
@@ -583,7 +679,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.grey.withOpacity(0.1),
+                                    color: Colors.grey.withValues(alpha: 0.1),
                                     spreadRadius: 1,
                                     blurRadius: 6,
                                     offset: const Offset(0, 3),
@@ -657,7 +753,8 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Text(
                                                         customer.name,
@@ -674,8 +771,8 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                           Icon(
                                                             Icons.phone,
                                                             size: 14,
-                                                            color:
-                                                                Colors.grey[600],
+                                                            color: Colors
+                                                                .grey[600],
                                                           ),
                                                           const SizedBox(
                                                             width: 4,
@@ -740,14 +837,16 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                                       ctx,
                                                                       false,
                                                                     ),
-                                                                child: const Text(
-                                                                  "Cancel",
-                                                                ),
+                                                                child:
+                                                                    const Text(
+                                                                      "Cancel",
+                                                                    ),
                                                               ),
                                                               ElevatedButton(
                                                                 style: ElevatedButton.styleFrom(
                                                                   backgroundColor:
-                                                                      Colors.red,
+                                                                      Colors
+                                                                          .red,
                                                                   foregroundColor:
                                                                       Colors
                                                                           .white,
@@ -757,9 +856,10 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                                       ctx,
                                                                       true,
                                                                     ),
-                                                                child: const Text(
-                                                                  "Delete",
-                                                                ),
+                                                                child:
+                                                                    const Text(
+                                                                      "Delete",
+                                                                    ),
                                                               ),
                                                             ],
                                                           ),
@@ -797,7 +897,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                   color: Colors.purple.shade900,
                                                   fontSize: 12,
                                                 ),
-                                                padding: const EdgeInsets.all(0),
+                                                padding: const EdgeInsets.all(
+                                                  0,
+                                                ),
                                                 visualDensity:
                                                     VisualDensity.compact,
                                               ),
@@ -809,7 +911,8 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                             // Pending Amount Metric
                                             Row(
                                               mainAxisAlignment:
-                                                  MainAxisAlignment.spaceBetween,
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Column(
                                                   crossAxisAlignment:
@@ -819,8 +922,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                       "PENDING AMOUNT",
                                                       style: TextStyle(
                                                         fontSize: 10,
-                                                        color:
-                                                            Colors.grey.shade500,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade500,
                                                         fontWeight:
                                                             FontWeight.w600,
                                                       ),
@@ -831,7 +935,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                       style: TextStyle(
                                                         fontSize: 20,
                                                         color: hasPending
-                                                            ? Colors.red.shade700
+                                                            ? Colors
+                                                                  .red
+                                                                  .shade700
                                                             : Colors
                                                                   .green
                                                                   .shade700,
@@ -851,12 +957,15 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                       Icons.payment,
                                                       size: 18,
                                                     ),
-                                                    label: const Text("Pay Now"),
+                                                    label: const Text(
+                                                      "Pay Now",
+                                                    ),
                                                     style:
                                                         ElevatedButton.styleFrom(
-                                                          backgroundColor: Colors
-                                                              .green
-                                                              .shade600,
+                                                          backgroundColor:
+                                                              Colors
+                                                                  .green
+                                                                  .shade600,
                                                           foregroundColor:
                                                               Colors.white,
                                                         ),
@@ -869,14 +978,16 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                           vertical: 6,
                                                         ),
                                                     decoration: BoxDecoration(
-                                                      color: Colors.green.shade50,
+                                                      color:
+                                                          Colors.green.shade50,
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                             20,
                                                           ),
                                                       border: Border.all(
-                                                        color:
-                                                            Colors.green.shade200,
+                                                        color: Colors
+                                                            .green
+                                                            .shade200,
                                                       ),
                                                     ),
                                                     child: Row(
@@ -890,7 +1001,9 @@ class _CustomerFrameState extends State<CustomerFrame> {
                                                               .green
                                                               .shade700,
                                                         ),
-                                                        const SizedBox(width: 4),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
                                                         Text(
                                                           "All Clear",
                                                           style: TextStyle(
