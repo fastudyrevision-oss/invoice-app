@@ -81,26 +81,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   );
                   if (pdfFile != null) {
                     await shareOrPrintPdf(pdfFile);
-                  } else if (mounted) {
+                  } else {
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("PDF generation cancelled")),
                     );
                   }
                 } else if (value == 'thermal') {
-                  final File? thermalFile = await generateThermalReceipt(
+                  final success = await printSilentThermalReceipt(
                     invoice,
                     items: _items,
                   );
-                  if (thermalFile != null) {
-                    await printPdfFile(thermalFile);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("✅ Sending to thermal printer..."),
-                        ),
-                      );
-                    }
-                  }
+                  if (!success || !mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("✅ Sending to thermal printer..."),
+                    ),
+                  );
                 } else if (value == 'print') {
                   final File? pdfFile = await generateInvoicePdf(
                     invoice,
@@ -112,11 +109,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 }
               } catch (e) {
                 debugPrint("❌ Error: $e");
-                if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text("Failed: $e")));
-                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text("Failed: $e")));
               }
             },
             itemBuilder: (BuildContext context) => [

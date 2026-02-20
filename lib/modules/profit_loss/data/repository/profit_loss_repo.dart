@@ -24,16 +24,24 @@ class ProfitLossRepository {
     final sales = await dao.getTotalSales(start, end);
     final discounts = await dao.getTotalDiscounts(start, end);
     final cogs = await dao.getTotalCostOfGoodsSold(start, end);
-    final grossProfit = sales - cogs;
+
     final expenses = await dao.getTotalExpenses(start, end);
 
     // Add manual entries
     final manualIncome = await manualEntryDao.getTotalIncome(start, end);
     final manualExpense = await manualEntryDao.getTotalExpense(start, end);
 
+    // ✅ Gross Profit Correction: Manual Income IS revenue, so it should be part of Gross Profit
+    // Gross Profit = (Sales - Discounts - COGS) + Manual Income
+    final grossProfit = (sales - discounts - cogs) + manualIncome;
+
     final totalExpenses = expenses + manualExpense;
+    // We now return GROSS sales in totalSales to better reflect "Total Sales" on UI
+    // The UI or Net Profit calc will handle filtering discounts
     final totalIncome = sales + manualIncome;
-    final net = grossProfit + manualIncome - totalExpenses;
+
+    // ✅ Net Profit Correction: Gross - Expenses
+    final net = grossProfit - totalExpenses;
 
     final pendingCustomers = await dao.getCustomerPendings();
     final pendingSuppliers = await dao.getSupplierPendings();
@@ -77,21 +85,30 @@ class ProfitLossRepository {
 
     // Get expense breakdown
     final breakdown = await dao.getExpenseCategoryBreakdown(start, end);
+    final incomeBreakdown = <String, double>{};
+
     // Add manual entries to breakdown
     final manualEntries = await manualEntryDao.getByDateRange(start, end);
     for (var entry in manualEntries) {
       if (entry.type == 'expense') {
         breakdown[entry.category] =
             (breakdown[entry.category] ?? 0) + entry.amount;
+      } else if (entry.type == 'income') {
+        incomeBreakdown[entry.category] =
+            (incomeBreakdown[entry.category] ?? 0) + entry.amount;
       }
     }
 
+    // Final Net Profit Calculation:
+    // net = grossProfit - totalExpenses - netExpiredLoss;
+    final finalNet = net - netExpiredLoss;
+
     return ProfitLossSummary(
-      totalSales: totalIncome,
+      totalSales: totalIncome, // NOW GROSS
       totalCostOfGoods: cogs,
       grossProfit: grossProfit,
       totalExpenses: totalExpenses,
-      netProfit: net,
+      netProfit: finalNet,
       totalDiscounts: discounts,
       totalReceived: paidInvoices + manualIncome,
       pendingFromCustomers: pendingCustomers,
@@ -102,6 +119,7 @@ class ProfitLossRepository {
       expiredStockRefunds: expiredStockRefunds,
       netExpiredLoss: netExpiredLoss,
       expenseBreakdown: breakdown,
+      incomeBreakdown: incomeBreakdown,
     );
   }
 
@@ -111,7 +129,50 @@ class ProfitLossRepository {
   Future<List<CategoryProfit>> loadCategoryProfit(
     DateTime start,
     DateTime end,
-  ) => dao.getCategoryWiseProfit(start, end);
+  ) async {
+    // 1. Get database categories
+    final list = await dao.getCategoryWiseProfit(start, end);
+    final manualEntries = await manualEntryDao.getByDateRange(start, end);
+
+    // 2. Wrap in a map for easy merging
+    final Map<String, CategoryProfit> map = {for (var c in list) c.name: c};
+
+    // 3. Merge manual items
+    for (var entry in manualEntries) {
+      final name = entry.category;
+      final existing = map[name];
+
+      if (existing != null) {
+        final newSales = entry.type == 'income'
+            ? existing.totalSales + entry.amount
+            : existing.totalSales;
+        final newCost = entry.type == 'expense'
+            ? existing.totalCost + entry.amount
+            : existing.totalCost;
+        map[name] = CategoryProfit(
+          categoryId: existing.categoryId,
+          name: name,
+          totalSales: newSales,
+          totalCost: newCost,
+          profit: newSales - newCost,
+        );
+      } else {
+        // Create new virtual category if it doesn't exist in DB categories
+        final sales = entry.type == 'income' ? entry.amount : 0.0;
+        final cost = entry.type == 'expense' ? entry.amount : 0.0;
+        map[name] = CategoryProfit(
+          categoryId: 'manual_$name',
+          name: name,
+          totalSales: sales,
+          totalCost: cost,
+          profit: sales - cost,
+        );
+      }
+    }
+
+    return map.values.toList()
+      ..sort((a, b) => b.profit.compareTo(a.profit)); // Sort by profit
+  }
 
   Future<List<SupplierProfit>> loadSupplierProfit(
     DateTime start,

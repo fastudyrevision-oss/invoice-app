@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../db/database_helper.dart';
 import '../models/invoice_item.dart';
@@ -15,11 +14,7 @@ class InvoiceItemDao {
   Future<int> insert(InvoiceItem item) async {
     final db = txn ?? await dbHelper.db;
 
-    // Encode reservedBatches before insert
     final data = item.toMap();
-    data['reserved_batches'] = item.reservedBatches != null
-        ? jsonEncode(item.reservedBatches)
-        : null;
 
     return await db.insert(
       "invoice_items",
@@ -36,9 +31,6 @@ class InvoiceItemDao {
     final batch = db.batch();
     for (final item in items) {
       final data = item.toMap();
-      data['reserved_batches'] = item.reservedBatches != null
-          ? jsonEncode(item.reservedBatches)
-          : null;
       batch.insert(
         "invoice_items",
         data,
@@ -59,19 +51,7 @@ class InvoiceItemDao {
       whereArgs: [invoiceId],
     );
 
-    return res.map((e) {
-      // Decode reserved_batches JSON if present
-      if (e['reserved_batches'] != null && e['reserved_batches'] is String) {
-        try {
-          e['reserved_batches'] = List<Map<String, dynamic>>.from(
-            jsonDecode(e['reserved_batches']),
-          );
-        } catch (_) {
-          e['reserved_batches'] = [];
-        }
-      }
-      return InvoiceItem.fromMap(e);
-    }).toList();
+    return res.map<InvoiceItem>((e) => InvoiceItem.fromMap(e)).toList();
   }
 
   // =========================
@@ -81,18 +61,7 @@ class InvoiceItemDao {
     final db = txn ?? await dbHelper.db;
     final res = await db.query("invoice_items");
 
-    return res.map((e) {
-      if (e['reserved_batches'] != null && e['reserved_batches'] is String) {
-        try {
-          e['reserved_batches'] = List<Map<String, dynamic>>.from(
-            jsonDecode(e['reserved_batches']),
-          );
-        } catch (_) {
-          e['reserved_batches'] = [];
-        }
-      }
-      return InvoiceItem.fromMap(e);
-    }).toList();
+    return res.map<InvoiceItem>((e) => InvoiceItem.fromMap(e)).toList();
   }
 
   // =========================
@@ -101,9 +70,25 @@ class InvoiceItemDao {
   Future<int> update(InvoiceItem item) async {
     final db = txn ?? await dbHelper.db;
     final data = item.toMap();
-    data['reserved_batches'] = item.reservedBatches != null
-        ? jsonEncode(item.reservedBatches)
+    // Check if parent invoice is posted
+    final invoiceRes = await db.query(
+      'invoices',
+      where: 'id = ?',
+      whereArgs: [item.invoiceId],
+    );
+    final invoiceStatus = invoiceRes.isNotEmpty
+        ? invoiceRes.first['status'] as String?
         : null;
+
+    // 🔒 IMMUTABILITY: Lock financial fields for posted invoices
+    if (invoiceStatus == 'posted') {
+      data.remove('cost_price');
+      data.remove('price');
+      data.remove('discount');
+    } else {
+      // For draft, still protect cost_price if not explicitly intended to change (optional safety)
+      data.remove('cost_price');
+    }
 
     return await db.update(
       "invoice_items",
@@ -163,6 +148,6 @@ class InvoiceItemDao {
       ['%"batchId":"$batchId"%'],
     );
 
-    return res.map((e) => InvoiceItem.fromMap(e)).toList();
+    return res.map<InvoiceItem>((e) => InvoiceItem.fromMap(e)).toList();
   }
 }

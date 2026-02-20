@@ -157,18 +157,21 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.white, Colors.blue.withOpacity(0.05)],
+          colors: [Colors.white, Colors.blue.withValues(alpha: 0.05)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.1),
+            color: Colors.blue.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: Colors.blue.withOpacity(0.2), width: 1.5),
+        border: Border.all(
+          color: Colors.blue.withValues(alpha: 0.2),
+          width: 1.5,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -235,7 +238,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                       border: Border.all(color: Colors.grey.shade200),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
+                          color: Colors.grey.withValues(alpha: 0.1),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -341,7 +344,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
             ),
 
             // Actions Divider
-            Divider(height: 1, color: Colors.blue.withOpacity(0.1)),
+            Divider(height: 1, color: Colors.blue.withValues(alpha: 0.1)),
 
             // Actions
             Padding(
@@ -413,8 +416,8 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Theme.of(context).primaryColor.withOpacity(0.1),
-                  Theme.of(context).primaryColor.withOpacity(0.05),
+                  Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                  Theme.of(context).primaryColor.withValues(alpha: 0.05),
                 ],
               ),
             ),

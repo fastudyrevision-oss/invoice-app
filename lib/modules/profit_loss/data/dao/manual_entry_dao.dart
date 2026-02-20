@@ -20,29 +20,35 @@ class ManualEntryDao {
 
   Future<List<ManualEntry>> getAll() async {
     final data = await db.queryAll('manual_entries');
-    return data.map((e) => ManualEntry.fromMap(e)).toList();
+    return data.map((e) => ManualEntry.fromMap(e)).cast<ManualEntry>().toList();
   }
 
   Future<List<ManualEntry>> getByDateRange(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final data = await db.rawQuery(
       'SELECT * FROM manual_entries WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
-    return data.map((e) => ManualEntry.fromMap(e)).toList();
+    return data.map((e) => ManualEntry.fromMap(e)).cast<ManualEntry>().toList();
   }
 
   Future<double> getTotalIncome(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       "SELECT SUM(amount) AS total FROM manual_entries WHERE type = 'income' AND date BETWEEN ? AND ?",
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['total'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getTotalExpense(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       "SELECT SUM(amount) AS total FROM manual_entries WHERE type = 'expense' AND date BETWEEN ? AND ?",
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['total'] as num? ?? 0) * 1.0;
   }

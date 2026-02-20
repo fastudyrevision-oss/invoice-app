@@ -21,8 +21,11 @@ import '../db/database_helper.dart'; // <-- your DatabaseHelper file from earlie
 import 'package:fl_chart/fl_chart.dart';
 
 // ----------------------------- CONFIG -----------------------------
+// ignore: constant_identifier_names
 const String GEMINI_API_KEY = 'AIzaSyBy3QugqiTbqzlS3yxKAvO5JfOHilAU7yY';
-const String GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY';
+// ignore: constant_identifier_names
+const String GEMINI_API_URL =
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY';
 // Replace GEMINI_API_URL with your provider's HTTP endpoint for Gemini (per your docs)
 
 // ----------------------------- SQL SAFETY -----------------------------
@@ -78,10 +81,14 @@ class GeminiService {
       'stop': null,
     };
 
-    final resp = await http.post(uri, headers: {
-      'Authorization': 'Bearer $apiKey',
-      'Content-Type': 'application/json',
-    }, body: jsonEncode(body));
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $apiKey',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
 
     if (resp.statusCode >= 400) {
       throw Exception('Gemini error ${resp.statusCode}: ${resp.body}');
@@ -92,12 +99,16 @@ class GeminiService {
     // Try common response shapes (adjust to match your provider):
     String? text;
     if (jsonResp['choices'] != null && jsonResp['choices'].isNotEmpty) {
-      text = jsonResp['choices'][0]['text'] ?? jsonResp['choices'][0]['message']?['content'];
+      text =
+          jsonResp['choices'][0]['text'] ??
+          jsonResp['choices'][0]['message']?['content'];
     } else if (jsonResp['output'] != null) {
       // some providers return `output` or `candidates`
       if (jsonResp['output'] is String) {
         text = jsonResp['output'];
-      } else if (jsonResp['output'] is List && jsonResp['output'].isNotEmpty) text = jsonResp['output'][0]['content'];
+      } else if (jsonResp['output'] is List && jsonResp['output'].isNotEmpty) {
+        text = jsonResp['output'][0]['content'];
+      }
     } else if (jsonResp['generated_text'] != null) {
       text = jsonResp['generated_text'];
     }
@@ -240,33 +251,40 @@ class _ReportRunnerWidgetState extends State<ReportRunnerWidget> {
         ),
         const SizedBox(height: 12),
 
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _queryController,
-              decoration: InputDecoration(
-                labelText: 'Ask (e.g. "Top 5 customers by invoice total this year")',
-                border: OutlineInputBorder(),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _queryController,
+                decoration: InputDecoration(
+                  labelText:
+                      'Ask (e.g. "Top 5 customers by invoice total this year")',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _runNaturalQuery(),
               ),
-              onSubmitted: (_) => _runNaturalQuery(),
             ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(onPressed: _runNaturalQuery, child: Text('Run')),
-        ]),
+            const SizedBox(width: 8),
+            ElevatedButton(onPressed: _runNaturalQuery, child: Text('Run')),
+          ],
+        ),
 
         const SizedBox(height: 12),
         if (_loading) LinearProgressIndicator(),
-        if (_error.isNotEmpty) Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text('Error: $_error', style: TextStyle(color: Colors.red)),
-        ),
+        if (_error.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text('Error: $_error', style: TextStyle(color: Colors.red)),
+          ),
 
         // SQL preview
         if (_lastSql.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text('SQL: $_lastSql', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+            child: Text(
+              'SQL: $_lastSql',
+              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            ),
           ),
 
         // Data table
@@ -276,16 +294,24 @@ class _ReportRunnerWidgetState extends State<ReportRunnerWidget> {
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    columns: _rows.first.keys.map((k) => DataColumn(label: Text(k))).toList(),
+                    columns: _rows.first.keys
+                        .map((k) => DataColumn(label: Text(k)))
+                        .toList(),
                     rows: _rows.map((r) {
-                      return DataRow(cells: r.values.map((v) => DataCell(Text(v?.toString() ?? ''))).toList());
+                      return DataRow(
+                        cells: r.values
+                            .map((v) => DataCell(Text(v?.toString() ?? '')))
+                            .toList(),
+                      );
                     }).toList(),
                   ),
                 ),
         ),
 
         // Chart (if rows contain 'period' and 'total_amount' numeric)
-        if (_rows.isNotEmpty && _rows.first.containsKey('period') && _rows.first.containsKey('total_amount'))
+        if (_rows.isNotEmpty &&
+            _rows.first.containsKey('period') &&
+            _rows.first.containsKey('total_amount'))
           SizedBox(
             height: 200,
             child: Padding(
@@ -301,15 +327,27 @@ class _ReportRunnerWidgetState extends State<ReportRunnerWidget> {
     final points = <FlSpot>[];
     for (var i = 0; i < _rows.length; i++) {
       final r = _rows[i];
-      final y = (r['total_amount'] is num) ? (r['total_amount'] as num).toDouble() : double.tryParse(r['total_amount'].toString()) ?? 0.0;
+      final y = (r['total_amount'] is num)
+          ? (r['total_amount'] as num).toDouble()
+          : double.tryParse(r['total_amount'].toString()) ?? 0.0;
       points.add(FlSpot(i.toDouble(), y));
     }
 
     return LineChartData(
-      titlesData: FlTitlesData(show: true, bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true))),
+      titlesData: FlTitlesData(
+        show: true,
+        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)),
+      ),
       gridData: FlGridData(show: true),
       borderData: FlBorderData(show: true),
-      lineBarsData: [LineChartBarData(spots: points, isCurved: true, dotData: FlDotData(show: false))],
+      lineBarsData: [
+        LineChartBarData(
+          spots: points,
+          isCurved: true,
+          dotData: FlDotData(show: false),
+        ),
+      ],
     );
   }
 
@@ -399,4 +437,3 @@ Use these to verify agent correctness.
 // final gemini = GeminiService(apiKey: GEMINI_API_KEY, apiUrl: GEMINI_API_URL);
 // final agent = SqlAgentService(gemini: gemini, dbHelper: DatabaseHelper.instance);
 // Then use ReportRunnerWidget(agent: agent) inside a Scaffold body.
-

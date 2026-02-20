@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/printer_settings_service.dart';
 import '../../services/thermal_printer/thermal_printing_service.dart';
+import 'package:printing/printing.dart';
+import '../../services/logger_service.dart';
 
 /// 🖨️ Detailed Printer Settings Screen
-/// 
+///
 /// Features:
 /// - Display current printer configuration
 /// - Edit all printer settings
@@ -13,11 +15,8 @@ import '../../services/thermal_printer/thermal_printing_service.dart';
 /// - Real-time validation
 class PrinterSettingsScreen extends StatefulWidget {
   final ThermalPrintingService? thermalPrinting;
-  
-  const PrinterSettingsScreen({
-    super.key,
-    this.thermalPrinting,
-  });
+
+  const PrinterSettingsScreen({super.key, this.thermalPrinting});
 
   @override
   State<PrinterSettingsScreen> createState() => _PrinterSettingsScreenState();
@@ -25,19 +24,24 @@ class PrinterSettingsScreen extends StatefulWidget {
 
 class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   final PrinterSettingsService _settingsService = PrinterSettingsService();
-  
+
   late TextEditingController _addressController;
   late TextEditingController _portController;
   late TextEditingController _timeoutController;
   late TextEditingController _nameController;
-  
+
   int _selectedDensity = 1;
   int _selectedPaperWidth = 80;
   bool _autoPrintTest = false;
   bool _enableLogging = true;
   bool _isLoading = true;
   bool _isTesting = false;
-  
+
+  String? _selectedUsbPrinter;
+  String _printerPriority = 'network'; // 'network' or 'usb'
+  List<Printer> _availablePrinters = [];
+  bool _isScanningPrinters = false;
+
   String? _connectionStatus;
 
   @override
@@ -47,7 +51,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     _portController = TextEditingController();
     _timeoutController = TextEditingController();
     _nameController = TextEditingController();
-    
+
     _loadSettings();
   }
 
@@ -63,9 +67,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   /// Load current settings into form
   Future<void> _loadSettings() async {
     await _settingsService.initialize();
-    
+
     final settings = await _settingsService.getAllSettings();
-    
+
     setState(() {
       _addressController.text = settings['address'] ?? '';
       _portController.text = (settings['port'] ?? 9100).toString();
@@ -75,8 +79,27 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       _selectedPaperWidth = settings['paperWidth'] ?? 80;
       _autoPrintTest = settings['autoPrintTest'] ?? false;
       _enableLogging = settings['enableLogging'] ?? true;
+      _selectedUsbPrinter = settings['usbPrinterName'];
+      _printerPriority = settings['priority'] ?? 'network';
       _isLoading = false;
     });
+
+    _scanPrinters();
+  }
+
+  /// Scan for available system printers
+  Future<void> _scanPrinters() async {
+    setState(() => _isScanningPrinters = true);
+    try {
+      final printers = await Printing.listPrinters();
+      setState(() {
+        _availablePrinters = printers;
+        _isScanningPrinters = false;
+      });
+    } catch (e) {
+      logger.error('PrinterSettings', 'Error scanning printers', error: e);
+      setState(() => _isScanningPrinters = false);
+    }
   }
 
   /// Save all settings
@@ -96,7 +119,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         'paperWidth': _selectedPaperWidth,
         'autoPrintTest': _autoPrintTest,
         'enableLogging': _enableLogging,
+        'usbPrinterName': _selectedUsbPrinter,
+        'priority': _printerPriority,
       });
+
+      // Save priority explicitly
+      await _settingsService.setPrinterPriority(_printerPriority);
 
       if (success) {
         _showSuccessSnackBar('✅ Printer settings saved successfully');
@@ -116,21 +144,23 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     }
 
     setState(() => _isTesting = true);
-    
+
     try {
       final address = _addressController.text;
       final port = int.parse(_portController.text);
 
-      final success = await widget.thermalPrinting?.connectPrinter(
-        address,
-        port: port,
-        context: context,
-      ) ?? false;
+      final success =
+          await widget.thermalPrinting?.connectPrinter(
+            address,
+            port: port,
+            context: context,
+          ) ??
+          false;
 
       setState(() {
-        _connectionStatus = success 
-          ? '✅ Connected successfully to $address:$port'
-          : '❌ Failed to connect. Please check the IP address and port.';
+        _connectionStatus = success
+            ? '✅ Connected successfully to $address:$port'
+            : '❌ Failed to connect. Please check the IP address and port.';
       });
 
       if (success) {
@@ -154,9 +184,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     }
 
     try {
-      final success = await widget.thermalPrinting?.printTestPage(
-        context: context,
-      ) ?? false;
+      final success =
+          await widget.thermalPrinting?.printTestPage(context: context) ??
+          false;
 
       if (success) {
         _showSuccessSnackBar('✅ Test page sent to printer');
@@ -205,7 +235,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   bool _validateInputs() {
     if (_addressController.text.isEmpty) return false;
     if (_portController.text.isEmpty) return false;
-    
+
     try {
       final port = int.parse(_portController.text);
       if (port < 1 || port > 65535) return false;
@@ -253,10 +283,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('🖨️ Printer Settings'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('🖨️ Printer Settings'), elevation: 0),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -264,6 +291,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           // Current Status Card
           // ═══════════════════════════════════════════════════════════
           _buildStatusCard(),
+          // ═══════════════════════════════════════════════════════════
+          // Priority Selection
+          // ═══════════════════════════════════════════════════════════
+          _buildPrioritySelector(),
           const SizedBox(height: 24),
 
           // ═══════════════════════════════════════════════════════════
@@ -275,6 +306,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           _buildPortField(),
           const SizedBox(height: 12),
           _buildTimeoutField(),
+          const SizedBox(height: 24),
+
+          // ═══════════════════════════════════════════════════════════
+          // USB Printer Section
+          // ═══════════════════════════════════════════════════════════
+          _buildSectionHeader('🔌 USB / System Printer'),
+          _buildUsbPrinterSelector(),
           const SizedBox(height: 16),
 
           // ═══════════════════════════════════════════════════════════
@@ -375,25 +413,43 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 SizedBox(width: 8),
                 Text(
                   'Current Configuration',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            _buildStatusRow('Printer Name:', _nameController.text.isNotEmpty
-                ? _nameController.text
-                : 'Not configured'),
-            _buildStatusRow('Address:', _addressController.text.isNotEmpty
-                ? _addressController.text
-                : 'Not configured'),
-            _buildStatusRow('Port:', _portController.text.isNotEmpty
-                ? _portController.text
-                : 'Not configured'),
-            _buildStatusRow('Print Density:', PrinterSettingsService.densityLevels[_selectedDensity] ?? 'Unknown'),
+            _buildStatusRow(
+              'Printer Name:',
+              _nameController.text.isNotEmpty
+                  ? _nameController.text
+                  : 'Not configured',
+            ),
+            _buildStatusRow(
+              'Priority:',
+              _printerPriority == 'network' ? 'Network (IP)' : 'USB Driver',
+            ),
+            _buildStatusRow(
+              'Address:',
+              _addressController.text.isNotEmpty
+                  ? _addressController.text
+                  : 'Not configured',
+            ),
+            _buildStatusRow(
+              'Port:',
+              _portController.text.isNotEmpty
+                  ? _portController.text
+                  : 'Not configured',
+            ),
+            _buildStatusRow(
+              'Print Density:',
+              PrinterSettingsService.densityLevels[_selectedDensity] ??
+                  'Unknown',
+            ),
             _buildStatusRow('Paper Width:', '${_selectedPaperWidth}mm'),
+            _buildStatusRow(
+              'USB Driver:',
+              _selectedUsbPrinter ?? 'Not selected',
+            ),
           ],
         ),
       ),
@@ -415,12 +471,55 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           ),
           Text(
             value,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPrioritySelector() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Printer Priority',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment<String>(
+                  value: 'network',
+                  label: Text('Network (IP)'),
+                  icon: Icon(Icons.wifi),
+                ),
+                ButtonSegment<String>(
+                  value: 'usb',
+                  label: Text('USB / Driver'),
+                  icon: Icon(Icons.usb),
+                ),
+              ],
+              selected: {_printerPriority},
+              onSelectionChanged: (Set<String> newSelection) {
+                setState(() {
+                  _printerPriority = newSelection.first;
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _printerPriority == 'network'
+                  ? 'App will try to connect via IP address first.'
+                  : 'App will try to use the system driver (USB) first.',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -446,9 +545,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         labelText: 'Printer IP Address or Hostname',
         hintText: '192.168.1.100',
         prefixIcon: const Icon(Icons.language),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         errorText: _addressController.text.isEmpty ? 'Required' : null,
       ),
       onChanged: (value) => setState(() {}),
@@ -462,16 +559,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         labelText: 'Printer Port',
         hintText: '9100',
         prefixIcon: const Icon(Icons.pin),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         helperText: 'Usually 9100 for network printers',
         errorText: _portController.text.isEmpty
             ? 'Required'
             : (int.tryParse(_portController.text) ?? -1) < 1 ||
-                    (int.tryParse(_portController.text) ?? -1) > 65535
-                ? 'Must be between 1 and 65535'
-                : null,
+                  (int.tryParse(_portController.text) ?? -1) > 65535
+            ? 'Must be between 1 and 65535'
+            : null,
       ),
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -486,20 +581,84 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         labelText: 'Connection Timeout (seconds)',
         hintText: '5',
         prefixIcon: const Icon(Icons.timer),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         helperText: 'How long to wait for printer response (1-60 seconds)',
         errorText: _timeoutController.text.isEmpty
             ? 'Required'
             : (int.tryParse(_timeoutController.text) ?? -1) < 1 ||
-                    (int.tryParse(_timeoutController.text) ?? -1) > 60
-                ? 'Must be between 1 and 60'
-                : null,
+                  (int.tryParse(_timeoutController.text) ?? -1) > 60
+            ? 'Must be between 1 and 60'
+            : null,
       ),
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       onChanged: (value) => setState(() {}),
+    );
+  }
+
+  Widget _buildUsbPrinterSelector() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Select USB / System Printer',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (_isScanningPrinters)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    onPressed: _scanPrinters,
+                    tooltip: 'Refresh list',
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedUsbPrinter,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                hintText: 'Select a printer driver',
+                prefixIcon: Icon(Icons.print),
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('Manual Input (from address field)'),
+                ),
+                ..._availablePrinters.map(
+                  (p) => DropdownMenuItem<String>(
+                    value: p.name,
+                    child: Text(p.name),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => _selectedUsbPrinter = value);
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'If you select a printer here, those settings will be used for printing instead of the IP address.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -510,9 +669,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         labelText: 'Printer Name (Optional)',
         hintText: 'e.g., Main Floor Printer',
         prefixIcon: const Icon(Icons.label),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         helperText: 'A friendly name to identify this printer',
       ),
       onChanged: (value) => setState(() {}),
@@ -612,10 +769,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   label,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                Switch(
-                  value: value,
-                  onChanged: onChanged,
-                ),
+                Switch(value: value, onChanged: onChanged),
               ],
             ),
             const SizedBox(height: 4),
@@ -658,8 +812,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(Icons.wifi),
@@ -716,10 +871,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 SizedBox(width: 8),
                 Text(
                   'Quick Reference',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ],
             ),
@@ -754,17 +906,11 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           ),
           Text(
             description,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.grey,
-            ),
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
           ),
         ],
       ),

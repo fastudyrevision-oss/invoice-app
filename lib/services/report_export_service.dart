@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart'; // Fix for PdfColors
 import 'package:printing/printing.dart';
@@ -627,6 +628,19 @@ class ReportExportService {
     final regularFont = fonts['regular']!;
     final boldFont = fonts['bold']!;
 
+    // Load Logo
+    pw.MemoryImage? logoImage;
+    try {
+      final logoData = await rootBundle.load('assets/logo.png');
+      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (e) {
+      LoggerService.instance.warning(
+        'ReportExport',
+        'Could not load logo for PDF',
+        error: e,
+      );
+    }
+
     // Calculate totals
     double totalIn = 0;
     double totalOut = 0;
@@ -639,38 +653,113 @@ class ReportExportService {
 
     pdf.addPage(
       pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
         build: (context) {
           return [
-            pw.Header(
-              level: 0,
+            // Header
+            pw.Container(
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(width: 1, color: PdfColors.grey300),
+                ),
+              ),
+              padding: const pw.EdgeInsets.only(bottom: 10),
+              margin: const pw.EdgeInsets.only(bottom: 20),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  pw.Text(
-                    'Cash Flow Report',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                      font: boldFont,
+                  if (logoImage != null)
+                    pw.Container(
+                      width: 60,
+                      height: 60,
+                      margin: const pw.EdgeInsets.only(right: 15),
+                      child: pw.Image(logoImage),
+                    ),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        // Urdu Title
+                        pw.Text(
+                          'میاں ٹریڈرز', // Mian Traders
+                          textDirection: pw.TextDirection.rtl,
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 24,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          'Cash Flow Report',
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 16,
+                            color: PdfColors.grey700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  pw.Text(
-                    _formatDate(DateTime.now()),
-                    style: pw.TextStyle(font: regularFont),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Date: ${_formatDate(DateTime.now())}',
+                        style: pw.TextStyle(font: regularFont, fontSize: 10),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: pw.BoxDecoration(
+                          color: net >= 0 ? PdfColors.green50 : PdfColors.red50,
+                          borderRadius: pw.BorderRadius.circular(4),
+                          border: pw.Border.all(
+                            color: net >= 0 ? PdfColors.green : PdfColors.red,
+                            width: 0.5,
+                          ),
+                        ),
+                        child: pw.Text(
+                          'Net: ${net.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            color: net >= 0
+                                ? PdfColors.green900
+                                : PdfColors.red900,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            pw.SizedBox(height: 20),
+
             // Summary Table
+            pw.Text(
+              "Summary",
+              style: pw.TextStyle(font: boldFont, fontSize: 14),
+            ),
+            pw.SizedBox(height: 5),
             pw.TableHelper.fromTextArray(
               context: context,
               headers: ['Total Money In', 'Total Money Out', 'Net Cash Flow'],
               headerStyle: pw.TextStyle(
                 font: boldFont,
                 fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blueGrey700,
               ),
               cellStyle: pw.TextStyle(font: regularFont),
+              cellAlignment: pw.Alignment.centerRight, // Right align numbers
               data: [
                 [
                   totalIn.toStringAsFixed(2),
@@ -678,12 +767,15 @@ class ReportExportService {
                   net.toStringAsFixed(2),
                 ],
               ],
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
             ),
             pw.SizedBox(height: 20),
+
             // Detailed Table
+            pw.Text(
+              "Transactions",
+              style: pw.TextStyle(font: boldFont, fontSize: 14),
+            ),
+            pw.SizedBox(height: 5),
             pw.TableHelper.fromTextArray(
               context: context,
               headers: [
@@ -694,29 +786,49 @@ class ReportExportService {
                 'Money Out',
                 'Money In',
               ],
+              columnWidths: {
+                0: const pw.FixedColumnWidth(60), // Date
+                1: const pw.FixedColumnWidth(50), // Type
+                2: const pw.FlexColumnWidth(2), // Name
+                3: const pw.FlexColumnWidth(1.5), // Ref
+                4: const pw.FixedColumnWidth(60), // Out
+                5: const pw.FixedColumnWidth(60), // In
+              },
               headerStyle: pw.TextStyle(
                 font: boldFont,
                 fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+                color: PdfColors.white,
               ),
-              cellStyle: pw.TextStyle(font: regularFont),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blueGrey700,
+              ),
+              cellStyle: pw.TextStyle(font: regularFont, fontSize: 9),
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerLeft,
+                2: pw.Alignment.centerLeft,
+                3: pw.Alignment.centerLeft,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+              },
               data: entries
                   .map(
                     (e) => [
                       _formatDate(e.date),
                       e.type.toUpperCase(),
                       e.entityName,
-                      e.reference,
+                      e.reference.length > 20
+                          ? '${e.reference.substring(0, 17)}...'
+                          : e.reference,
                       e.moneyOut > 0 ? e.moneyOut.toStringAsFixed(2) : '-',
                       e.moneyIn > 0 ? e.moneyIn.toStringAsFixed(2) : '-',
                     ],
                   )
                   .toList(),
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
               rowDecoration: const pw.BoxDecoration(
                 border: pw.Border(
-                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  bottom: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
                 ),
               ),
             ),

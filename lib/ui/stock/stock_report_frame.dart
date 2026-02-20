@@ -106,6 +106,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
       // 5. Load Top Items for Chart
       final topItems = await _repo.getTopStockByQuantity(limit: 10);
 
+      if (!mounted) return;
       setState(() {
         _totalCost = summary['totalCostValue'] ?? 0;
         _totalSell = summary['totalSellValue'] ?? 0;
@@ -117,7 +118,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
         _loading = false;
       });
     } catch (e, stackTrace) {
-      _handleError(e, stackTrace);
+      if (mounted) _handleError(e, stackTrace);
     }
   }
 
@@ -164,8 +165,6 @@ class _StockReportFrameState extends State<StockReportFrame> {
     });
   }
 
-  void _loadReport() => _loadInitialData();
-
   void _openFilterDialog() async {
     final result = await showDialog(
       context: context,
@@ -210,7 +209,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
             ),
             const SizedBox(height: 12),
             _modernSummaryCard(
-              title: "Profit",
+              title: "Expected Profit",
               value: _totalProfit,
               icon: Icons.trending_up,
               gradientColors: [Colors.green.shade400, Colors.green.shade600],
@@ -245,7 +244,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
           const SizedBox(width: 12),
           Expanded(
             child: _modernSummaryCard(
-              title: "Profit",
+              title: "Expected Profit",
               value: _totalProfit,
               icon: Icons.trending_up,
               gradientColors: [Colors.green.shade400, Colors.green.shade600],
@@ -269,15 +268,15 @@ class _StockReportFrameState extends State<StockReportFrame> {
         borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
           colors: [
-            gradientColors[0].withOpacity(0.8),
-            gradientColors[1].withOpacity(0.9),
+            gradientColors[0].withValues(alpha: 0.8),
+            gradientColors[1].withValues(alpha: 0.9),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: gradientColors[1].withOpacity(0.3),
+            color: gradientColors[1].withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -295,7 +294,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -311,7 +310,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(icon, color: Colors.white, size: 24),
@@ -329,13 +328,17 @@ class _StockReportFrameState extends State<StockReportFrame> {
                     title,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       fontWeight: FontWeight.w500,
                       letterSpacing: 0.5,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
                     child: Text(
                       'Rs ${value.toStringAsFixed(0)}',
                       style: const TextStyle(
@@ -371,7 +374,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -464,7 +467,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
           width: 1,
         ),
       ),
-      color: isLow ? Colors.red.shade50.withOpacity(0.5) : Colors.white,
+      color: isLow ? Colors.red.shade50.withValues(alpha: 0.5) : Colors.white,
       child: ExpansionTile(
         key: PageStorageKey(r.productId + (r.batchNo ?? '')),
         leading: Container(
@@ -486,30 +489,41 @@ class _StockReportFrameState extends State<StockReportFrame> {
             fontWeight: FontWeight.bold,
             color: isLow ? Colors.red.shade900 : Colors.black87,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           "Stock: ${r.remainingQty} | Batch: ${r.batchNo ?? '-'}",
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              "Rs ${r.remainingQty * r.sellPrice}",
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const Text(
-              "Value",
-              style: TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ],
+        trailing: Container(
+          constraints: const BoxConstraints(maxWidth: 80),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              FittedBox(
+                child: Text(
+                  "Rs ${r.remainingQty * r.sellPrice}",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const Text(
+                "Value",
+                style: TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ],
+          ),
         ),
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
+                if (r.companyName != null && r.companyName!.isNotEmpty)
+                  _buildDetailRow("Company", r.companyName!),
                 _buildDetailRow("Supplier", r.supplierName ?? "-"),
                 _buildDetailRow("Cost Price", "Rs ${r.costPrice}"),
                 _buildDetailRow(
@@ -552,13 +566,21 @@ class _StockReportFrameState extends State<StockReportFrame> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -567,11 +589,12 @@ class _StockReportFrameState extends State<StockReportFrame> {
 
   Widget _buildChart() {
     final barData = _chartService.getBarChartData(_topReports);
-    final pieData = _chartService.getCategoryData(_topReports);
-    // rigid ABC stats are loaded in _loadReport, so we don't overwrite them here with dynamic data
-    // _abcData is already set securely
+    final pieData = _chartService
+        .getCategoryData(_topReports)
+        .where((e) => (e['quantity'] ?? 0) > 0)
+        .toList();
 
-    if (barData.isEmpty) return const SizedBox();
+    if (barData.isEmpty && pieData.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,123 +631,131 @@ class _StockReportFrameState extends State<StockReportFrame> {
                 const SizedBox(height: 32),
                 SizedBox(
                   height: 250,
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY:
-                          (barData.isNotEmpty
-                              ? barData
-                                    .map((e) => e['remaining'] as num)
-                                    .reduce((a, b) => a > b ? a : b)
-                              : 100) *
-                          1.2,
-                      barTouchData: BarTouchData(
-                        enabled: true,
-                        touchTooltipData: BarTouchTooltipData(
-                          getTooltipColor: (_) =>
-                              Colors.blueAccent.withOpacity(0.9),
-                          tooltipRoundedRadius: 8,
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            final item = barData[groupIndex];
-                            return BarTooltipItem(
-                              "${item['name']}\n",
-                              const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: "Qty: ${item['remaining']}",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.normal,
-                                  ),
+                  child: RepaintBoundary(
+                    child: BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: (() {
+                          num maxVal = 100;
+                          if (barData.isNotEmpty) {
+                            maxVal = barData
+                                .map((e) => e['remaining'] as num)
+                                .reduce((a, b) => a > b ? a : b);
+                          }
+                          return (maxVal > 0 ? maxVal : 100) * 1.2;
+                        })(),
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) =>
+                                Colors.blueAccent.withValues(alpha: 0.9),
+                            tooltipRoundedRadius: 8,
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final item = barData[groupIndex];
+                              return BarTooltipItem(
+                                "${item['name']}\n",
+                                const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              if (value.toInt() < 0 ||
-                                  value.toInt() >= barData.length) {
-                                return const SizedBox();
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Text(
-                                  barData[value.toInt()]['name']
-                                      .toString()
-                                      .substring(0, 3)
-                                      .toUpperCase(),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey.shade600,
+                                children: [
+                                  TextSpan(
+                                    text: "Qty: ${item['remaining']}",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.normal,
+                                    ),
                                   ),
-                                ),
+                                ],
                               );
                             },
                           ),
                         ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            getTitlesWidget: (value, meta) => Text(
-                              value.toInt().toString(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade600,
+                        titlesData: FlTitlesData(
+                          show: true,
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                if (value.toInt() < 0 ||
+                                    value.toInt() >= barData.length) {
+                                  return const SizedBox();
+                                }
+                                final name = barData[value.toInt()]['name']
+                                    .toString();
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text(
+                                    name.length > 3
+                                        ? name.substring(0, 3).toUpperCase()
+                                        : name.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 30,
+                              getTitlesWidget: (value, meta) => Text(
+                                value.toInt().toString(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                ),
                               ),
                             ),
                           ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
                         ),
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Colors.grey.shade200,
+                            strokeWidth: 1,
+                          ),
                         ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
+                        borderData: FlBorderData(show: false),
+                        barGroups: barData.asMap().entries.map((entry) {
+                          return BarChartGroupData(
+                            x: entry.key,
+                            barRods: [
+                              BarChartRodData(
+                                toY: (entry.value['remaining'] ?? 0).toDouble(),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.blue.shade400,
+                                    Colors.blue.shade700,
+                                  ],
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                ),
+                                width: 18,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(6),
+                                ),
+                                backDrawRodData: BackgroundBarChartRodData(
+                                  show: true,
+                                  toY: (entry.value['purchased'] ?? 0)
+                                      .toDouble(),
+                                  color: Colors.grey.shade100,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
                       ),
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        getDrawingHorizontalLine: (value) =>
-                            FlLine(color: Colors.grey.shade200, strokeWidth: 1),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      barGroups: barData.asMap().entries.map((entry) {
-                        return BarChartGroupData(
-                          x: entry.key,
-                          barRods: [
-                            BarChartRodData(
-                              toY: (entry.value['remaining'] ?? 0).toDouble(),
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.blue.shade400,
-                                  Colors.blue.shade700,
-                                ],
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                              ),
-                              width: 18,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(6),
-                              ),
-                              backDrawRodData: BackgroundBarChartRodData(
-                                show: true,
-                                toY: (entry.value['purchased'] ?? 0).toDouble(),
-                                color: Colors.grey.shade100,
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
                     ),
                   ),
                 ),
@@ -738,107 +769,111 @@ class _StockReportFrameState extends State<StockReportFrame> {
         // 🥧 Segmented Analytics (Category & ABC)
         Row(
           children: [
-            // Category Split
-            Expanded(
-              flex: 3,
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "Category Mix",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 150,
-                        child: pieData.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  "No Data",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
+            // Category Split (Pie Chart)
+            if (pieData.isNotEmpty)
+              Expanded(
+                flex: 3,
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        const Text(
+                          "Category Mix",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 150,
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: _scrolledIndex,
+                            builder: (context, touchedIndex, _) {
+                              return RepaintBoundary(
+                                child: PieChart(
+                                  PieChartData(
+                                    pieTouchData: PieTouchData(
+                                      touchCallback:
+                                          (FlTouchEvent event, response) {
+                                            if (!mounted) return;
+
+                                            if (response == null ||
+                                                response.touchedSection ==
+                                                    null ||
+                                                !event
+                                                    .isInterestedForInteractions) {
+                                              if (touchedIndex != -1) {
+                                                WidgetsBinding.instance
+                                                    .addPostFrameCallback((_) {
+                                                      if (mounted) {
+                                                        _scrolledIndex.value =
+                                                            -1;
+                                                      }
+                                                    });
+                                              }
+                                              return;
+                                            }
+                                            final newIndex = response
+                                                .touchedSection!
+                                                .touchedSectionIndex;
+
+                                            if (touchedIndex != newIndex) {
+                                              WidgetsBinding.instance
+                                                  .addPostFrameCallback((_) {
+                                                    if (mounted) {
+                                                      _scrolledIndex.value =
+                                                          newIndex;
+                                                    }
+                                                  });
+                                            }
+                                          },
+                                    ),
+                                    sectionsSpace: 4,
+                                    centerSpaceRadius: 30,
+                                    sections: pieData.asMap().entries.map((
+                                      entry,
+                                    ) {
+                                      final isTouched =
+                                          entry.key == touchedIndex;
+                                      final fontSize = isTouched ? 14.0 : 10.0;
+                                      final radius = isTouched ? 55.0 : 45.0;
+                                      final List<Color> colors = [
+                                        Colors.blue,
+                                        Colors.teal,
+                                        Colors.orange,
+                                        Colors.purple,
+                                        Colors.red,
+                                      ];
+
+                                      return PieChartSectionData(
+                                        color:
+                                            colors[entry.key % colors.length],
+                                        value: (entry.value['quantity'] ?? 0)
+                                            .toDouble(),
+                                        title: isTouched
+                                            ? entry.value['category']
+                                            : "${(entry.value['percentage'] ?? 0).toStringAsFixed(0)}%",
+                                        radius: radius,
+                                        titleStyle: TextStyle(
+                                          fontSize: fontSize,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      );
+                                    }).toList(),
                                   ),
                                 ),
-                              )
-                            : ValueListenableBuilder<int>(
-                                valueListenable: _scrolledIndex,
-                                builder: (context, touchedIndex, _) {
-                                  return PieChart(
-                                    PieChartData(
-                                      pieTouchData: PieTouchData(
-                                        touchCallback:
-                                            (
-                                              FlTouchEvent event,
-                                              pieTouchResponse,
-                                            ) {
-                                              final response = pieTouchResponse;
-                                              final newIndex =
-                                                  (response == null ||
-                                                      response.touchedSection ==
-                                                          null ||
-                                                      !event
-                                                          .isInterestedForInteractions)
-                                                  ? -1
-                                                  : response
-                                                        .touchedSection!
-                                                        .touchedSectionIndex;
-
-                                              if (touchedIndex != newIndex) {
-                                                _scrolledIndex.value = newIndex;
-                                              }
-                                            },
-                                      ),
-                                      sectionsSpace: 4,
-                                      centerSpaceRadius: 30,
-                                      sections: pieData.asMap().entries.map((
-                                        entry,
-                                      ) {
-                                        final isTouched =
-                                            entry.key == touchedIndex;
-                                        final fontSize = isTouched
-                                            ? 14.0
-                                            : 10.0;
-                                        final radius = isTouched ? 55.0 : 45.0;
-                                        final List<Color> colors = [
-                                          Colors.blue,
-                                          Colors.teal,
-                                          Colors.orange,
-                                          Colors.purple,
-                                          Colors.red,
-                                        ];
-
-                                        return PieChartSectionData(
-                                          color:
-                                              colors[entry.key % colors.length],
-                                          value: (entry.value['quantity'] ?? 0)
-                                              .toDouble(),
-                                          title: isTouched
-                                              ? entry.value['category']
-                                              : "${(entry.value['percentage'] ?? 0).toStringAsFixed(0)}%",
-                                          radius: radius,
-                                          titleStyle: TextStyle(
-                                            fontSize: fontSize,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
             const SizedBox(width: 8),
             // ABC Analysis (Pareto Distribution)
             Expanded(
@@ -972,9 +1007,7 @@ class _StockReportFrameState extends State<StockReportFrame> {
     }
 
     try {
-      // Export functions usually expect full list, for 10,000 items we might need
-      // to fetch full dataset briefly or warn user.
-      // For now, we export the currently loaded items.
+      // Export functions with current filter settings
       if (outputType == 'print') {
         await _exportService.printStockReport(
           _report,
@@ -983,11 +1016,35 @@ class _StockReportFrameState extends State<StockReportFrame> {
           detailedView: _detailedView,
         );
       } else if (outputType == 'save') {
-        await _exportService.saveStockReportPdf(_report);
+        await _exportService.saveStockReportPdf(
+          _report,
+          includePrice: _includePrice,
+          showExpiry: _showExpiry,
+          detailedView: _detailedView,
+        );
       } else if (outputType == 'share') {
-        await _exportService.exportToPDF(_report);
+        await _exportService.exportToPDF(
+          _report,
+          includePrice: _includePrice,
+          showExpiry: _showExpiry,
+          detailedView: _detailedView,
+        );
       } else if (outputType == 'excel') {
-        await _exportService.exportToExcel(_report);
+        await _exportService.exportToExcel(
+          _report,
+          includePrice: _includePrice,
+          showExpiry: _showExpiry,
+          detailedView: _detailedView,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Excel file exported successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1020,11 +1077,40 @@ class _StockReportFrameState extends State<StockReportFrame> {
             onPressed: _openFilterDialog,
           ),
           PopupMenuButton<String>(
+            icon: const Icon(Icons.file_download),
+            tooltip: 'Export Options',
             onSelected: _handleExport,
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'print', child: Text('Print')),
-              const PopupMenuItem(value: 'save', child: Text('Save PDF')),
-              const PopupMenuItem(value: 'excel', child: Text('Export Excel')),
+              const PopupMenuItem(
+                value: 'print',
+                child: Row(
+                  children: [
+                    Icon(Icons.print, size: 20),
+                    SizedBox(width: 12),
+                    Text('Print'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'save',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, size: 20),
+                    SizedBox(width: 12),
+                    Text('Save PDF'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'excel',
+                child: Row(
+                  children: [
+                    Icon(Icons.table_chart, size: 20, color: Colors.green),
+                    SizedBox(width: 12),
+                    Text('Export Excel'),
+                  ],
+                ),
+              ),
             ],
           ),
         ],

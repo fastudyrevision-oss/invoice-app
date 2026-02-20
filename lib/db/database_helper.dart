@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:path/path.dart';
@@ -10,6 +11,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite_ffi;
 import 'package:sembast/sembast.dart' as sembast;
 import 'package:sembast/sembast_io.dart' as sembast_io;
 import 'package:sembast_web/sembast_web.dart' as sembast_web;
+import 'package:path_provider/path_provider.dart';
 import '../services/logger_service.dart';
 
 class DatabaseHelper {
@@ -17,10 +19,11 @@ class DatabaseHelper {
   factory DatabaseHelper() => _instance;
 
   DatabaseHelper._internal();
-  static DatabaseHelper get instance => _instance; // ✅ Add this
+  static DatabaseHelper get instance => _instance;
 
   sqflite.Database? _db; // SQLite DB
   sembast.Database? _webDb; // Sembast DB for web
+  Completer<void>? _initCompleter; // Prevents race conditions during init
 
   // Stores for Sembast
   final Map<String, sembast.StoreRef<String, Map<String, dynamic>>> _stores =
@@ -76,6 +79,11 @@ class DatabaseHelper {
 
   /// Initialize database
   Future<void> init() async {
+    if (_initCompleter != null) {
+      return _initCompleter!.future;
+    }
+    _initCompleter = Completer<void>();
+
     try {
       if (kIsWeb) {
         // Web: Sembast
@@ -94,104 +102,136 @@ class DatabaseHelper {
         }
 
         // Mobile/Desktop: SQLite
-        final dbPath = await sqflite.getDatabasesPath();
-        final path = join(dbPath, "invoice_app.db");
+        String path;
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          final appSupportDir = await getApplicationSupportDirectory();
+          path = join(appSupportDir.path, "invoice_app.db");
+          // Ensure directory exists
+          await Directory(appSupportDir.path).create(recursive: true);
+        } else {
+          final dbPath = await sqflite.getDatabasesPath();
+          path = join(dbPath, "invoice_app.db");
+        }
 
         logger.info('Database', "📂 Opening database at: $path");
 
         _db = await sqflite.openDatabase(
           path,
           version: 1,
-          onConfigure: (sqflite.Database db) async {
-            await db.execute('PRAGMA foreign_keys = ON');
-          },
+          singleInstance: true, // ✅ Prevent JNI locks on Android
+          onConfigure: _onConfigure, // ✅ WAL mode
           onCreate: _onCreate,
         );
 
         logger.info('Database', "✅ Database opened successfully");
 
         // Run migrations manually for existing databases (since version is still 1)
-        // CRITICAL: Use _db directly, NOT await db (which would cause circular dependency)
         if (_db != null) {
           logger.info('Database', "🔄 Running database migrations...");
           try {
-            await _addColumnIfNotExistsDirect(
-              _db!,
-              "users",
-              "permissions",
-              "TEXT",
-            );
-            await _addColumnIfNotExistsDirect(
-              _db!,
-              "purchase_items",
-              "cost_price",
-              "REAL DEFAULT 0",
-            );
-            await _addColumnIfNotExistsDirect(
-              _db!,
-              "purchase_items",
-              "product_name",
-              "TEXT",
-            );
-            await _addColumnIfNotExistsDirect(
-              _db!,
-              "products",
-              "is_deleted",
-              "INTEGER DEFAULT 0",
-            );
+            // ✅ Wrap in transaction for atomicity and to prevent locks
+            await _db!.transaction((txn) async {
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "users",
+                "permissions",
+                "TEXT",
+              );
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "purchase_items",
+                "cost_price",
+                "REAL DEFAULT 0",
+              );
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "purchase_items",
+                "product_name",
+                "TEXT",
+              );
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "products",
+                "is_deleted",
+                "INTEGER DEFAULT 0",
+              );
 
-            // Create manual_entries table if it doesn't exist
-            await _createTableIfNotExists(_db!, "manual_entries", '''
-                CREATE TABLE manual_entries (
-                  id TEXT PRIMARY KEY,
-                  description TEXT,
-                  amount REAL,
-                  type TEXT,
-                  date TEXT,
-                  category TEXT DEFAULT 'General'
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "manual_entries",
+                "category",
+                "TEXT DEFAULT 'General'",
+              );
+
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "invoice_items",
+                "cost_price",
+                "REAL NOT NULL DEFAULT 0",
+              );
+
+              // Data Migration: Populate existing invoice_items.cost_price from products.cost_price
+              await txn.rawUpdate('''
+                UPDATE invoice_items 
+                SET cost_price = (
+                  SELECT cost_price FROM products WHERE products.id = invoice_items.product_id
                 )
+                WHERE cost_price = 0 OR cost_price IS NULL
               ''');
 
-            // Create stock_disposal table if it doesn't exist
-            await _createTableIfNotExists(_db!, "stock_disposal", '''
-                CREATE TABLE stock_disposal (
-                  id TEXT PRIMARY KEY,
-                  batch_id TEXT NOT NULL,
-                  product_id TEXT NOT NULL,
-                  supplier_id TEXT,
-                  qty INTEGER NOT NULL,
-                  disposal_type TEXT NOT NULL,
-                  cost_loss REAL NOT NULL,
-                  refund_status TEXT,
-                  refund_amount REAL DEFAULT 0,
-                  notes TEXT,
-                  created_at TEXT NOT NULL,
-                  FOREIGN KEY(batch_id) REFERENCES product_batches(id) ON DELETE CASCADE,
-                  FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,
-                  FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
-                )
-              ''');
+              // Create manual_entries table if it doesn't exist
+              await _createTableIfNotExistsTxn(txn, "manual_entries", '''
+                  CREATE TABLE manual_entries (
+                    id TEXT PRIMARY KEY,
+                    description TEXT,
+                    amount REAL,
+                    type TEXT,
+                    date TEXT,
+                    category TEXT DEFAULT 'General'
+                  )
+                ''');
 
-            // Add indexes for stock_disposal
-            await _db!.execute(
-              'CREATE INDEX IF NOT EXISTS idx_stock_disposal_batch ON stock_disposal(batch_id)',
-            );
-            await _db!.execute(
-              'CREATE INDEX IF NOT EXISTS idx_stock_disposal_product ON stock_disposal(product_id)',
-            );
-            await _db!.execute(
-              'CREATE INDEX IF NOT EXISTS idx_stock_disposal_supplier ON stock_disposal(supplier_id)',
-            );
+              // Create stock_disposal table if it doesn't exist
+              await _createTableIfNotExistsTxn(txn, "stock_disposal", '''
+                  CREATE TABLE stock_disposal (
+                    id TEXT PRIMARY KEY,
+                    batch_id TEXT NOT NULL,
+                    product_id TEXT NOT NULL,
+                    supplier_id TEXT,
+                    qty INTEGER NOT NULL,
+                    disposal_type TEXT NOT NULL,
+                    cost_loss REAL NOT NULL,
+                    refund_status TEXT,
+                    refund_amount REAL DEFAULT 0,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(batch_id) REFERENCES product_batches(id) ON DELETE CASCADE,
+                    FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,
+                    FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
+                  )
+                ''');
+
+              // Add indexes for stock_disposal
+              await txn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_stock_disposal_batch ON stock_disposal(batch_id)',
+              );
+              await txn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_stock_disposal_product ON stock_disposal(product_id)',
+              );
+              await txn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_stock_disposal_supplier ON stock_disposal(supplier_id)',
+              );
+            });
 
             logger.info('Database', "✅ Database migrations completed");
           } catch (e) {
             logger.warning('Database', "⚠️ Migration error (non-fatal): $e");
-            // Continue anyway - migrations might fail if columns already exist
           }
         }
 
         logger.info('Database', "✅ SQLite database fully initialized");
       }
+      if (!_initCompleter!.isCompleted) _initCompleter!.complete();
     } catch (e, stackTrace) {
       logger.error(
         'Database',
@@ -202,6 +242,9 @@ class DatabaseHelper {
       // Set databases to null to ensure app doesn't try to use them
       _db = null;
       _webDb = null;
+      if (!_initCompleter!.isCompleted) {
+        _initCompleter!.completeError(e, stackTrace);
+      }
       rethrow; // Re-throw to let main.dart handle it
     }
   }
@@ -232,8 +275,30 @@ class DatabaseHelper {
     }
   }
 
+  // ================== CONFIGURATION ==================
+  /// ✅ Configure WAL mode for performance
+  Future<void> _onConfigure(sqflite.Database db) async {
+    // WAL mode allows concurrent readers and writers
+    await db.execute('PRAGMA foreign_keys = ON');
+
+    if (!kIsWeb && Platform.isAndroid) {
+      // WAL is especially beneficial on Android
+      try {
+        await db.execute('PRAGMA journal_mode = WAL');
+        await db.execute(
+          'PRAGMA synchronous = NORMAL',
+        ); // Faster writes, slightly less safe on power loss but standard for mobile apps
+      } catch (e) {
+        logger.warning('Database', "⚠️ Failed to enable WAL mode: $e");
+      }
+    }
+  }
+
   // ================== CREATE TABLES FOR SQLite ==================
   Future _onCreate(sqflite.Database db, int version) async {
+    logger.info('Database', "🆕 Creating Schema (Version $version)...");
+    final batch = db.batch();
+
     // USERS
     await db.execute('''
       CREATE TABLE users (
@@ -249,7 +314,7 @@ class DatabaseHelper {
     ''');
 
     // CUSTOMERS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE customers (
         id TEXT PRIMARY KEY,
         name TEXT,
@@ -265,7 +330,7 @@ class DatabaseHelper {
     ''');
 
     // SUPPLIER COMPANIES
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE supplier_companies (
         id TEXT PRIMARY KEY,
         name TEXT UNIQUE,
@@ -280,7 +345,7 @@ class DatabaseHelper {
     ''');
 
     // SUPPLIERS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE suppliers (
         id TEXT PRIMARY KEY,
         name TEXT,
@@ -298,24 +363,25 @@ class DatabaseHelper {
       )
     ''');
     // CATEGORIES
-    await db.execute('''
-  CREATE TABLE categories (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    slug TEXT UNIQUE,
-    description TEXT,
-    parent_id TEXT,
-    icon TEXT,
-    color TEXT,
-    sort_order INTEGER DEFAULT 0,
-    is_active INTEGER DEFAULT 1,
-    created_at TEXT,
-    updated_at TEXT,
-    is_deleted INTEGER DEFAULT 0,
-    FOREIGN KEY(parent_id) REFERENCES categories(id) ON DELETE SET NULL
-  )
-''');
-    await db.insert('categories', {
+    batch.execute('''
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        slug TEXT UNIQUE,
+        description TEXT,
+        parent_id TEXT,
+        icon TEXT,
+        color TEXT,
+        sort_order INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT,
+        is_deleted INTEGER DEFAULT 0,
+        FOREIGN KEY(parent_id) REFERENCES categories(id) ON DELETE SET NULL
+      )
+    ''');
+
+    batch.insert('categories', {
       'id': 'cat-001',
       'name': 'Uncategorized',
       'slug': 'uncategorized',
@@ -327,7 +393,7 @@ class DatabaseHelper {
     });
 
     // PRODUCTS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE products (
         id TEXT PRIMARY KEY,
         name TEXT,
@@ -351,7 +417,7 @@ class DatabaseHelper {
     ''');
 
     // PRODUCT BATCHES
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE product_batches (
         id TEXT PRIMARY KEY,
         product_id TEXT NOT NULL,
@@ -372,7 +438,7 @@ class DatabaseHelper {
     ''');
 
     // INVOICES
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE invoices (
         id TEXT PRIMARY KEY,
         customer_id TEXT,
@@ -393,7 +459,7 @@ class DatabaseHelper {
     ''');
 
     // INVOICE ITEMS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE invoice_items (
         id TEXT PRIMARY KEY,
         invoice_id TEXT,
@@ -404,6 +470,7 @@ class DatabaseHelper {
         tax REAL DEFAULT 0,
         batch_no TEXT,
         reserved_batches TEXT,
+        cost_price REAL NOT NULL DEFAULT 0, -- ✅ Added for COGS accuracy
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0,
@@ -413,7 +480,7 @@ class DatabaseHelper {
     ''');
 
     // PURCHASES
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE purchases (
         id TEXT PRIMARY KEY,
         supplier_id TEXT,
@@ -430,7 +497,7 @@ class DatabaseHelper {
     ''');
 
     // PURCHASE ITEMS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE purchase_items (
         id TEXT PRIMARY KEY,
         purchase_id TEXT,
@@ -451,7 +518,7 @@ class DatabaseHelper {
     ''');
 
     // CUSTOMER PAYMENTS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE customer_payments (
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL,
@@ -470,7 +537,7 @@ class DatabaseHelper {
     ''');
 
     // SUPPLIER PAYMENTS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE supplier_payments (
         id TEXT PRIMARY KEY,
         supplier_id TEXT NOT NULL,
@@ -490,7 +557,7 @@ class DatabaseHelper {
     ''');
 
     // EXPENSES
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE expenses (
         id TEXT PRIMARY KEY,
         description TEXT NOT NULL,
@@ -504,13 +571,14 @@ class DatabaseHelper {
     ''');
 
     // MANUAL ENTRIES
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE manual_entries (
         id TEXT PRIMARY KEY,
         description TEXT NOT NULL,
         amount REAL NOT NULL,
         type TEXT NOT NULL,
         date TEXT NOT NULL,
+        category TEXT DEFAULT 'General', -- ✅ Added for P&L breakdown
         created_at TEXT,
         updated_at TEXT,
         is_synced INTEGER DEFAULT 0
@@ -518,7 +586,7 @@ class DatabaseHelper {
     ''');
 
     // LEDGER
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE ledger (
         id TEXT PRIMARY KEY,
         entity_id TEXT,
@@ -533,7 +601,7 @@ class DatabaseHelper {
     ''');
 
     // AUDIT LOGS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE audit_logs (
         id TEXT PRIMARY KEY,
         action TEXT,
@@ -547,7 +615,7 @@ class DatabaseHelper {
     ''');
 
     // ATTACHMENTS
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE attachments (
         id TEXT PRIMARY KEY,
         entity_type TEXT,
@@ -560,7 +628,7 @@ class DatabaseHelper {
     ''');
 
     // STOCK DISPOSAL
-    await db.execute('''
+    batch.execute('''
       CREATE TABLE stock_disposal (
         id TEXT PRIMARY KEY,
         batch_id TEXT NOT NULL,
@@ -579,7 +647,7 @@ class DatabaseHelper {
       )
     ''');
     // SYNC META TABLE
-    await db.execute('''
+    batch.execute('''
     CREATE TABLE sync_meta (
       table_name TEXT PRIMARY KEY,
       last_synced_at TEXT
@@ -588,115 +656,115 @@ class DatabaseHelper {
 
     // ==================== COMPREHENSIVE INDEXES ====================
     // Core name indexes (existing)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)',
     );
 
     // Date-based indexes for time-series queries (NEW)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_customer_payments_date ON customer_payments(date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_supplier_payments_date ON supplier_payments(date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)',
     );
 
     // Search optimization indexes (NEW)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_invoice_no ON invoices(invoice_no)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_suppliers_phone ON suppliers(phone)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email)',
     );
 
     // Foreign key indexes for joins (existing + new)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON products(supplier_id)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_batches_product_id ON product_batches(product_id)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_batches_supplier_id ON product_batches(supplier_id)',
     );
 
     // Status and filter indexes (NEW)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_track_expiry ON products(track_expiry)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_suppliers_deleted ON suppliers(deleted)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_is_deleted ON products(is_deleted)',
     );
 
     // Inventory and stock management indexes (NEW)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_quantity ON products(quantity)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_min_stock ON products(min_stock)',
     );
 
     // Composite indexes for common query patterns (NEW)
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_customer_date ON invoices(customer_id, date DESC)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_purchases_supplier_date ON purchases(supplier_id, date DESC)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_batches_product_expiry ON product_batches(product_id, expiry_date)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_products_supplier_deleted ON products(supplier_id, is_deleted)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_suppliers_company_deleted ON suppliers(company_id, deleted)',
     );
-    await db.execute(
+    batch.execute(
       'CREATE INDEX IF NOT EXISTS idx_invoices_status_date ON invoices(status, date DESC)',
     );
 
@@ -718,12 +786,15 @@ class DatabaseHelper {
     );
     // Users permissions
     await addColumnIfNotExists(db, "users", "permissions", "TEXT");
+
+    await batch.commit(noResult: true);
+    logger.info('Database', "✅ Schema created successfully");
   }
 
   /// Helper to add column if it doesn't exist (DIRECT VERSION - for use during init)
   /// Uses db parameter directly instead of getter to avoid circular dependency
   Future<void> _addColumnIfNotExistsDirect(
-    sqflite.Database db,
+    sqflite.DatabaseExecutor db,
     String table,
     String column,
     String columnType,
@@ -817,6 +888,29 @@ class DatabaseHelper {
     }
   }
 
+  /// ✅ PARALLEL PARSING HELPER
+  /// Runs the query and passes the result to a computation function in a background isolate.
+  /// This prevents large dataset mapping from freezing the UI.
+  Future<T> queryAndParse<T>(
+    String table,
+    T Function(List<Map<String, dynamic>>) parser, {
+    String? where,
+    List<Object?>? whereArgs,
+  }) async {
+    final List<Map<String, dynamic>> rawData;
+
+    if (kIsWeb) {
+      // Web doesn't support Isolates nicely for this, run on main thread
+      rawData = await queryWhere(table, where ?? '', whereArgs ?? []);
+    } else {
+      final dbClient = await db;
+      rawData = await dbClient.query(table, where: where, whereArgs: whereArgs);
+    }
+
+    // Offload parsing to background isolate
+    return await compute(parser, rawData);
+  }
+
   Future<List<Map<String, dynamic>>> rawQuery(
     String sql, [
     List<Object?>? arguments,
@@ -878,35 +972,26 @@ class DatabaseHelper {
     return await dbClient.rawUpdate(sql, args);
   }
 
-  /// Helper method to create a table if it doesn't exist
-  Future<void> _createTableIfNotExists(
-    sqflite.Database db,
+  /// Helper method to create a table if it doesn't exist (TRANSACTION VERSION)
+  Future<void> _createTableIfNotExistsTxn(
+    sqflite.Transaction txn,
     String tableName,
     String createTableSql,
   ) async {
     try {
       // Check if table exists
-      final result = await db.rawQuery(
+      final result = await txn.rawQuery(
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
         [tableName],
       );
 
       if (result.isEmpty) {
         logger.info('Database', "📋 Creating table: $tableName");
-        await db.execute(createTableSql);
+        await txn.execute(createTableSql);
         logger.info('Database', "✅ Table $tableName created successfully");
-      } else {
-        logger.info(
-          'Database',
-          "ℹ️  Table $tableName already exists, skipping creation",
-        );
       }
     } catch (e) {
-      logger.error(
-        'Database',
-        "⚠️ Error checking/creating table $tableName",
-        error: e,
-      );
+      logger.error('Database', "⚠️ Error creating table $tableName", error: e);
       rethrow;
     }
   }

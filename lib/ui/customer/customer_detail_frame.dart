@@ -7,6 +7,9 @@ import '../../repositories/customer_repository.dart';
 import '../../dao/invoice_dao.dart';
 import '../../db/database_helper.dart';
 import '../customer_payment/customer_payment_dialog.dart';
+import '../order/order_detail_screen.dart';
+import '../order/pdf_export_helper.dart';
+import '../../services/logger_service.dart';
 
 class CustomerDetailFrame extends StatefulWidget {
   final Customer customer;
@@ -54,12 +57,22 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
     final db = await DatabaseHelper.instance.db;
     final invoiceDao = InvoiceDao(db);
 
+    logger.info(
+      'CustomerDetail',
+      'Loading data for customer: ${widget.customer.id} (${widget.customer.name})',
+    );
+
     // Get all invoices and filter by customer
     final allInvoices = await invoiceDao.getAllInvoices();
     _orders = allInvoices
         .where((inv) => inv.customerId == widget.customer.id)
         .toList();
     _orders.sort((a, b) => b.date.compareTo(a.date));
+
+    logger.info(
+      'CustomerDetail',
+      'Found ${_orders.length} orders for customer ${widget.customer.id} (total invoices: ${allInvoices.length})',
+    );
 
     // Get payments using correct method name
     _payments = await widget.repository.getPayments(widget.customer.id);
@@ -84,6 +97,108 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
 
     if (result == true) {
       _loadData();
+    }
+  }
+
+  // ─── Print an invoice using the same method as OrderDetailScreen ───
+  Future<void> _printInvoice(Invoice invoice) async {
+    try {
+      // Fetch items for this invoice
+      final db = await DatabaseHelper.instance.db;
+      final rawItems = await db.rawQuery(
+        '''
+        SELECT ii.qty, ii.price, p.name as product_name
+        FROM invoice_items ii
+        JOIN products p ON ii.product_id = p.id
+        WHERE ii.invoice_id = ?
+      ''',
+        [invoice.id],
+      );
+
+      // Set customer name if missing
+      invoice.customerName ??= widget.customer.name;
+
+      if (!mounted) return;
+
+      // Show print options dialog
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Print Invoice'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, 'thermal'),
+              child: const Row(
+                children: [
+                  Icon(Icons.receipt_long, size: 20),
+                  SizedBox(width: 12),
+                  Text('Thermal Receipt'),
+                ],
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, 'pdf'),
+              child: const Row(
+                children: [
+                  Icon(Icons.picture_as_pdf, size: 20),
+                  SizedBox(width: 12),
+                  Text('Export PDF'),
+                ],
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, 'print'),
+              child: const Row(
+                children: [
+                  Icon(Icons.print, size: 20),
+                  SizedBox(width: 12),
+                  Text('Print Invoice'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (choice == null || !mounted) return;
+
+      if (choice == 'thermal') {
+        final success = await printSilentThermalReceipt(
+          invoice,
+          items: rawItems,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? '✅ Sending to thermal printer...'
+                  : '❌ Thermal print failed',
+            ),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      } else if (choice == 'pdf') {
+        final pdfFile = await generateInvoicePdf(invoice, items: rawItems);
+        if (pdfFile != null) {
+          await shareOrPrintPdf(pdfFile);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('PDF generation cancelled')),
+          );
+        }
+      } else if (choice == 'print') {
+        final pdfFile = await generateInvoicePdf(invoice, items: rawItems);
+        if (pdfFile != null) {
+          await printPdfFile(pdfFile);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Print error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -268,7 +383,14 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
   Widget _buildOrdersTab() {
     if (_orders.isEmpty) {
       return const Center(
-        child: Text('No orders yet', style: TextStyle(color: Colors.grey)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.receipt_long, size: 48, color: Colors.grey),
+            SizedBox(height: 8),
+            Text('No orders yet', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
       );
     }
 
@@ -291,16 +413,40 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
               ),
             ),
             title: Text(
-              'Invoice #${order.id.substring(0, 8)}...',
+              'Invoice #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}...',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(
-              '${DateFormat('dd MMM yyyy').format(DateTime.parse(order.date))} • ${isPaid ? "Paid" : "Pending"}',
+              '${DateFormat('dd MMM yyyy').format(DateTime.parse(order.date))} • ${isPaid ? "Paid" : "Pending: Rs ${order.pending.toStringAsFixed(0)}"}',
             ),
-            trailing: Text(
-              'Rs ${order.total.toStringAsFixed(0)}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Rs ${order.total.toStringAsFixed(0)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 4),
+                // Print button
+                IconButton(
+                  icon: const Icon(Icons.print, size: 20),
+                  tooltip: 'Print Invoice',
+                  onPressed: () => _printInvoice(order),
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(4),
+                ),
+              ],
             ),
+            onTap: () {
+              // Navigate to OrderDetailScreen
+              order.customerName ??= widget.customer.name;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => OrderDetailScreen(invoice: order),
+                ),
+              );
+            },
           ),
         );
       },
@@ -310,7 +456,14 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
   Widget _buildPaymentsTab() {
     if (_payments.isEmpty) {
       return const Center(
-        child: Text('No payments yet', style: TextStyle(color: Colors.grey)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.payment, size: 48, color: Colors.grey),
+            SizedBox(height: 8),
+            Text('No payments yet', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
       );
     }
 
@@ -344,7 +497,8 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
     for (var order in _orders) {
       ledgerEntries.add({
         'date': order.date,
-        'description': 'Invoice #${order.id.substring(0, 8)}',
+        'description':
+            'Invoice #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
         'debit': order.total,
         'credit': 0.0,
         'pending': order.pending > 0,
@@ -366,9 +520,13 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
 
     if (ledgerEntries.isEmpty) {
       return const Center(
-        child: Text(
-          'No transactions yet',
-          style: TextStyle(color: Colors.grey),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.account_balance, size: 48, color: Colors.grey),
+            SizedBox(height: 8),
+            Text('No transactions yet', style: TextStyle(color: Colors.grey)),
+          ],
         ),
       );
     }

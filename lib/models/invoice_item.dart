@@ -6,6 +6,7 @@ class InvoiceItem {
   final String productId;
   final int qty;
   final double price;
+  final double costPrice; // 👈 Current cost at time of sale
   final double? discount;
   final double? tax;
   final String? batchNo; // 👈 for backward compatibility
@@ -22,6 +23,7 @@ class InvoiceItem {
     required this.productId,
     required this.qty,
     required this.price,
+    this.costPrice = 0.0,
     this.discount,
     this.tax,
     this.batchNo,
@@ -39,6 +41,7 @@ class InvoiceItem {
     "product_id": productId,
     "qty": qty,
     "price": price,
+    "cost_price": costPrice,
     "discount": discount ?? 0.0,
     "tax": tax ?? 0.0,
     "batch_no": batchNo,
@@ -62,6 +65,7 @@ class InvoiceItem {
         ? map["qty"]
         : int.tryParse(map["qty"].toString()) ?? 0,
     price: (map["price"] ?? 0).toDouble(),
+    costPrice: (map["cost_price"] ?? 0).toDouble(),
     discount: (map["discount"] ?? 0).toDouble(),
     tax: (map["tax"] ?? 0).toDouble(),
     batchNo: map["batch_no"],
@@ -83,6 +87,7 @@ class InvoiceItem {
     String? productId,
     int? qty,
     double? price,
+    double? costPrice,
     double? discount,
     double? tax,
     String? batchNo,
@@ -96,6 +101,7 @@ class InvoiceItem {
       productId: productId ?? this.productId,
       qty: qty ?? this.qty,
       price: price ?? this.price,
+      costPrice: costPrice ?? this.costPrice,
       discount: discount ?? this.discount,
       tax: tax ?? this.tax,
       batchNo: batchNo ?? this.batchNo,

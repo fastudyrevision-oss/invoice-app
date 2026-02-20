@@ -3,6 +3,8 @@ import '../../dao/stock_disposal_dao.dart';
 import '../../models/stock_disposal.dart';
 import '../../db/database_helper.dart';
 import 'package:intl/intl.dart';
+import '../order/pdf_export_helper.dart';
+import '../../services/thermal_printer/thermal_printing_service.dart';
 
 class ExpiredStockScreen extends StatefulWidget {
   const ExpiredStockScreen({super.key});
@@ -244,27 +246,51 @@ class _ExpiredStockScreenState extends State<ExpiredStockScreen>
                   const SizedBox(width: 8),
                   if (disposal.refundAmount > 0)
                     Text(currencyFormat.format(disposal.refundAmount)),
+                  if (disposal.refundStatus == 'pending') ...[
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => _updateRefundStatus(disposal),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text('Update'),
+                    ),
+                  ],
                 ],
               ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.picture_as_pdf, size: 20),
+                  onPressed: () => generateStockDisposalPdf(disposal),
+                  tooltip: 'PDF Receipt',
+                  color: Colors.red.shade400,
+                ),
+                const SizedBox(width: 16),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.receipt_long, size: 20),
+                  onPressed: () => thermalPrinting.printStockDisposal(disposal),
+                  tooltip: 'Thermal Print',
+                  color: Colors.blue.shade400,
+                ),
+              ],
+            ),
           ],
         ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              currencyFormat.format(disposal.costLoss),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
-              ),
-            ),
-            if (isReturn && disposal.refundStatus == 'pending')
-              TextButton(
-                onPressed: () => _updateRefundStatus(disposal),
-                child: const Text('Update'),
-              ),
-          ],
+        trailing: Text(
+          currencyFormat.format(disposal.costLoss),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.red,
+          ),
         ),
       ),
     );
@@ -369,6 +395,7 @@ class _ExpiredStockScreenState extends State<ExpiredStockScreen>
                 status,
                 double.tryParse(amountController.text) ?? 0.0,
               );
+              if (!context.mounted) return;
               Navigator.pop(context);
               _loadData();
             },

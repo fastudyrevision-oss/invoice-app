@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 import '../../modules/audit_log/data/dao/audit_log_dao.dart';
 import '../../modules/audit_log/data/repository/audit_log_repository.dart';
 
@@ -35,7 +36,7 @@ class AuditLogger {
       );
     } catch (e) {
       // Fail silently or log to console, don't crash the app for logging
-      print('Failed to write audit log: $e');
+      debugPrint('Failed to write audit log: $e');
     }
   }
 }

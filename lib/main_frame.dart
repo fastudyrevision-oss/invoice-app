@@ -14,6 +14,7 @@ import 'ui/customer_payment/customer_payment_screen.dart';
 import 'ui/settings/user_management_screen.dart';
 import 'ui/settings/printer_settings_screen.dart';
 import 'ui/settings/logs_frame.dart';
+import 'ui/settings/invoice_customization_screen.dart';
 import 'ui/help/help_frame.dart';
 import 'ui/expired/expired_stock_screen.dart';
 
@@ -32,6 +33,8 @@ import '../utils/responsive_utils.dart';
 
 import '../services/auth_service.dart';
 import '../services/logger_service.dart';
+import '../services/update_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MainFrame extends StatefulWidget {
   const MainFrame({super.key});
@@ -95,7 +98,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         tab: const Tab(text: "Suppliers"),
         view: _supplierRepo == null || _supplierPaymentRepo == null
             ? const Center(child: CircularProgressIndicator())
-            : SupplierFrame(repo: _supplierRepo!, repo2: _supplierPaymentRepo!),
+            : SupplierFrame(
+                repo: _supplierRepo!,
+                repo2: _supplierPaymentRepo!,
+                purchaseRepo: _purchaseRepo!,
+              ),
         perm: 'suppliers_view',
       ),
       _TabDef(
@@ -314,6 +321,14 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     );
   }
 
+  void _openInvoiceDesigner() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const InvoiceCustomizationScreen(),
+      ),
+    );
+  }
+
   void _openLogs() {
     logger.info('MainFrame', 'Opening Logs Frame');
     Navigator.of(
@@ -325,6 +340,72 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const HelpFrame()));
+  }
+
+  Future<void> _checkForUpdate() async {
+    final updateService = UpdateService();
+    // Show loading? Or just background. Let's show a loading dialog or snackbar.
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Checking for updates...')));
+
+    final updateInfo = await updateService.checkForUpdate();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (updateInfo != null) {
+      // Show update dialog
+      final shouldUpdate = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Update Available: ${updateInfo.latestVersion}'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('A new version is available.'),
+                const SizedBox(height: 8),
+                const Text(
+                  'Release Notes:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(updateInfo.notes),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Download & Install'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldUpdate == true) {
+        if (await canLaunchUrl(Uri.parse(updateInfo.downloadUrl))) {
+          await launchUrl(
+            Uri.parse(updateInfo.downloadUrl),
+            mode: LaunchMode.externalApplication,
+          );
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not open download URL')),
+            );
+          }
+        }
+      }
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('App is up to date!')));
+    }
   }
 
   @override
@@ -371,17 +452,22 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
             ? _tabController.index
             : 0;
         final title = safeIndex < _tabs.length
-            ? (_tabs[safeIndex].text ?? "Invoice App")
-            : "Invoice App";
+            ? (_tabs[safeIndex].text ?? "Mian Traders")
+            : "Mian Traders";
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(isMobile ? title : "Invoice App"),
+            title: Text(isMobile ? title : "Mian Traders"),
             actions: [
               IconButton(
                 icon: const Icon(Icons.print),
                 tooltip: "Printer Settings",
                 onPressed: _openPrinterSettings,
+              ),
+              IconButton(
+                icon: const Icon(Icons.design_services),
+                tooltip: "Invoice Designer",
+                onPressed: _openInvoiceDesigner,
               ),
               IconButton(
                 icon: const Icon(Icons.help_outline),
@@ -392,6 +478,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                 icon: const Icon(Icons.bug_report),
                 tooltip: "System Logs",
                 onPressed: _openLogs,
+              ),
+              IconButton(
+                icon: const Icon(Icons.system_update),
+                tooltip: "Check for Updates",
+                onPressed: _checkForUpdate,
               ),
               IconButton(
                 icon: const Icon(Icons.logout),

@@ -15,9 +15,9 @@ class ProductBatchDao {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-    // ✅ Sync main product stock after batch insert
+    // ✅ Sync main product stock AND cost after batch insert
     final productDao = ProductDao(db);
-    await productDao.refreshProductQuantityFromBatches(batch.productId);
+    await productDao.recalculateProductFromBatches(batch.productId);
   }
 
   /// Get all batches by product ID
@@ -62,9 +62,9 @@ class ProductBatchDao {
       whereArgs: [batch.id],
     );
 
-    // ✅ Sync product quantity after batch update
+    // ✅ Sync product quantity AND cost after batch update
     final productDao = ProductDao(db);
-    await productDao.refreshProductQuantityFromBatches(batch.productId);
+    await productDao.recalculateProductFromBatches(batch.productId);
 
     return count;
   }
@@ -247,12 +247,14 @@ class ProductBatchDao {
           "batchId": batch.id,
           "supplierId": batch.supplierId,
           "qty": deductQty,
+          "purchasePrice": batch.purchasePrice, // 👈 Add for weighted avg COGS
         });
       }
 
       remaining -= deductQty;
     }
 
+    // ✅ Update quantity only (not cost) - AVCO cost should remain stable during sales
     final productDao = ProductDao(db);
     await productDao.refreshProductQuantityFromBatches(productId);
 

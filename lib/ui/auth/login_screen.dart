@@ -83,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Icon(Icons.lock_outline, size: 60, color: Colors.blue),
                   const SizedBox(height: 16),
                   const Text(
-                    "Invoice App Login",
+                    "Mian Traders Login",
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 30),

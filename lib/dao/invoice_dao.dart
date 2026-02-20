@@ -19,6 +19,7 @@ class InvoiceDao {
       "discount": invoice.discount,
       "paid": invoice.paid,
       "pending": invoice.pending,
+      "status": invoice.status, // 👈 Persist status field
       "date": invoice.date,
       "created_at": invoice.createdAt,
       "updated_at": invoice.updatedAt,
@@ -97,9 +98,19 @@ class InvoiceDao {
     // Fetch old data
     final oldData = await getById(invoice.id);
 
+    // 🔒 Financial Immutability: Lock financial fields for posted invoices
+    final map = invoice.toMap();
+    if (oldData?.status == 'posted') {
+      map.remove('total');
+      map.remove('discount');
+      map.remove('paid');
+      map.remove('tax');
+      map.remove('status'); // Prevent status change
+    }
+
     final count = await db.update(
       'invoices',
-      invoice.toMap(),
+      map,
       where: 'id = ?',
       whereArgs: [invoice.id],
     );

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import '../models/supplier.dart';
+import '../models/supplier_company.dart';
 import '../utils/unified_print_helper.dart';
 import '../utils/pdf_font_helper.dart';
 import '../services/logger_service.dart';
@@ -13,6 +14,7 @@ class SupplierExportService {
     List<Supplier> suppliers, {
     String? searchKeyword,
     String? companyName,
+    Map<String, String>? companyNames,
     bool? pendingFilter,
     double? minCredit,
     double? maxCredit,
@@ -29,6 +31,7 @@ class SupplierExportService {
       suppliers,
       searchKeyword: searchKeyword,
       companyName: companyName,
+      companyNames: companyNames,
       pendingFilter: pendingFilter,
       minCredit: minCredit,
       maxCredit: maxCredit,
@@ -55,6 +58,7 @@ class SupplierExportService {
     List<Supplier> suppliers, {
     String? searchKeyword,
     String? companyName,
+    Map<String, String>? companyNames,
     bool? pendingFilter,
     double? minCredit,
     double? maxCredit,
@@ -71,6 +75,7 @@ class SupplierExportService {
       suppliers,
       searchKeyword: searchKeyword,
       companyName: companyName,
+      companyNames: companyNames,
       pendingFilter: pendingFilter,
       minCredit: minCredit,
       maxCredit: maxCredit,
@@ -98,6 +103,7 @@ class SupplierExportService {
     List<Supplier> suppliers, {
     String? searchKeyword,
     String? companyName,
+    Map<String, String>? companyNames,
     bool? pendingFilter, // null=all, true=pending, false=paid
     double? minCredit,
     double? maxCredit,
@@ -114,6 +120,7 @@ class SupplierExportService {
       suppliers,
       searchKeyword: searchKeyword,
       companyName: companyName,
+      companyNames: companyNames,
       pendingFilter: pendingFilter,
       minCredit: minCredit,
       maxCredit: maxCredit,
@@ -145,6 +152,7 @@ class SupplierExportService {
     List<Supplier> suppliers, {
     String? searchKeyword,
     String? companyName,
+    Map<String, String>? companyNames,
     bool? pendingFilter,
     double? minCredit,
     double? maxCredit,
@@ -415,7 +423,9 @@ class SupplierExportService {
                       ),
                       _buildDataCell(supplier.phone ?? '-', font: regularFont),
                       _buildDataCell(
-                        supplier.companyId.toString(),
+                        companyNames?[supplier.companyId] ??
+                            supplier.companyId ??
+                            '-',
                         font: regularFont,
                       ),
                       _buildDataCell(
@@ -466,6 +476,308 @@ class SupplierExportService {
                         ),
                         pw.Text(
                           'Total Pending Amount: Rs ${totalPending.toStringAsFixed(2)}',
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
+                        ),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          'Prepared via میاں ٹریڈرز',
+                          textDirection: pw.TextDirection.rtl,
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            color: PdfColors.grey700,
+                            font: regularFont,
+                          ),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          _formatDateTime(now),
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            color: PdfColors.grey700,
+                            font: regularFont,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return await pdf.save();
+  }
+
+  /// Export companies list to PDF
+  Future<void> exportCompaniesToPDF(
+    List<SupplierCompany> companies,
+    Map<String, List<String>> supplierNamesMap,
+  ) async {
+    final pdfBytes = await _generateCompaniesPdf(companies, supplierNamesMap);
+    if (pdfBytes.isEmpty) return;
+
+    await UnifiedPrintHelper.sharePdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Companies_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Print companies list directly
+  Future<void> printCompaniesList(
+    List<SupplierCompany> companies,
+    Map<String, List<String>> supplierNamesMap,
+  ) async {
+    final pdfBytes = await _generateCompaniesPdf(companies, supplierNamesMap);
+    if (pdfBytes.isEmpty) return;
+
+    await UnifiedPrintHelper.printPdfBytes(
+      pdfBytes: pdfBytes,
+      filename: 'Companies_Report_${_formatDate(DateTime.now())}.pdf',
+    );
+  }
+
+  /// Save companies list PDF to file
+  Future<File?> saveCompaniesPdf(
+    List<SupplierCompany> companies,
+    Map<String, List<String>> supplierNamesMap,
+  ) async {
+    final pdfBytes = await _generateCompaniesPdf(companies, supplierNamesMap);
+    if (pdfBytes.isEmpty) return null;
+
+    return await UnifiedPrintHelper.savePdfBytes(
+      pdfBytes: pdfBytes,
+      suggestedName: 'Companies_Report_${_formatDate(DateTime.now())}.pdf',
+      dialogTitle: 'Save Companies Report',
+    );
+  }
+
+  Future<Uint8List> _generateCompaniesPdf(
+    List<SupplierCompany> companies,
+    Map<String, List<String>> supplierNamesMap,
+  ) async {
+    if (companies.isEmpty) return Uint8List(0);
+
+    final pdf = pw.Document();
+    final now = DateTime.now();
+
+    // Load fonts
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    final totalSuppliers = supplierNamesMap.values.fold(
+      0,
+      (sum, list) => sum + list.length,
+    );
+    final avgSuppliers = companies.isEmpty
+        ? 0.0
+        : totalSuppliers / companies.length;
+
+    const itemsPerPage = 20;
+    final totalPages = (companies.length / itemsPerPage).ceil();
+
+    for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+      final startIndex = pageIndex * itemsPerPage;
+      final endIndex = (startIndex + itemsPerPage > companies.length)
+          ? companies.length
+          : startIndex + itemsPerPage;
+      final pageCompanies = companies.sublist(startIndex, endIndex);
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(24),
+          build: (context) => [
+            // Header
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                gradient: const pw.LinearGradient(
+                  colors: [PdfColors.indigo700, PdfColors.indigo900],
+                ),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Companies Report',
+                        style: pw.TextStyle(
+                          fontSize: 24,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                          font: boldFont,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Page ${pageIndex + 1} of $totalPages',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.white,
+                          font: regularFont,
+                        ),
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Generated: ${_formatDateTime(now)}',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          color: PdfColors.white,
+                          font: regularFont,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Total Companies: ${companies.length}',
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                          font: boldFont,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // Summary Cards (First Page Only)
+            if (pageIndex == 0) ...[
+              pw.Row(
+                children: [
+                  _buildSummaryCard(
+                    'Total Companies',
+                    '${companies.length}',
+                    PdfColors.indigo,
+                    regularFont,
+                    boldFont,
+                  ),
+                  pw.SizedBox(width: 12),
+                  _buildSummaryCard(
+                    'Total Suppliers',
+                    '$totalSuppliers',
+                    PdfColors.green700,
+                    regularFont,
+                    boldFont,
+                  ),
+                  pw.SizedBox(width: 12),
+                  _buildSummaryCard(
+                    'Avg. Suppliers',
+                    avgSuppliers.toStringAsFixed(1),
+                    PdfColors.blue700,
+                    regularFont,
+                    boldFont,
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 24),
+            ],
+
+            // Data Table
+            pw.Table(
+              border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(0.5), // #
+                1: const pw.FlexColumnWidth(2.5), // Company Name
+                2: const pw.FlexColumnWidth(2.5), // Contact Details
+                3: const pw.FlexColumnWidth(4), // Suppliers
+                4: const pw.FlexColumnWidth(0.8), // Count
+              },
+              children: [
+                // Header Row
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.indigo50),
+                  children: [
+                    _buildHeaderCell('#', boldFont),
+                    _buildHeaderCell('Company Name', boldFont),
+                    _buildHeaderCell('Contact Info', boldFont),
+                    _buildHeaderCell('Suppliers', boldFont),
+                    _buildHeaderCell('Cnt', boldFont),
+                  ],
+                ),
+                // Data Rows
+                ...pageCompanies.asMap().entries.map((entry) {
+                  final index = startIndex + entry.key;
+                  final company = entry.value;
+                  final suppliers = supplierNamesMap[company.id] ?? [];
+                  final isEven = index % 2 == 0;
+
+                  return pw.TableRow(
+                    decoration: pw.BoxDecoration(
+                      color: isEven ? PdfColors.white : PdfColors.grey50,
+                    ),
+                    children: [
+                      _buildDataCell((index + 1).toString(), font: regularFont),
+                      _buildDataCell(company.name, bold: true, font: boldFont),
+                      _buildDataCell(
+                        '${company.phone ?? "-"}\n${company.address ?? "-"}',
+                        font: regularFont,
+                      ),
+                      _buildDataCell(
+                        suppliers.isEmpty
+                            ? 'No suppliers'
+                            : suppliers.join(', '),
+                        font: regularFont,
+                      ),
+                      _buildDataCell(
+                        suppliers.length.toString(),
+                        font: regularFont,
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ),
+
+            pw.SizedBox(height: 20),
+
+            // Footer (Only on last page)
+            if (pageIndex == totalPages - 1) ...[
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(8),
+                  color: PdfColors.grey50,
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'Company Report Summary',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                            font: boldFont,
+                          ),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          'Total Companies: ${companies.length}',
+                          style: pw.TextStyle(fontSize: 10, font: regularFont),
+                        ),
+                        pw.Text(
+                          'Total Suppliers: $totalSuppliers',
                           style: pw.TextStyle(fontSize: 10, font: regularFont),
                         ),
                       ],

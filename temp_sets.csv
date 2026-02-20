@@ -1,0 +1,8 @@
+#TYPE Selected.Microsoft.PowerShell.Commands.MatchInfo
+"LineNumber","Line","Path"
+"58","  final Set<String> _expandedProductIds = {};","C:\Users\User\Desktop\Projects_folder\Flutter\invoice_app\lib\ui\product_frame.dart"
+"78","  Widget _buildExpandedContent(Set<String> categories, List<Expense> expenses) {","C:\Users\User\Desktop\Projects_folder\Flutter\invoice_app\lib\ui\expense\expense_insights_card.dart"
+"210","                      onSelectionChanged: (Set<bool> sel) {","C:\Users\User\Desktop\Projects_folder\Flutter\invoice_app\lib\ui\settings\invoice_customization_screen.dart"
+"508","              onSelectionChanged: (Set<String> newSelection) {","C:\Users\User\Desktop\Projects_folder\Flutter\invoice_app\lib\ui\settings\printer_settings_screen.dart"
+"157","  final Set<String> _selectedPermissions = {};","C:\Users\User\Desktop\Projects_folder\Flutter\invoice_app\lib\ui\settings\user_management_screen.dart"
+r

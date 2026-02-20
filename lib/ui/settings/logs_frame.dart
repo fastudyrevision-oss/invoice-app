@@ -233,7 +233,7 @@ class _LogsFrameState extends State<LogsFrame> {
             Container(
               height: 100,
               padding: const EdgeInsets.all(8),
-              color: Colors.blue.withOpacity(0.1),
+              color: Colors.blue.withValues(alpha: 0.1),
               child: LogPerformanceView(
                 metrics: _logger.getPerformanceMetrics(),
               ),
@@ -255,7 +255,7 @@ class _LogsFrameState extends State<LogsFrame> {
                       vertical: 8,
                     ),
                     color: log.level.index >= LogLevel.error.index
-                        ? Colors.red.withOpacity(0.05)
+                        ? Colors.red.withValues(alpha: 0.05)
                         : null,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

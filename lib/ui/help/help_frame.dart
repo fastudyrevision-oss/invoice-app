@@ -201,6 +201,90 @@ class _HelpFrameState extends State<HelpFrame> {
           ),
         ],
       ),
+      HelpTopic(
+        title: "اردو گائیڈ (Urdu User Guide)",
+        icon: Icons.language,
+        isRtl: true,
+        children: [
+          HelpItem(
+            title: "پراڈکٹس (Products) بنانا",
+            content:
+                "پراڈکٹس شامل کرنے کے لیے 'Products' ٹیب میں جائیں اور '+' بٹن دبائیں۔ نام، قیمت اور موجودہ اسٹاک درج کریں۔ نیا اسٹاک صرف 'Purchases' کے ذریعے شامل کریں تاکہ حساب درست رہے۔",
+          ),
+          HelpItem(
+            title: "گاہک (Customers) کا اندراج",
+            content:
+                "اپنے گاہکوں کا اندراج 'Customers' ٹیب میں کریں۔ یہاں آپ ان کے ذمے بقایا رقم اور ادائیگیوں کی تفصیلات بھی دیکھ سکتے ہیں۔",
+          ),
+          HelpItem(
+            title: "سپلائرز (Suppliers) اور کمپنیاں",
+            content:
+                "جن سپلائرز سے آپ مال خریدتے ہیں ان کا اندراج 'Suppliers' ٹیب میں کریں۔ ہر سپلائر کے ساتھ کمپنی کا نام بھی منسلک کیا جا سکتا ہے۔",
+          ),
+          HelpItem(
+            title: "خریداری (Purchases) کا عمل",
+            content:
+                "جب آپ مال خریدیں تو 'Purchases' اسکرین میں جا کر سپلائر منتخب کریں اور اشیاء شامل کریں۔ اس سے پراڈکٹس کا اسٹاک خود بخود بڑھ جائے گا۔",
+          ),
+          HelpItem(
+            title: "آرڈرز اور سیلز (Orders)",
+            content:
+                "سیل کرنے کے لیے 'Orders' میں جا کر '+' بٹن دبائیں، گاہک اور اشیاء منتخب کریں اور 'Save' کریں۔ اسٹاک خود بخود کم ہو جائے گا اور ریکارڈ محفوظ ہو جائے گا۔",
+          ),
+          HelpItem(
+            title: "ادائیگیاں (Payments) ریکارڈ کرنا",
+            content:
+                "گاہکوں سے موصول ہونے والی رقم یا سپلائرز کو دی گئی رقم کے لیے متعلقہ 'Payments' سیکشن استعمال کریں۔ اس سے لیجر بیلنس اپ ڈیٹ ہو جاتا ہے۔",
+          ),
+          HelpItem(
+            title: "پرنٹنگ گائیڈ (Printing)",
+            content:
+                "رسید پرنٹ کرنے کے لیے Settings میں جا کر پرنٹر کنفیگر کریں۔ بلوٹوتھ یا نیٹ ورک پرنٹر کے لیے IP ایڈریس یا ڈیوائس منتخب کریں۔ آرڈر مکمل ہونے پر تھرمل پرنٹ کا بٹن دبائیں۔",
+          ),
+          HelpItem(
+            title: "نفع اور نقصان (Profit & Loss)",
+            content:
+                "اپنے کاروبار کی کارکردگی دیکھنے کے لیے 'Reports' سیکشن میں جائیں۔ یہاں آپ مخصوص تاریخوں کے درمیان کل سیل، اخراجات اور خالص نفع دیکھ سکتے ہیں۔",
+          ),
+          HelpItem(
+            title: "اسٹاک رپورٹ (Stock Report)",
+            content:
+                "کون سا مال کتنا باقی ہے اور اس کی کل مالیت کیا ہے، یہ دیکھنے کے لیے 'Stock' رپورٹ دیکھیں۔ آپ اسے PDF یا Excel میں ایکسپورٹ بھی کر سکتے ہیں۔",
+          ),
+          HelpItem(
+            title: "بیک اپ اور ریسٹور (Backup/Restore)",
+            content:
+                "ڈیٹا کی حفاظت کے لیے روزانہ 'Backup Online' کا بٹن دبائیں۔ موبائل گم ہونے یا بدلنے کی صورت میں 'Restore Online' کے ذریعے اپنا ڈیٹا واپس لایا جا سکتا ہے۔",
+          ),
+        ],
+      ),
+      HelpTopic(
+        title: "اردو احتیاطی تدابیر (Critical Cautions)",
+        icon: Icons.gpp_maybe,
+        isRtl: true,
+        children: [
+          HelpItem(
+            title: "ڈیٹا ڈیلیٹ کرنا (Deleting)",
+            content:
+                "⚠️ **خبردار**: کسی بھی پراڈکٹ، سپلائر یا آرڈر کو ڈیلیٹ کرنے سے پہلے اچھی طرح سوچ لیں۔ ڈیلیٹ کردہ ریکارڈ اکاؤنٹنگ میں فرق پیدا کر سکتا ہے۔ اہم ڈیٹا ڈیلیٹ کرنے سے پہلے ہم سے رابطہ کریں۔",
+          ),
+          HelpItem(
+            title: "بیک اپ کی اہمیت",
+            content:
+                "⚠️ **ضروری**: ایپ ڈیلیٹ کرنے یا فون تبدیل کرنے سے پہلے 'Cloud Backup' لازمی کریں۔ بیک اپ کے بغیر ڈیٹا واپس نہیں مل سکے گا۔",
+          ),
+          HelpItem(
+            title: "اسٹاک میں خودکار تبدیلی",
+            content:
+                "⚠️ **توجہ**: پراڈکٹ کا اسٹاک خود مینوئلی تبدیل کرنے کے بجائے خریداری (Purchase) اور سیل (Order) کے ذریعے مینیج کریں ورنہ منافع کا حساب غلط ہو سکتا ہے۔",
+          ),
+          HelpItem(
+            title: "ٹیکنیکل سپورٹ",
+            content:
+                "ایپ میں کسی بھی قسم کی خرابی یا مشکل کی صورت میں خود تجربات کرنے کے بجائے فوری طور پر ڈیویلپر سے رابطہ کریں تاکہ ڈیٹا ضائع نہ ہو۔",
+          ),
+        ],
+      ),
     ];
   }
 
@@ -276,7 +360,7 @@ class _HelpFrameState extends State<HelpFrame> {
                           leading: CircleAvatar(
                             backgroundColor: Theme.of(
                               context,
-                            ).primaryColor.withOpacity(0.1),
+                            ).primaryColor.withValues(alpha: 0.1),
                             child: Icon(
                               topic.icon,
                               color: Theme.of(context).primaryColor,
@@ -284,6 +368,9 @@ class _HelpFrameState extends State<HelpFrame> {
                           ),
                           title: Text(
                             topic.title,
+                            textAlign: topic.isRtl
+                                ? TextAlign.right
+                                : TextAlign.left,
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           initiallyExpanded: _searchQuery.isNotEmpty,
@@ -311,6 +398,9 @@ class _HelpFrameState extends State<HelpFrame> {
                             return ListTile(
                               title: Text(
                                 item.title,
+                                textAlign: topic.isRtl
+                                    ? TextAlign.right
+                                    : TextAlign.left,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
@@ -318,7 +408,12 @@ class _HelpFrameState extends State<HelpFrame> {
                               ),
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
-                                child: Text(item.content),
+                                child: Text(
+                                  item.content,
+                                  textAlign: topic.isRtl
+                                      ? TextAlign.right
+                                      : TextAlign.left,
+                                ),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 24,
@@ -341,8 +436,16 @@ class HelpTopic {
   final String title;
   final IconData icon;
   final List<HelpItem> children;
+  final bool? _isRtl;
 
-  HelpTopic({required this.title, required this.icon, required this.children});
+  bool get isRtl => _isRtl ?? false;
+
+  HelpTopic({
+    required this.title,
+    required this.icon,
+    required this.children,
+    bool? isRtl,
+  }) : _isRtl = isRtl;
 }
 
 class HelpItem {

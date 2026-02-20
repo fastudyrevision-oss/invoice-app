@@ -21,11 +21,13 @@ import '../models/product_batch.dart';
 
 enum ProductSortOption { name, quantity, costPrice, sellPrice }
 
+enum ProductViewMode { table, compact, card }
+
 class ProductFrame extends StatefulWidget {
   const ProductFrame({super.key});
 
   @override
-  _ProductFrameState createState() => _ProductFrameState();
+  State<ProductFrame> createState() => _ProductFrameState();
 }
 
 class _ProductFrameState extends State<ProductFrame> {
@@ -46,10 +48,12 @@ class _ProductFrameState extends State<ProductFrame> {
   Category? _selectedCategory;
   Supplier? _selectedSupplier;
   bool _lowStockOnly = false;
+  bool _showArchived = false;
   ProductSortOption _sortOption = ProductSortOption.name;
 
   bool _isAscending = true; // Added for sort direction
   bool _loadAll = false; // Added for "Load All" feature
+  ProductViewMode _viewMode = ProductViewMode.table;
 
   Map<String, dynamic>? _overallStats; // Added for dashboard stats
 
@@ -173,6 +177,7 @@ class _ProductFrameState extends State<ProductFrame> {
         onlyLowStock: _lowStockOnly,
         orderBy: _sortOption.name,
         isAscending: _isAscending,
+        includeDeleted: _showArchived,
       );
 
       if (mounted) {
@@ -514,6 +519,7 @@ class _ProductFrameState extends State<ProductFrame> {
                     await _repo.updateProduct(newProduct);
                   }
 
+                  if (!mounted) return;
                   Navigator.pop(context);
                   _resetPagination();
                 }
@@ -606,6 +612,93 @@ class _ProductFrameState extends State<ProductFrame> {
     }
   }
 
+  void _showInsightsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Product Insights",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: ProductInsightsCard(
+                      products: _products,
+                      stats: _overallStats,
+                      loading: false,
+                      lastUpdated: DateTime.now(),
+                      categoriesCount: _categories
+                          .where((c) => c.id != 'all')
+                          .length,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _viewModeIcon() {
+    switch (_viewMode) {
+      case ProductViewMode.table:
+        return Icons.table_chart;
+      case ProductViewMode.compact:
+        return Icons.view_list;
+      case ProductViewMode.card:
+        return Icons.view_agenda;
+    }
+  }
+
+  void _cycleViewMode() {
+    setState(() {
+      switch (_viewMode) {
+        case ProductViewMode.table:
+          _viewMode = ProductViewMode.compact;
+          break;
+        case ProductViewMode.compact:
+          _viewMode = ProductViewMode.card;
+          break;
+        case ProductViewMode.card:
+          _viewMode = ProductViewMode.table;
+          break;
+      }
+    });
+  }
+
+  String _viewModeLabel() {
+    switch (_viewMode) {
+      case ProductViewMode.table:
+        return 'Table';
+      case ProductViewMode.compact:
+        return 'Compact';
+      case ProductViewMode.card:
+        return 'Card';
+    }
+  }
+
   Future<void> _showSettingsDialog() async {
     final prefs = PreferencesService.instance;
     bool includeExpired = await prefs.getIncludeExpiredInOrders();
@@ -665,6 +758,16 @@ class _ProductFrameState extends State<ProductFrame> {
             elevation: 0,
             actions: isMobile
                 ? [
+                    IconButton(
+                      icon: Icon(_viewModeIcon()),
+                      tooltip: 'View: ${_viewModeLabel()}',
+                      onPressed: _cycleViewMode,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.insights),
+                      tooltip: 'Insights',
+                      onPressed: _showInsightsDialog,
+                    ),
                     IconButton(
                       onPressed: () => _showAddEditProductDialog(),
                       icon: const Icon(Icons.add_circle),
@@ -742,7 +845,26 @@ class _ProductFrameState extends State<ProductFrame> {
                     ),
                   ]
                 : [
-                    const SizedBox(width: 10),
+                    // View toggle
+                    Tooltip(
+                      message: 'View: ${_viewModeLabel()}',
+                      child: TextButton.icon(
+                        icon: Icon(_viewModeIcon(), size: 20),
+                        label: Text(_viewModeLabel()),
+                        onPressed: _cycleViewMode,
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).appBarTheme.foregroundColor ??
+                              Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.insights),
+                      tooltip: 'Insights',
+                      onPressed: _showInsightsDialog,
+                    ),
                     IconButton(
                       icon: Icon(_loadAll ? Icons.pages : Icons.speed),
                       tooltip: _loadAll ? 'Paged Mode' : 'Load All Mode',
@@ -792,8 +914,11 @@ class _ProductFrameState extends State<ProductFrame> {
 
             bottom: PreferredSize(
               preferredSize: Size.fromHeight(
-                isMobile ? 220 : 160,
-              ), // Adjusted for proper spacing
+                ResponsiveUtils.getAppBarBottomHeight(
+                  context,
+                  baseHeight: isMobile ? 220 : 160,
+                ),
+              ),
               child: Container(
                 color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
                 child: Column(
@@ -949,14 +1074,36 @@ class _ProductFrameState extends State<ProductFrame> {
                           FilterChip(
                             label: const Text("Low Stock"),
                             selected: _lowStockOnly,
-                            onSelected: _onLowStockChanged,
-                            selectedColor: Colors.red.shade100,
-                            checkmarkColor: Colors.red,
+                            onSelected: (selected) =>
+                                _onLowStockChanged(selected),
+                            selectedColor: Colors.orange.shade100,
+                            checkmarkColor: Colors.orange,
                             labelStyle: TextStyle(
                               color: _lowStockOnly
-                                  ? Colors.red[900]
+                                  ? Colors.orange[900]
                                   : Colors.black,
                               fontWeight: _lowStockOnly
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: const Text("Archived"),
+                            selected: _showArchived,
+                            onSelected: (selected) {
+                              setState(() {
+                                _showArchived = selected;
+                                _resetPagination();
+                              });
+                            },
+                            selectedColor: Colors.grey.shade300,
+                            checkmarkColor: Colors.grey[800],
+                            labelStyle: TextStyle(
+                              color: _showArchived
+                                  ? Colors.black
+                                  : Colors.black87,
+                              fontWeight: _showArchived
                                   ? FontWeight.bold
                                   : FontWeight.normal,
                             ),
@@ -1018,700 +1165,666 @@ class _ProductFrameState extends State<ProductFrame> {
           ),
           body: _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  children: [
-                    // Product Insights Card
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: ProductInsightsCard(
-                        products: _products,
-                        stats: _overallStats,
-                        loading: false,
-                        lastUpdated: DateTime.now(),
-                        categoriesCount: _categories
-                            .where((c) => c.id != 'all')
-                            .length,
+              : _buildBody(),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody() {
+    final displayedProducts = _products;
+    if (displayedProducts.isEmpty && !_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              "No products found",
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+            if (_searchQuery.isNotEmpty || _selectedCategory != null)
+              TextButton(
+                onPressed: () {
+                  _searchController.clear();
+                  _onSearchChanged('');
+                  _onCategoryChanged(null);
+                },
+                child: const Text("Clear Filters"),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        _resetPagination();
+        await Future.delayed(const Duration(milliseconds: 500));
+      },
+      child: _viewMode == ProductViewMode.table
+          ? _buildTableView()
+          : ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: displayedProducts.length + (_hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index >= displayedProducts.length) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final p = displayedProducts[index];
+                if (_viewMode == ProductViewMode.compact) {
+                  return _buildCompactItem(p);
+                }
+                return _buildCardItem(p);
+              },
+            ),
+    );
+  }
+
+  Widget _buildTableView() {
+    final displayedProducts = _products;
+    return Scrollbar(
+      controller: _scrollController,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columnSpacing: 24,
+            headingRowHeight: 40,
+            dataRowMaxHeight: 56,
+            columns: const [
+              DataColumn(label: Text("NAME")),
+              DataColumn(label: Text("CATEGORY")),
+              DataColumn(label: Text("SUPPLIER")),
+              DataColumn(label: Text("STOCK")),
+              DataColumn(label: Text("COST")),
+              DataColumn(label: Text("SELL")),
+              DataColumn(label: Text("ACTIONS")),
+            ],
+            rows: displayedProducts.map((p) {
+              final isLowStock = p.quantity <= p.minStock;
+              final category = _categories.firstWhere(
+                (c) => c.id == p.categoryId,
+                orElse: () => Category(
+                  id: "0",
+                  name: "Uncategorized",
+                  createdAt: DateTime.now().toIso8601String(),
+                  updatedAt: DateTime.now().toIso8601String(),
+                ),
+              );
+              final supplier = _suppliers.firstWhere(
+                (s) => s.id == p.supplierId,
+                orElse: () => Supplier(
+                  id: "0",
+                  name: "Unlinked",
+                  phone: null,
+                  address: null,
+                  createdAt: "",
+                  updatedAt: "",
+                ),
+              );
+              return DataRow(
+                cells: [
+                  DataCell(
+                    Text(
+                      p.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  DataCell(Text(category.name)),
+                  DataCell(Text(supplier.name)),
+                  DataCell(
+                    Text(
+                      "${p.quantity} ${p.defaultUnit}",
+                      style: TextStyle(
+                        color: isLowStock ? Colors.red : Colors.black,
+                        fontWeight: isLowStock
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
+                  ),
+                  DataCell(Text("Rs ${p.costPrice.toStringAsFixed(0)}")),
+                  DataCell(Text("Rs ${p.sellPrice.toStringAsFixed(0)}")),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blue,
+                            size: 18,
+                          ),
+                          onPressed: () => _showAddEditProductDialog(p),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                            size: 18,
+                          ),
+                          onPressed: () => _archiveProduct(p),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
 
-                    // Product List
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          _resetPagination();
-                          await Future.delayed(
-                            const Duration(milliseconds: 500),
-                          );
-                        },
-                        child: displayedProducts.isEmpty && !_isLoading
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_outlined,
-                                      size: 64,
-                                      color: Colors.grey[300],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      "No products found",
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    if (_searchQuery.isNotEmpty ||
-                                        _selectedCategory != null)
-                                      TextButton(
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          _onSearchChanged('');
-                                          _onCategoryChanged(null);
-                                        },
-                                        child: const Text("Clear Filters"),
-                                      ),
-                                  ],
-                                ),
-                              )
-                            : ListView.builder(
-                                controller: _scrollController,
-                                padding: const EdgeInsets.only(bottom: 80),
-                                itemCount:
-                                    displayedProducts.length +
-                                    (_hasMore ? 1 : 0),
-                                itemBuilder: (context, index) {
-                                  if (index >= displayedProducts.length) {
-                                    return const Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 16,
-                                      ),
-                                      child: Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                    );
-                                  }
+  Widget _buildCompactItem(Product p) {
+    final isLowStock = p.quantity <= p.minStock;
+    final category = _categories.firstWhere(
+      (c) => c.id == p.categoryId,
+      orElse: () => Category(
+        id: "0",
+        name: "Uncategorized",
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
 
-                                  final p = displayedProducts[index];
-                                  final supplier = _suppliers.firstWhere(
-                                    (s) => s.id == p.supplierId,
-                                    orElse: () => Supplier(
-                                      id: "0",
-                                      name: "Unlinked",
-                                      phone: null,
-                                      address: null,
-                                      createdAt: "",
-                                      updatedAt: "",
-                                    ),
-                                  );
-                                  final category = _categories.firstWhere(
-                                    (c) => c.id == p.categoryId,
-                                    orElse: () => Category(
-                                      id: "0",
-                                      name: "Uncategorized",
-                                      createdAt: DateTime.now()
-                                          .toIso8601String(),
-                                      updatedAt: DateTime.now()
-                                          .toIso8601String(),
-                                    ),
-                                  );
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        backgroundColor: Colors.blue.shade50,
+        child: Text(
+          p.name[0].toUpperCase(),
+          style: TextStyle(color: Colors.blue.shade900),
+        ),
+      ),
+      title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text("${category.name} | Rs ${p.sellPrice.toStringAsFixed(0)}"),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            "${p.quantity} ${p.defaultUnit}",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isLowStock ? Colors.red : Colors.blue,
+            ),
+          ),
+          _buildCompactActions(p),
+        ],
+      ),
+      onTap: () => _showAddEditProductDialog(p),
+    );
+  }
 
-                                  final isLowStock = p.quantity <= p.minStock;
-                                  final profit = p.sellPrice - p.costPrice;
-                                  final profitPercent = p.costPrice > 0
-                                      ? (profit / p.costPrice) * 100
-                                      : 0.0;
+  Widget _buildCompactActions(Product p) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () => _showAddEditProductDialog(p),
+          child: const Icon(Icons.edit, size: 16, color: Colors.blue),
+        ),
+        const SizedBox(width: 12),
+        InkWell(
+          onTap: () => _archiveProduct(p),
+          child: const Icon(Icons.delete, size: 16, color: Colors.red),
+        ),
+      ],
+    );
+  }
 
-                                  return Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.grey.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          spreadRadius: 1,
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ],
-                                      border: Border.all(
-                                        color: isLowStock
-                                            ? Colors.red.shade200
-                                            : Colors.transparent,
-                                        width: isLowStock ? 1.5 : 0,
-                                      ),
-                                    ),
-                                    child: InkWell(
-                                      onTap: () => _toggleExpansion(p.id),
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          // Status Strip
-                                          if (isLowStock)
-                                            Container(
-                                              width: double.infinity,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 4,
-                                                    horizontal: 12,
-                                                  ),
-                                              color: Colors.red.shade50,
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.warning_amber_rounded,
-                                                    size: 16,
-                                                    color: Colors.red.shade700,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    "Low Stock Alert",
-                                                    style: TextStyle(
-                                                      color:
-                                                          Colors.red.shade900,
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
+  Future<void> _archiveProduct(Product p) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Archive Product?"),
+        content: Text("Are you sure you want to archive '${p.name}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Archive"),
+          ),
+        ],
+      ),
+    );
 
-                                          Padding(
-                                            padding: const EdgeInsets.all(16),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                // Header: Name & SKU
-                                                Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Icon(
-                                                      _expandedProductIds
-                                                              .contains(p.id)
-                                                          ? Icons.expand_less
-                                                          : Icons.expand_more,
-                                                      size: 20,
-                                                      color: Colors.grey,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Text(
-                                                            p.name,
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontSize: 18,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  color: Colors
-                                                                      .black87,
-                                                                ),
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 4,
-                                                          ),
-                                                          Text(
-                                                            "SKU: ${p.sku}",
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: Colors
-                                                                  .grey[600],
-                                                              fontFamily:
-                                                                  'Monospace',
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    // Actions
-                                                    Row(
-                                                      children: [
-                                                        IconButton(
-                                                          icon: const Icon(
-                                                            Icons.edit_outlined,
-                                                            color: Colors.blue,
-                                                          ),
-                                                          onPressed: () =>
-                                                              _showAddEditProductDialog(
-                                                                p,
-                                                              ),
-                                                          tooltip: 'Edit',
-                                                        ),
-                                                        IconButton(
-                                                          icon: const Icon(
-                                                            Icons
-                                                                .delete_outline,
-                                                            color: Colors.red,
-                                                          ),
-                                                          onPressed: () async {
-                                                            // Confirm delete
-                                                            final confirm = await showDialog<bool>(
-                                                              context: context,
-                                                              builder: (ctx) => AlertDialog(
-                                                                title: const Text(
-                                                                  "Delete Product?",
-                                                                ),
-                                                                content: Text(
-                                                                  "Are you sure you want to delete '${p.name}'?",
-                                                                ),
-                                                                actions: [
-                                                                  TextButton(
-                                                                    onPressed: () =>
-                                                                        Navigator.pop(
-                                                                          ctx,
-                                                                          false,
-                                                                        ),
-                                                                    child: const Text(
-                                                                      "Cancel",
-                                                                    ),
-                                                                  ),
-                                                                  ElevatedButton(
-                                                                    style: ElevatedButton.styleFrom(
-                                                                      backgroundColor:
-                                                                          Colors
-                                                                              .red,
-                                                                      foregroundColor:
-                                                                          Colors
-                                                                              .white,
-                                                                    ),
-                                                                    onPressed: () =>
-                                                                        Navigator.pop(
-                                                                          ctx,
-                                                                          true,
-                                                                        ),
-                                                                    child: const Text(
-                                                                      "Delete",
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            );
+    if (confirm == true) {
+      await _repo.deleteProduct(p.id);
+      _resetPagination();
+    }
+  }
 
-                                                            if (confirm ==
-                                                                true) {
-                                                              await _repo
-                                                                  .deleteProduct(
-                                                                    p.id,
-                                                                  );
-                                                              _resetPagination();
-                                                            }
-                                                          },
-                                                          tooltip: 'Delete',
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
+  Widget _buildCardItem(Product p) {
+    final isMobile = ResponsiveUtils.isMobile(context);
 
-                                                const SizedBox(height: 12),
+    final isLowStock = p.quantity <= p.minStock;
+    final profit = p.sellPrice - p.costPrice;
+    final profitPercent = p.costPrice > 0 ? (profit / p.costPrice) * 100 : 0.0;
+    final category = _categories.firstWhere(
+      (c) => c.id == p.categoryId,
+      orElse: () => Category(
+        id: "0",
+        name: "Uncategorized",
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+      ),
+    );
+    final supplier = _suppliers.firstWhere(
+      (s) => s.id == p.supplierId,
+      orElse: () => Supplier(
+        id: "0",
+        name: "Unlinked",
+        phone: null,
+        address: null,
+        createdAt: "",
+        updatedAt: "",
+      ),
+    );
 
-                                                // Chips: Category & Supplier
-                                                Wrap(
-                                                  spacing: 8,
-                                                  runSpacing: 8,
-                                                  children: [
-                                                    Chip(
-                                                      avatar: const Icon(
-                                                        Icons.category_outlined,
-                                                        size: 16,
-                                                      ),
-                                                      label: Text(
-                                                        category.name,
-                                                      ),
-                                                      backgroundColor:
-                                                          Colors.blue.shade50,
-                                                      labelStyle: TextStyle(
-                                                        color: Colors
-                                                            .blue
-                                                            .shade900,
-                                                        fontSize: 12,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            0,
-                                                          ),
-                                                      visualDensity:
-                                                          VisualDensity.compact,
-                                                    ),
-                                                    Chip(
-                                                      avatar: const Icon(
-                                                        Icons.store_outlined,
-                                                        size: 16,
-                                                      ),
-                                                      label: Text(
-                                                        supplier.name,
-                                                      ),
-                                                      backgroundColor:
-                                                          Colors.orange.shade50,
-                                                      labelStyle: TextStyle(
-                                                        color: Colors
-                                                            .orange
-                                                            .shade900,
-                                                        fontSize: 12,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            0,
-                                                          ),
-                                                      visualDensity:
-                                                          VisualDensity.compact,
-                                                    ),
-                                                    if (p.trackExpiry)
-                                                      Chip(
-                                                        avatar: const Icon(
-                                                          Icons.access_time,
-                                                          size: 16,
-                                                        ),
-                                                        label: const Text(
-                                                          "Expiry Tracked",
-                                                        ),
-                                                        backgroundColor: Colors
-                                                            .purple
-                                                            .shade50,
-                                                        labelStyle: TextStyle(
-                                                          color: Colors
-                                                              .purple
-                                                              .shade900,
-                                                          fontSize: 12,
-                                                        ),
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              0,
-                                                            ),
-                                                        visualDensity:
-                                                            VisualDensity
-                                                                .compact,
-                                                      ),
-                                                  ],
-                                                ),
-
-                                                const SizedBox(height: 16),
-                                                const Divider(),
-                                                const SizedBox(height: 8),
-
-                                                // Metrics Grid
-                                                // Metrics Grid
-                                                isMobile
-                                                    ? Column(
-                                                        children: [
-                                                          Row(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            children: [
-                                                              _buildMetricColumn(
-                                                                "Cost",
-                                                                "Rs ${p.costPrice.toStringAsFixed(0)}",
-                                                                Colors
-                                                                    .grey
-                                                                    .shade700,
-                                                              ),
-                                                              _buildMetricColumn(
-                                                                "Sell",
-                                                                "Rs ${p.sellPrice.toStringAsFixed(0)}",
-                                                                Colors.black87,
-                                                                isBold: true,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 12,
-                                                          ),
-                                                          Row(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            children: [
-                                                              _buildMetricColumn(
-                                                                "Profit",
-                                                                "Rs ${profit.toStringAsFixed(0)}",
-                                                                profit > 0
-                                                                    ? Colors
-                                                                          .green
-                                                                          .shade700
-                                                                    : Colors
-                                                                          .red
-                                                                          .shade700,
-                                                                subtext:
-                                                                    "(${profitPercent.toStringAsFixed(0)}%)",
-                                                              ),
-                                                              _buildMetricColumn(
-                                                                "Stock",
-                                                                "${p.quantity} ${p.defaultUnit}",
-                                                                isLowStock
-                                                                    ? Colors
-                                                                          .red
-                                                                          .shade700
-                                                                    : Colors
-                                                                          .blue
-                                                                          .shade700,
-                                                                isBold: true,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      )
-                                                    : Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          _buildMetricColumn(
-                                                            "Cost",
-                                                            "Rs ${p.costPrice.toStringAsFixed(0)}",
-                                                            Colors
-                                                                .grey
-                                                                .shade700,
-                                                          ),
-                                                          _buildMetricColumn(
-                                                            "Sell",
-                                                            "Rs ${p.sellPrice.toStringAsFixed(0)}",
-                                                            Colors.black87,
-                                                            isBold: true,
-                                                          ),
-                                                          _buildMetricColumn(
-                                                            "Profit",
-                                                            "Rs ${profit.toStringAsFixed(0)}",
-                                                            profit > 0
-                                                                ? Colors
-                                                                      .green
-                                                                      .shade700
-                                                                : Colors
-                                                                      .red
-                                                                      .shade700,
-                                                            subtext:
-                                                                "(${profitPercent.toStringAsFixed(0)}%)",
-                                                          ),
-                                                          Container(
-                                                            width: 1,
-                                                            height: 30,
-                                                            color: Colors
-                                                                .grey
-                                                                .shade300,
-                                                          ),
-                                                          _buildMetricColumn(
-                                                            "Stock",
-                                                            "${p.quantity} ${p.defaultUnit}",
-                                                            isLowStock
-                                                                ? Colors
-                                                                      .red
-                                                                      .shade700
-                                                                : Colors
-                                                                      .blue
-                                                                      .shade700,
-                                                            isBold: true,
-                                                          ),
-                                                        ],
-                                                      ),
-                                              ],
-                                            ),
-                                          ),
-                                          // Expandable Batch Section
-                                          if (_expandedProductIds.contains(
-                                            p.id,
-                                          )) ...[
-                                            const Divider(height: 1),
-                                            Container(
-                                              width: double.infinity,
-                                              padding: const EdgeInsets.all(16),
-                                              color: Colors.grey.shade50,
-                                              child:
-                                                  _loadingBatches[p.id] == true
-                                                  ? const Center(
-                                                      child: Padding(
-                                                        padding: EdgeInsets.all(
-                                                          8.0,
-                                                        ),
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
-                                                      ),
-                                                    )
-                                                  : _batchesCache[p.id] ==
-                                                            null ||
-                                                        _batchesCache[p.id]!
-                                                            .isEmpty
-                                                  ? const Text(
-                                                      "No batch information available",
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    )
-                                                  : Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .spaceBetween,
-                                                          children: [
-                                                            const Text(
-                                                              "Batch Breakdown",
-                                                              style: TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                fontSize: 13,
-                                                              ),
-                                                            ),
-                                                            Text(
-                                                              "${_batchesCache[p.id]!.length} Batches",
-                                                              style: TextStyle(
-                                                                fontSize: 11,
-                                                                color: Colors
-                                                                    .grey
-                                                                    .shade600,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 12,
-                                                        ),
-                                                        SingleChildScrollView(
-                                                          scrollDirection:
-                                                              Axis.horizontal,
-                                                          child: Theme(
-                                                            data:
-                                                                Theme.of(
-                                                                  context,
-                                                                ).copyWith(
-                                                                  dividerColor:
-                                                                      Colors
-                                                                          .grey
-                                                                          .shade200,
-                                                                ),
-                                                            child: DataTable(
-                                                              columnSpacing: 24,
-                                                              horizontalMargin:
-                                                                  0,
-                                                              headingRowHeight:
-                                                                  32,
-                                                              dataRowMinHeight:
-                                                                  32,
-                                                              dataRowMaxHeight:
-                                                                  44,
-                                                              headingTextStyle:
-                                                                  TextStyle(
-                                                                    fontSize:
-                                                                        11,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    color: Colors
-                                                                        .grey
-                                                                        .shade700,
-                                                                  ),
-                                                              columns: const [
-                                                                DataColumn(
-                                                                  label: Text(
-                                                                    "BATCH NO",
-                                                                  ),
-                                                                ),
-                                                                DataColumn(
-                                                                  label: Text(
-                                                                    "QTY",
-                                                                  ),
-                                                                ),
-                                                                DataColumn(
-                                                                  label: Text(
-                                                                    "EXPIRY",
-                                                                  ),
-                                                                ),
-                                                                DataColumn(
-                                                                  label: Text(
-                                                                    "SELL",
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                              rows: _batchesCache[p.id]!.map((
-                                                                b,
-                                                              ) {
-                                                                return DataRow(
-                                                                  cells: [
-                                                                    DataCell(
-                                                                      Text(
-                                                                        b.batchNo ??
-                                                                            "-",
-                                                                        style: const TextStyle(
-                                                                          fontSize:
-                                                                              12,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                    DataCell(
-                                                                      Text(
-                                                                        "${b.qty}",
-                                                                        style: const TextStyle(
-                                                                          fontSize:
-                                                                              12,
-                                                                          fontWeight:
-                                                                              FontWeight.bold,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                    DataCell(
-                                                                      Text(
-                                                                        b.expiryDate ??
-                                                                            "-",
-                                                                        style: const TextStyle(
-                                                                          fontSize:
-                                                                              12,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                    DataCell(
-                                                                      Text(
-                                                                        "Rs ${(b.sellPrice ?? 0).toStringAsFixed(0)}",
-                                                                        style: const TextStyle(
-                                                                          fontSize:
-                                                                              12,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                );
-                                                              }).toList(),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.1),
+            spreadRadius: 1,
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(
+          color: isLowStock ? Colors.red.shade200 : Colors.transparent,
+          width: isLowStock ? 1.5 : 0,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => _toggleExpansion(p.id),
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Status Strip
+            if (isLowStock)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 4,
+                  horizontal: 12,
+                ),
+                color: Colors.red.shade50,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: Colors.red.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Low Stock Alert",
+                      style: TextStyle(
+                        color: Colors.red.shade900,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-        );
-      },
+              ),
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header: Name & SKU
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _expandedProductIds.contains(p.id)
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "SKU: ${p.sku}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontFamily: 'Monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Actions
+                      Row(
+                        children: [
+                          if (_showArchived)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.restore,
+                                color: Colors.green,
+                              ),
+                              tooltip: 'Restore Product',
+                              onPressed: () async {
+                                await _repo.restoreProduct(p.id);
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Product restored successfully',
+                                    ),
+                                  ),
+                                );
+                                _resetPagination();
+                              },
+                            )
+                          else ...[
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                color: Colors.blue,
+                              ),
+                              onPressed: () => _showAddEditProductDialog(p),
+                              tooltip: 'Edit',
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                              onPressed: () => _archiveProduct(p),
+                              tooltip: 'Archive',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildChip(
+                        category.name,
+                        Colors.blue.shade700,
+                        Icons.category_outlined,
+                      ),
+                      _buildChip(
+                        supplier.name,
+                        Colors.orange.shade700,
+                        Icons.business_outlined,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  isMobile
+                      ? Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildMetricColumn(
+                                  "Cost",
+                                  "Rs ${p.costPrice.toStringAsFixed(0)}",
+                                  Colors.grey.shade700,
+                                ),
+                                _buildMetricColumn(
+                                  "Sell",
+                                  "Rs ${p.sellPrice.toStringAsFixed(0)}",
+                                  Colors.black87,
+                                  isBold: true,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildMetricColumn(
+                                  "Profit",
+                                  "Rs ${profit.toStringAsFixed(0)}",
+                                  profit > 0
+                                      ? Colors.green.shade700
+                                      : Colors.red.shade700,
+                                  subtext:
+                                      "(${profitPercent.toStringAsFixed(0)}%)",
+                                ),
+                                _buildMetricColumn(
+                                  "Stock",
+                                  "${p.quantity} ${p.defaultUnit}",
+                                  isLowStock
+                                      ? Colors.red.shade700
+                                      : Colors.blue.shade700,
+                                  isBold: true,
+                                ),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildMetricColumn(
+                              "Cost",
+                              "Rs ${p.costPrice.toStringAsFixed(0)}",
+                              Colors.grey.shade700,
+                            ),
+                            _buildMetricColumn(
+                              "Sell",
+                              "Rs ${p.sellPrice.toStringAsFixed(0)}",
+                              Colors.black87,
+                              isBold: true,
+                            ),
+                            _buildMetricColumn(
+                              "Profit",
+                              "Rs ${profit.toStringAsFixed(0)}",
+                              profit > 0
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700,
+                              subtext: "(${profitPercent.toStringAsFixed(0)}%)",
+                            ),
+                            Container(
+                              width: 1,
+                              height: 30,
+                              color: Colors.grey.shade300,
+                            ),
+                            _buildMetricColumn(
+                              "Stock",
+                              "${p.quantity} ${p.defaultUnit}",
+                              isLowStock
+                                  ? Colors.red.shade700
+                                  : Colors.blue.shade700,
+                              isBold: true,
+                            ),
+                          ],
+                        ),
+                ],
+              ),
+            ),
+
+            // Expandable Batch Section
+            if (_expandedProductIds.contains(p.id)) ...[
+              const Divider(height: 1),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: Colors.grey.shade50,
+                child: _loadingBatches[p.id] == true
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : _batchesCache[p.id] == null ||
+                          _batchesCache[p.id]!.isEmpty
+                    ? const Text(
+                        "No batch information available",
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "Batch Breakdown",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                "${_batchesCache[p.id]!.length} Batches",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Theme(
+                              data: Theme.of(
+                                context,
+                              ).copyWith(dividerColor: Colors.grey.shade200),
+                              child: DataTable(
+                                columnSpacing: 24,
+                                horizontalMargin: 0,
+                                headingRowHeight: 32,
+                                dataRowMinHeight: 32,
+                                dataRowMaxHeight: 44,
+                                headingTextStyle: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey.shade700,
+                                ),
+                                columns: const [
+                                  DataColumn(label: Text("BATCH NO")),
+                                  DataColumn(label: Text("QTY")),
+                                  DataColumn(label: Text("EXPIRY")),
+                                  DataColumn(label: Text("SELL")),
+                                ],
+                                rows: _batchesCache[p.id]!.map((b) {
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          b.batchNo ?? "-",
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          "${b.qty}",
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          b.expiryDate ?? "-",
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          "Rs ${(b.sellPrice ?? 0).toStringAsFixed(0)}",
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1751,4 +1864,3 @@ class _ProductFrameState extends State<ProductFrame> {
     );
   }
 }
-

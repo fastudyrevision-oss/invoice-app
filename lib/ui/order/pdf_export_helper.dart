@@ -829,6 +829,15 @@ Future<File?> generateThermalReceipt(
     await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'),
   );
 
+  // Load logo image from assets
+  pw.MemoryImage? logoImage;
+  try {
+    final logoData = await rootBundle.load('assets/printing_logo.png');
+    logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+  } catch (e) {
+    logger.warning('PDFHelper', 'Could not load printing logo: $e');
+  }
+
   final date =
       '${DateHelper.formatIso(invoice.date)}, ${DateFormat('hh:mm a').format(DateTime.tryParse(invoice.date) ?? DateTime.now())}';
 
@@ -845,6 +854,11 @@ Future<File?> generateThermalReceipt(
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
+            // 🖼️ Logo
+            if (logoImage != null)
+              pw.Center(child: pw.Image(logoImage, width: 80, height: 80)),
+            if (logoImage != null) pw.SizedBox(height: 4),
+
             // 🏢 Company Header
             pw.Directionality(
               textDirection: pw.TextDirection.rtl,
@@ -1185,4 +1199,805 @@ Future<File?> generateThermalReceipt(
     suggestedName: suggestedName,
     dialogTitle: 'Save Thermal Receipt',
   );
+}
+
+/// ✅ Silent print a thermal receipt (no file save dialog)
+/// Returns true on success, false on failure
+Future<bool> printSilentThermalReceipt(
+  Invoice invoice, {
+  List<Map<String, dynamic>>? items,
+}) async {
+  try {
+    logger.info(
+      'PDFHelper',
+      'Silent printing thermal receipt for #${invoice.id}',
+    );
+
+    // Generate the thermal receipt PDF using existing function
+    final pdf = pw.Document();
+
+    // Load fonts
+    final regularFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    );
+    final boldFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'),
+    );
+
+    // Load logo image from assets
+    pw.MemoryImage? logoImage;
+    try {
+      final logoData = await rootBundle.load('assets/printing_logo.png');
+      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (e) {
+      logger.warning('PDFHelper', 'Could not load printing logo: $e');
+    }
+
+    final date =
+        '${DateHelper.formatIso(invoice.date)}, ${DateFormat('hh:mm a').format(DateTime.tryParse(invoice.date) ?? DateTime.now())}';
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: const PdfPageFormat(260, double.infinity),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              // Logo
+              if (logoImage != null)
+                pw.Center(child: pw.Image(logoImage, width: 80, height: 80)),
+              if (logoImage != null) pw.SizedBox(height: 4),
+
+              // Company Header
+              pw.Directionality(
+                textDirection: pw.TextDirection.rtl,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      'میاں ٹریڈرز',
+                      textDirection: pw.TextDirection.rtl,
+                      style: pw.TextStyle(font: regularFont, fontSize: 20),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'Whole Sale & Retail Store',
+                style: pw.TextStyle(font: regularFont, fontSize: 7),
+              ),
+              pw.Text(
+                'Sargodha, Bhagtanawala, Kotmomin Road',
+                style: pw.TextStyle(font: regularFont, fontSize: 7),
+              ),
+              pw.Text(
+                '+92 345 4297128',
+                style: pw.TextStyle(font: regularFont, fontSize: 7),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Container(height: 1, color: PdfColors.black),
+              pw.SizedBox(height: 4),
+
+              // Customer & Date
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Customer: ${invoice.customerName ?? 'N/A'}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 6),
+                ),
+              ),
+              pw.SizedBox(height: 1),
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Date: $date',
+                  style: pw.TextStyle(font: regularFont, fontSize: 7),
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Container(height: 1, color: PdfColors.black),
+              pw.SizedBox(height: 4),
+
+              // Items Table
+              if (items != null && items.isNotEmpty) ...[
+                pw.Table(
+                  border: pw.TableBorder.all(width: 0.3),
+                  columnWidths: {
+                    0: const pw.FixedColumnWidth(80),
+                    1: const pw.FixedColumnWidth(30),
+                    2: const pw.FixedColumnWidth(20),
+                    3: const pw.FixedColumnWidth(60),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.grey200,
+                      ),
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            'Item',
+                            style: pw.TextStyle(font: boldFont, fontSize: 6),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            'Qty',
+                            style: pw.TextStyle(font: boldFont, fontSize: 6),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            'Price',
+                            style: pw.TextStyle(font: boldFont, fontSize: 6),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(1),
+                          child: pw.Text(
+                            'Total',
+                            style: pw.TextStyle(font: boldFont, fontSize: 6),
+                          ),
+                        ),
+                      ],
+                    ),
+                    ...items.map((item) {
+                      final qty = (item['qty'] ?? 0);
+                      final price = (item['price'] ?? 0.0);
+                      final total = qty * price;
+                      return pw.TableRow(
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(1),
+                            child: pw.Text(
+                              item['product_name'] ?? '',
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: 6,
+                              ),
+                              softWrap: true,
+                              maxLines: 2,
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(1),
+                            child: pw.Text(
+                              qty.toString(),
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: 6,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(1),
+                            child: pw.Text(
+                              price.toStringAsFixed(0),
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: 6,
+                              ),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(1),
+                            child: pw.Text(
+                              total.toStringAsFixed(0),
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: 6,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+              ],
+
+              pw.Container(height: 1, color: PdfColors.black),
+              pw.SizedBox(height: 3),
+
+              // Totals
+              pw.Container(
+                width: 200,
+                child: pw.Table(
+                  border: pw.TableBorder.all(width: 0.5),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(2),
+                    1: const pw.FlexColumnWidth(1),
+                  },
+                  children: [
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text(
+                            'Total',
+                            style: pw.TextStyle(font: boldFont, fontSize: 9),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text(
+                            invoice.total.toStringAsFixed(0),
+                            style: pw.TextStyle(font: boldFont, fontSize: 9),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text(
+                            'Paid',
+                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text(
+                            (invoice.total - invoice.pending).toStringAsFixed(
+                              0,
+                            ),
+                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text(
+                            'Due',
+                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(2),
+                          child: pw.Text(
+                            invoice.pending.toStringAsFixed(0),
+                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Center(
+                child: pw.Text(
+                  'Thank You!',
+                  style: pw.TextStyle(font: boldFont, fontSize: 9),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    final pdfBytes = await pdf.save();
+
+    // Use silent printing via the printing package
+    final printers = await Printing.listPrinters();
+    if (printers.isEmpty) {
+      logger.warning('PDFHelper', 'No printers available for silent print');
+      // Fallback to layout (shows dialog)
+      await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+      return true;
+    }
+
+    // Try to find a thermal printer or use the first available
+    final printer = printers.firstWhere(
+      (p) =>
+          p.name.toLowerCase().contains('thermal') ||
+          p.name.toLowerCase().contains('pos') ||
+          p.name.toLowerCase().contains('80'),
+      orElse: () => printers.first,
+    );
+
+    return await Printing.directPrintPdf(
+      printer: printer,
+      onLayout: (format) => pdfBytes,
+      name: 'Receipt_${invoice.id}',
+    );
+  } catch (e, st) {
+    logger.error(
+      'PDFHelper',
+      'Silent thermal print failed',
+      error: e,
+      stackTrace: st,
+    );
+    return false;
+  }
+}
+
+/// ✅ Generate PDF for stock disposal records
+Future<File?> generateStockDisposalPdf(dynamic disposal) async {
+  logger.info('PDFHelper', 'Generating Stock Disposal PDF for #${disposal.id}');
+
+  final pdf = pw.Document();
+  final fonts = await PdfFontHelper.getBothFonts();
+  final regularFont = fonts['regular']!;
+  final boldFont = fonts['bold']!;
+
+  final date = DateTime.tryParse(disposal.createdAt ?? '') ?? DateTime.now();
+
+  pdf.addPage(
+    pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      build: (context) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.brown100,
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Stock Disposal Record',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 20,
+                      color: PdfColors.brown900,
+                    ),
+                  ),
+                  pw.Text(
+                    '#${disposal.id.toString().substring(0, 8)}',
+                    style: pw.TextStyle(
+                      font: regularFont,
+                      fontSize: 14,
+                      color: PdfColors.brown700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // Product Info
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Product Details',
+                    style: pw.TextStyle(font: boldFont, fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Product: ${disposal.productName ?? 'Unknown'}',
+                    style: pw.TextStyle(font: regularFont, fontSize: 12),
+                  ),
+                  pw.Text(
+                    'Code: ${disposal.productCode ?? 'N/A'}',
+                    style: pw.TextStyle(font: regularFont, fontSize: 12),
+                  ),
+                  pw.Text(
+                    'Batch: ${disposal.batchNo ?? 'N/A'}',
+                    style: pw.TextStyle(font: regularFont, fontSize: 12),
+                  ),
+                  pw.Text(
+                    'Quantity: ${disposal.qty}',
+                    style: pw.TextStyle(font: regularFont, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // Disposal Info
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Disposal Details',
+                    style: pw.TextStyle(font: boldFont, fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Type: ${disposal.disposalType?.toString().toUpperCase() ?? 'N/A'}',
+                    style: pw.TextStyle(font: regularFont, fontSize: 12),
+                  ),
+                  pw.Text(
+                    'Date: ${DateFormat('yyyy-MM-dd HH:mm').format(date)}',
+                    style: pw.TextStyle(font: regularFont, fontSize: 12),
+                  ),
+                  pw.Text(
+                    'Cost Loss: Rs ${disposal.costLoss?.toStringAsFixed(2) ?? '0.00'}',
+                    style: pw.TextStyle(
+                      font: regularFont,
+                      fontSize: 12,
+                      color: PdfColors.red,
+                    ),
+                  ),
+                  if (disposal.notes != null && disposal.notes!.isNotEmpty)
+                    pw.Text(
+                      'Notes: ${disposal.notes}',
+                      style: pw.TextStyle(font: regularFont, fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+
+  final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+  final suggestedName =
+      'Disposal_${disposal.id.toString().substring(0, 8)}_$timestamp.pdf';
+
+  final pdfBytes = await pdf.save();
+  return await PlatformFileHelper.savePdfFile(
+    pdfBytes: pdfBytes,
+    suggestedName: suggestedName,
+    dialogTitle: 'Save Disposal Record PDF',
+  );
+}
+
+/// ✅ Generate PDF for purchase records
+Future<File?> generatePurchasePdf(
+  dynamic purchase,
+  List<Map<String, dynamic>> items,
+  String supplierName,
+) async {
+  logger.info(
+    'PDFHelper',
+    'Generating Purchase PDF for #${purchase.invoiceNo}',
+  );
+
+  final pdf = pw.Document();
+  final fonts = await PdfFontHelper.getBothFonts();
+  final regularFont = fonts['regular']!;
+  final boldFont = fonts['bold']!;
+
+  final date = DateTime.tryParse(purchase.date ?? '') ?? DateTime.now();
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      build: (context) {
+        return [
+          // Header
+          pw.Container(
+            padding: const pw.EdgeInsets.all(16),
+            decoration: pw.BoxDecoration(
+              gradient: const pw.LinearGradient(
+                colors: [PdfColors.green700, PdfColors.green900],
+              ),
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Purchase Invoice',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 20,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      '#${purchase.invoiceNo}',
+                      style: pw.TextStyle(
+                        font: regularFont,
+                        fontSize: 12,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.Text(
+                  DateFormat('dd MMM yyyy').format(date),
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 12,
+                    color: PdfColors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Supplier Info
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.green50,
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Row(
+              children: [
+                pw.Text(
+                  'Supplier: ',
+                  style: pw.TextStyle(font: boldFont, fontSize: 12),
+                ),
+                pw.Text(
+                  supplierName,
+                  style: pw.TextStyle(font: regularFont, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Items Table
+          pw.TableHelper.fromTextArray(
+            headers: ['#', 'Product', 'Qty', 'Unit Price', 'Total'],
+            headerStyle: pw.TextStyle(
+              font: boldFont,
+              fontSize: 11,
+              color: PdfColors.white,
+            ),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.green700),
+            cellStyle: pw.TextStyle(font: regularFont, fontSize: 10),
+            border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey400),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(30),
+              2: const pw.FixedColumnWidth(50),
+              3: const pw.FixedColumnWidth(80),
+              4: const pw.FixedColumnWidth(80),
+            },
+            data: items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final qty = item['qty'] ?? 0;
+              final price = item['price'] ?? 0.0;
+              final total = qty * price;
+              return [
+                (index + 1).toString(),
+                item['product_name'] ?? 'Unknown',
+                qty.toString(),
+                'Rs ${price.toStringAsFixed(2)}',
+                'Rs ${total.toStringAsFixed(2)}',
+              ];
+            }).toList(),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Summary
+          pw.Container(
+            width: 250,
+            child: pw.Table(
+              border: pw.TableBorder.all(width: 0.5),
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Total',
+                        style: pw.TextStyle(font: boldFont, fontSize: 12),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Rs ${purchase.total.toStringAsFixed(2)}',
+                        style: pw.TextStyle(font: boldFont, fontSize: 12),
+                        textAlign: pw.TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.TableRow(
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Paid',
+                        style: pw.TextStyle(font: regularFont, fontSize: 11),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Rs ${purchase.paid.toStringAsFixed(2)}',
+                        style: pw.TextStyle(font: regularFont, fontSize: 11),
+                        textAlign: pw.TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.TableRow(
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Pending',
+                        style: pw.TextStyle(
+                          font: regularFont,
+                          fontSize: 11,
+                          color: PdfColors.red,
+                        ),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text(
+                        'Rs ${purchase.pending.toStringAsFixed(2)}',
+                        style: pw.TextStyle(
+                          font: regularFont,
+                          fontSize: 11,
+                          color: PdfColors.red,
+                        ),
+                        textAlign: pw.TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ];
+      },
+    ),
+  );
+
+  final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+  final suggestedName = 'Purchase_${purchase.invoiceNo}_$timestamp.pdf';
+
+  final pdfBytes = await pdf.save();
+  return await PlatformFileHelper.savePdfFile(
+    pdfBytes: pdfBytes,
+    suggestedName: suggestedName,
+    dialogTitle: 'Save Purchase PDF',
+  );
+}
+
+/// ✅ Silent print a stock disposal thermal receipt
+/// Returns true on success, false on failure
+Future<bool> printSilentStockDisposalThermalReceipt(dynamic disposal) async {
+  try {
+    logger.info(
+      'PDFHelper',
+      'Silent printing disposal receipt for #${disposal.id}',
+    );
+
+    final pdf = pw.Document();
+
+    // Load fonts
+    final regularFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    );
+    final boldFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'),
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: const PdfPageFormat(260, double.infinity),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                'Stock Disposal',
+                style: pw.TextStyle(font: boldFont, fontSize: 14),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Container(height: 1, color: PdfColors.black),
+              pw.SizedBox(height: 4),
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Product: ${disposal.productName ?? 'N/A'}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ),
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Qty: ${disposal.qty}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ),
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Type: ${disposal.disposalType ?? 'N/A'}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Container(height: 1, color: PdfColors.black),
+              pw.SizedBox(height: 4),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Cost Loss:',
+                    style: pw.TextStyle(font: boldFont, fontSize: 9),
+                  ),
+                  pw.Text(
+                    'Rs ${disposal.costLoss?.toStringAsFixed(0) ?? '0'}',
+                    style: pw.TextStyle(font: boldFont, fontSize: 9),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    final pdfBytes = await pdf.save();
+
+    // Use silent printing via the printing package
+    final printers = await Printing.listPrinters();
+    if (printers.isEmpty) {
+      logger.warning('PDFHelper', 'No printers available for silent print');
+      await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+      return true;
+    }
+
+    final printer = printers.firstWhere(
+      (p) =>
+          p.name.toLowerCase().contains('thermal') ||
+          p.name.toLowerCase().contains('pos') ||
+          p.name.toLowerCase().contains('80'),
+      orElse: () => printers.first,
+    );
+
+    return await Printing.directPrintPdf(
+      printer: printer,
+      onLayout: (format) => pdfBytes,
+      name: 'Disposal_${disposal.id}',
+    );
+  } catch (e, st) {
+    logger.error(
+      'PDFHelper',
+      'Silent disposal print failed',
+      error: e,
+      stackTrace: st,
+    );
+    return false;
+  }
 }

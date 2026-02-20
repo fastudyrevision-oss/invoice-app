@@ -356,6 +356,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                               const SizedBox(height: 16),
                               _buildCategoryInsights(),
                               const SizedBox(height: 16),
+                              if (summaryData != null)
+                                _buildIncomeBreakdown(), // ✅ Added
+                              const SizedBox(height: 16),
                               _buildSupplierInsights(),
                               const SizedBox(height: 16),
                               if (summaryData != null) _buildExpenseBreakdown(),
@@ -463,6 +466,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     final currentProfit = isCogsBased
         ? summaryData!.totalProfit
         : (summaryData!.totalSales -
+              summaryData!
+                  .totalDiscounts - // ✅ Subtract discounts from Gross Sales
               summaryData!.totalPurchases -
               summaryData!.totalExpenses);
 
@@ -474,6 +479,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
       final prevProfit = isCogsBased
           ? previousSummaryData!.totalProfit
           : (previousSummaryData!.totalSales -
+                previousSummaryData!
+                    .totalDiscounts - // ✅ Subtract discounts here too
                 previousSummaryData!.totalPurchases -
                 previousSummaryData!.totalExpenses);
 
@@ -594,6 +601,50 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                 "Write-offs: Rs ${summaryData!.expiredStockLoss.toStringAsFixed(2)}, Refunds: Rs ${summaryData!.expiredStockRefunds.toStringAsFixed(2)}",
           ),
       ],
+    );
+  }
+
+  Widget _buildIncomeBreakdown() {
+    final breakdown = summaryData!.incomeBreakdown;
+    if (breakdown.isEmpty) return const SizedBox();
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.trending_up, color: Colors.green, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Manual Income Breakdown',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            ...breakdown.entries.map((e) {
+              final val = e.value;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(e.key, style: TextStyle(color: Colors.grey.shade700)),
+                    Text(
+                      'Rs ${val.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1971,11 +2022,14 @@ class PDFExporter {
   }
 
   static List<num> _generateYAxisTicks(ProfitLossModel summary) {
-    final maxVal = [
+    final values = [
       summary.totalSales,
       summary.totalPurchases,
       summary.totalExpenses,
-    ].reduce((a, b) => a > b ? a : b);
+    ];
+    final maxVal = values.isNotEmpty
+        ? values.reduce((a, b) => a > b ? a : b)
+        : 0;
     if (maxVal <= 0) return [0, 100];
     final step = maxVal / 4;
     return [0, step, step * 2, step * 3, step * 4];

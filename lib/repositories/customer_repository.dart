@@ -31,12 +31,14 @@ class CustomerRepository {
     String query = "",
     String sortField = "name",
     bool sortAsc = true,
+    bool showArchived = false,
   }) => _customerDao.getCustomersPage(
     page: page,
     pageSize: pageSize,
     query: query,
     sortField: sortField,
     sortAsc: sortAsc,
+    showArchived: showArchived,
   );
 
   Future<Customer?> getCustomer(String id) => _customerDao.getCustomerById(id);
@@ -45,6 +47,7 @@ class CustomerRepository {
   Future<int> updateCustomer(Customer customer) =>
       _customerDao.updateCustomer(customer);
   Future<int> deleteCustomer(String id) => _customerDao.deleteCustomer(id);
+  Future<int> restoreCustomer(String id) => _customerDao.restoreCustomer(id);
 
   Future<List<CustomerPayment>> getPayments(String customerId) =>
       _paymentDao.getByCustomerId(customerId);

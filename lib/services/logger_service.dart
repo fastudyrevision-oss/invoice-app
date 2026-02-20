@@ -201,14 +201,15 @@ class LoggerService {
 
       if (levelStr.contains('DEBUG')) {
         level = LogLevel.debug;
-      } else if (levelStr.contains('INFO'))
+      } else if (levelStr.contains('INFO')) {
         level = LogLevel.info;
-      else if (levelStr.contains('WARN'))
+      } else if (levelStr.contains('WARN')) {
         level = LogLevel.warning;
-      else if (levelStr.contains('ERROR'))
+      } else if (levelStr.contains('ERROR')) {
         level = LogLevel.error;
-      else if (levelStr.contains('CRIT'))
+      } else if (levelStr.contains('CRIT')) {
         level = LogLevel.critical;
+      }
 
       // Extract Tag
       final openTag = remainder.indexOf('[', parts[0].length);

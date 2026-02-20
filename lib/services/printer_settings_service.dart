@@ -17,6 +17,8 @@ class PrinterSettingsService {
   static const String _paperWidthKey = 'paper_width_mm';
   static const String _autoPrintTestKey = 'auto_print_test';
   static const String _enableLoggingKey = 'enable_printer_logging';
+  static const String _usbPrinterNameKey = 'usb_printer_name';
+  static const String _priorityKey = 'printer_priority'; // 'network' or 'usb'
 
   late SharedPreferences _prefs;
   bool _initialized = false;
@@ -102,6 +104,18 @@ class PrinterSettingsService {
     return _prefs.getBool(_enableLoggingKey) ?? true;
   }
 
+  /// Get saved USB printer driver name
+  Future<String?> getUsbPrinterName() async {
+    await _ensureInitialized();
+    return _prefs.getString(_usbPrinterNameKey);
+  }
+
+  /// Get printer priority ('network' or 'usb')
+  Future<String> getPrinterPriority() async {
+    await _ensureInitialized();
+    return _prefs.getString(_priorityKey) ?? 'network';
+  }
+
   /// Get all settings as a map
   Future<Map<String, dynamic>> getAllSettings() async {
     await _ensureInitialized();
@@ -114,6 +128,8 @@ class PrinterSettingsService {
       'paperWidth': await getPaperWidth(),
       'autoPrintTest': await isAutoPrintTestEnabled(),
       'enableLogging': await isLoggingEnabled(),
+      'usbPrinterName': await getUsbPrinterName(),
+      'priority': await getPrinterPriority(),
     };
   }
 
@@ -169,6 +185,35 @@ class PrinterSettingsService {
     final result = await _prefs.setString(_printerNameKey, name.trim());
     if (result) {
       logger.info(_tag, 'Printer name saved', context: {'name': name});
+    }
+    return result;
+  }
+
+  /// Save USB printer driver name
+  Future<bool> setUsbPrinterName(String? name) async {
+    await _ensureInitialized();
+    if (name == null) {
+      return await _prefs.remove(_usbPrinterNameKey);
+    }
+    final result = await _prefs.setString(_usbPrinterNameKey, name.trim());
+    if (result) {
+      logger.info(_tag, 'USB Printer name saved', context: {'usbName': name});
+    }
+    return result;
+  }
+
+  /// Save printer priority
+  Future<bool> setPrinterPriority(String priority) async {
+    await _ensureInitialized();
+    if (priority != 'network' && priority != 'usb') return false;
+
+    final result = await _prefs.setString(_priorityKey, priority);
+    if (result) {
+      logger.info(
+        _tag,
+        'Printer priority saved',
+        context: {'priority': priority},
+      );
     }
     return result;
   }
@@ -262,6 +307,9 @@ class PrinterSettingsService {
       if (settings.containsKey('enableLogging')) {
         await setLoggingEnabled(settings['enableLogging']);
       }
+      if (settings.containsKey('usbPrinterName')) {
+        await setUsbPrinterName(settings['usbPrinterName']);
+      }
 
       return true;
     } catch (e) {
@@ -292,7 +340,7 @@ class PrinterSettingsService {
       await _prefs.remove(_paperWidthKey);
       await _prefs.remove(_autoPrintTestKey);
       await _prefs.remove(_enableLoggingKey);
-      await _prefs.remove(_enableLoggingKey);
+      await _prefs.remove(_usbPrinterNameKey);
       logger.info(_tag, 'All settings cleared');
       return true;
     } catch (e) {

@@ -19,6 +19,7 @@ class ProfitLossSummary {
 
   // Additional detail fields
   final Map<String, double> expenseBreakdown;
+  final Map<String, double> incomeBreakdown; // ✅ Added
   final double? previousNetProfit; // For trend analysis
 
   ProfitLossSummary({
@@ -37,6 +38,7 @@ class ProfitLossSummary {
     this.expiredStockRefunds = 0.0,
     this.netExpiredLoss = 0.0,
     this.expenseBreakdown = const {},
+    this.incomeBreakdown = const {}, // ✅ Added
     this.previousNetProfit,
   });
 

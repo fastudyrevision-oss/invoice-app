@@ -595,10 +595,12 @@ class StockExportService {
     // Define headers
     final headers = <String>[
       'Product',
+      'Batch No',
       'Purchased',
       'Sold',
       'Remaining',
       if (showExpiry) 'Supplier',
+      if (showExpiry) 'Company',
       if (showExpiry) 'Expiry',
       if (includePrice) 'Cost',
       if (includePrice) 'Sell',
@@ -615,10 +617,12 @@ class StockExportService {
     for (final r in reports) {
       final row = [
         r.productName,
+        r.batchNo ?? '-',
         r.purchasedQty,
         r.soldQty,
         r.remainingQty,
         if (showExpiry) (r.supplierName ?? '-'),
+        if (showExpiry) (r.companyName ?? '-'),
         if (showExpiry)
           (r.expiryDate != null
               ? "${r.expiryDate!.toLocal()}".split(' ')[0]
@@ -643,17 +647,19 @@ class StockExportService {
     sheet.appendRow([]);
     sheet.appendRow([
       'TOTALS',
-      '',
-      '',
-      totalQty,
-      if (showExpiry) '',
-      if (showExpiry) '',
-      if (includePrice) '',
-      if (includePrice) '',
-      if (detailedView) '',
-      if (detailedView) '',
-      if (includePrice) totalValue.toStringAsFixed(2),
-      if (detailedView) '',
+      '', // Batch
+      '', // Purchased
+      '', // Sold
+      totalQty, // Remaining
+      if (showExpiry) '', // Supplier
+      if (showExpiry) '', // Company
+      if (showExpiry) '', // Expiry
+      if (includePrice) '', // Cost
+      if (includePrice) '', // Sell
+      if (detailedView) '', // Profit/Unit
+      if (detailedView) '', // Total Profit
+      if (includePrice) totalValue.toStringAsFixed(2), // Total Value
+      if (detailedView) '', // Reorder Level
     ]);
 
     // Save file

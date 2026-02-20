@@ -14,6 +14,10 @@ import 'order_insights_card.dart';
 import 'pdf_export_helper.dart';
 import '../../utils/responsive_utils.dart';
 import '../../services/logger_service.dart';
+import '../../utils/date_helper.dart';
+import '../common/unified_search_bar.dart';
+
+enum OrderViewMode { table, compact, card }
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -30,8 +34,7 @@ class _OrderListScreenState extends State<OrderListScreen>
   List<Invoice> _filtered = [];
 
   bool _loading = true;
-
-  DateTime? _lastUpdated;
+  OrderViewMode _viewMode = OrderViewMode.card;
 
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
@@ -103,7 +106,6 @@ class _OrderListScreenState extends State<OrderListScreen>
         _orders = data;
         _applyFilters(); // sets _filtered
         _loading = false;
-        _lastUpdated = DateTime.now();
       });
     } catch (e) {
       setState(() {
@@ -216,17 +218,6 @@ class _OrderListScreenState extends State<OrderListScreen>
     });
   }
 
-  DateTime? _safeParseDate(String? iso) {
-    if (iso == null) return null;
-    try {
-      return DateTime.parse(iso);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  double _safeDouble(num? n) => (n == null) ? 0.0 : n.toDouble();
-
   Future<void> _openFilterSheet() async {
     await showModalBottomSheet(
       context: context,
@@ -338,25 +329,38 @@ class _OrderListScreenState extends State<OrderListScreen>
     );
   }
 
-  Widget _emptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 12),
-          Text(
-            "No orders found",
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            "Try clearing filters or creating a new order",
-            style: TextStyle(fontSize: 12),
-          ),
-        ],
-      ),
-    );
+  Future<void> _fastPrintOrder(Invoice invoice) async {
+    try {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("🖨️ Preparing thermal receipt...")),
+      );
+
+      final db = await dbHelper.db;
+      final rawItems = await db.rawQuery(
+        '''
+        SELECT ii.qty, ii.price, p.name as product_name
+        FROM invoice_items ii
+        JOIN products p ON ii.product_id = p.id
+        WHERE ii.invoice_id = ?
+      ''',
+        [invoice.id],
+      );
+
+      final success = await printSilentThermalReceipt(invoice, items: rawItems);
+      if (success && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("✅ Sent to printer")));
+      }
+    } catch (e) {
+      logger.error('OrderList', 'Fast print error', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Print error: $e")));
+      }
+    }
   }
 
   void _showOrderActions(Invoice invoice) {
@@ -389,16 +393,13 @@ class _OrderListScreenState extends State<OrderListScreen>
               title: const Text("Print Thermal Receipt"),
               onTap: () async {
                 Navigator.pop(context);
-                final file = await generateThermalReceipt(invoice);
-                if (file != null) {
-                  await printPdfFile(file);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("✅ Sending to thermal printer..."),
-                      ),
-                    );
-                  }
+                final success = await printSilentThermalReceipt(invoice);
+                if (success && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("✅ Sending to thermal printer..."),
+                    ),
+                  );
                 }
               },
             ),
@@ -476,6 +477,21 @@ class _OrderListScreenState extends State<OrderListScreen>
         elevation: 0,
         actions: isMobile
             ? [
+                IconButton(
+                  icon: Icon(_viewModeIcon()),
+                  tooltip: 'View: ${_viewModeLabel()}',
+                  onPressed: _cycleViewMode,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.insights),
+                  tooltip: 'Insights',
+                  onPressed: _showInsightsDialog,
+                ),
+                IconButton(
+                  onPressed: _navigateToForm,
+                  icon: const Icon(Icons.add_circle),
+                  tooltip: 'Add Order',
+                ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'filter') {
@@ -522,6 +538,27 @@ class _OrderListScreenState extends State<OrderListScreen>
               ]
             : [
                 const SizedBox(width: 10),
+                // View toggle
+                Tooltip(
+                  message: 'View: ${_viewModeLabel()}',
+                  child: TextButton.icon(
+                    icon: Icon(_viewModeIcon(), size: 20),
+                    label: Text(_viewModeLabel()),
+                    onPressed: _cycleViewMode,
+                    style: TextButton.styleFrom(
+                      foregroundColor:
+                          Theme.of(context).appBarTheme.foregroundColor ??
+                          Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.insights),
+                  tooltip: 'Insights',
+                  onPressed: _showInsightsDialog,
+                ),
+                const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.filter_list),
                   onPressed: _openFilterSheet,
@@ -537,10 +574,20 @@ class _OrderListScreenState extends State<OrderListScreen>
                   onPressed: _exportAllOrders,
                   tooltip: 'Export PDF',
                 ),
+                IconButton(
+                  onPressed: _navigateToForm,
+                  icon: const Icon(Icons.add_circle, size: 28),
+                  tooltip: 'Add Order',
+                ),
                 const SizedBox(width: 10),
               ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(140),
+          preferredSize: Size.fromHeight(
+            ResponsiveUtils.getAppBarBottomHeight(
+              context,
+              baseHeight: isMobile ? 140 : 120,
+            ),
+          ),
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -556,31 +603,15 @@ class _OrderListScreenState extends State<OrderListScreen>
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: TextField(
+                  child: UnifiedSearchBar(
+                    hintText: "Search invoices or customers...",
                     controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: "Search invoices or customers...",
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                _applyFilters();
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+                    onChanged:
+                        (_) {}, // searchController is already listened to
+                    onClear: () {
+                      _searchController.clear();
+                      _applyFilters();
+                    },
                   ),
                 ),
                 Padding(
@@ -600,417 +631,21 @@ class _OrderListScreenState extends State<OrderListScreen>
           ),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: OrderInsightCard(
-              orders: _filtered,
-              loading: false,
-              lastUpdated: _lastUpdated,
-            ),
-          ),
+      body: _buildBody(),
 
-          // list area
-          Expanded(
-            child: _loading
-                ? _buildShimmerList()
-                : RefreshIndicator(
-                    color: Theme.of(context).colorScheme.primary,
-                    onRefresh: _loadOrders,
-                    child: _filtered.isEmpty
-                        ? _emptyState()
-                        : ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.only(
-                              left: 16,
-                              right: 16,
-                              bottom: 80,
-                            ),
-                            itemCount: _filtered.length,
-                            itemBuilder: (context, index) {
-                              final o = _filtered[index];
-                              final isPending = _safeDouble(o.pending) > 0;
-                              final date =
-                                  _safeParseDate(o.date) ?? DateTime.now();
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Colors.white,
-                                      isPending
-                                          ? Colors.orange.withValues(
-                                              alpha: 0.05,
-                                            )
-                                          : Colors.green.withValues(
-                                              alpha: 0.05,
-                                            ),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          (isPending
-                                                  ? Colors.orange
-                                                  : Colors.green)
-                                              .withValues(alpha: 0.2),
-                                      spreadRadius: 1,
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                  border: Border.all(
-                                    color:
-                                        (isPending
-                                                ? Colors.orange
-                                                : Colors.green)
-                                            .withValues(alpha: 0.3),
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // Status Strip
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 4,
-                                          horizontal: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: isPending
-                                                ? [
-                                                    Colors.orange.shade600,
-                                                    Colors.orange.shade400,
-                                                  ]
-                                                : [
-                                                    Colors.green.shade600,
-                                                    Colors.green.shade400,
-                                                  ],
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Icon(
-                                                  isPending
-                                                      ? Icons.pending_actions
-                                                      : Icons.check_circle,
-                                                  size: 16,
-                                                  color: Colors.white,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  isPending
-                                                      ? "Payment Pending"
-                                                      : "Fully Paid",
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (isPending)
-                                              SizedBox(
-                                                height: 24,
-                                                child: TextButton.icon(
-                                                  onPressed: () =>
-                                                      _payInvoice(o),
-                                                  icon: const Icon(
-                                                    Icons.payment,
-                                                    size: 14,
-                                                    color: Colors.white,
-                                                  ),
-                                                  label: const Text(
-                                                    "Pay Now",
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  style: TextButton.styleFrom(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 12,
-                                                        ),
-                                                    backgroundColor: Colors
-                                                        .white
-                                                        .withOpacity(0.2),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            12,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      InkWell(
-                                        onTap: () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                OrderDetailScreen(invoice: o),
-                                          ),
-                                        ),
-                                        onLongPress: () => _showOrderActions(o),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              // Header Row
-                                              Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  // Invoice Badge
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          12,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      gradient: LinearGradient(
-                                                        begin:
-                                                            Alignment.topLeft,
-                                                        end: Alignment
-                                                            .bottomRight,
-                                                        colors: [
-                                                          Colors.blue.shade600,
-                                                          Colors.blue.shade400,
-                                                        ],
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            12,
-                                                          ),
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.blue
-                                                              .withValues(
-                                                                alpha: 0.3,
-                                                              ),
-                                                          blurRadius: 8,
-                                                          offset: const Offset(
-                                                            0,
-                                                            2,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.receipt_long,
-                                                      color: Colors.white,
-                                                      size: 28,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 16),
-
-                                                  // Customer & Invoice Info
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          o.customerName ??
-                                                              "Unknown Customer",
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 18,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                color: Colors
-                                                                    .black87,
-                                                              ),
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 4,
-                                                        ),
-                                                        Container(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal: 8,
-                                                                vertical: 4,
-                                                              ),
-                                                          decoration: BoxDecoration(
-                                                            color: Colors
-                                                                .purple
-                                                                .shade50,
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  6,
-                                                                ),
-                                                            border: Border.all(
-                                                              color: Colors
-                                                                  .purple
-                                                                  .shade200,
-                                                            ),
-                                                          ),
-                                                          child: Text(
-                                                            "Invoice #${o.id}",
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: Colors
-                                                                  .purple
-                                                                  .shade900,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-
-                                                  // Date Badge
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          10,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          Colors.grey.shade100,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            10,
-                                                          ),
-                                                      border: Border.all(
-                                                        color: Colors
-                                                            .grey
-                                                            .shade300,
-                                                        width: 2,
-                                                      ),
-                                                    ),
-                                                    child: Column(
-                                                      children: [
-                                                        Text(
-                                                          date.day.toString(),
-                                                          style: TextStyle(
-                                                            fontSize: 20,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            color: Colors
-                                                                .grey
-                                                                .shade800,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          _getMonthName(
-                                                            date.month,
-                                                          ),
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            color: Colors
-                                                                .grey
-                                                                .shade600,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-
-                                              const SizedBox(height: 16),
-                                              const Divider(),
-                                              const SizedBox(height: 12),
-
-                                              // Metrics Row
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  _buildMetric(
-                                                    "TOTAL",
-                                                    "Rs ${_safeDouble(o.total).toStringAsFixed(0)}",
-                                                    Colors.blue,
-                                                  ),
-                                                  _buildMetric(
-                                                    "PAID",
-                                                    "Rs ${_safeDouble(o.paid).toStringAsFixed(0)}",
-                                                    Colors.green,
-                                                  ),
-                                                  _buildMetric(
-                                                    "PENDING",
-                                                    "Rs ${_safeDouble(o.pending).toStringAsFixed(0)}",
-                                                    isPending
-                                                        ? Colors.red
-                                                        : Colors.green,
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-          ),
-        ],
-      ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_showScrollToTop)
-            FloatingActionButton(
-              heroTag: 'scrollTop',
-              mini: true,
+      floatingActionButton: _showScrollToTop
+          ? FloatingActionButton(
               onPressed: () {
                 _scrollController.animateTo(
                   0,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeOut,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
                 );
               },
+              mini: true,
               child: const Icon(Icons.arrow_upward),
-            ),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(
-            heroTag: 'newOrder',
-            onPressed: _navigateToForm,
-            icon: const Icon(Icons.add_shopping_cart),
-            label: const Text("New Order"),
-          ),
-        ],
-      ),
+            )
+          : null,
     );
   }
 
@@ -1045,7 +680,7 @@ class _OrderListScreenState extends State<OrderListScreen>
         setState(() => _quickFilter = val ? filterKey : null);
         _applyFilters();
       },
-      selectedColor: chipColor.withOpacity(0.2),
+      selectedColor: chipColor.withValues(alpha: 0.2),
       checkmarkColor: chipColor,
       backgroundColor: Colors.white,
     );
@@ -1076,21 +711,404 @@ class _OrderListScreenState extends State<OrderListScreen>
     );
   }
 
-  String _getMonthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[month - 1];
+  DateTime? _safeParseDate(String dateStr) {
+    if (dateStr.isEmpty) return null;
+    return DateHelper.parseDate(dateStr) ?? DateTime.tryParse(dateStr);
+  }
+
+  IconData _viewModeIcon() {
+    switch (_viewMode) {
+      case OrderViewMode.table:
+        return Icons.table_chart;
+      case OrderViewMode.compact:
+        return Icons.view_list;
+      case OrderViewMode.card:
+        return Icons.grid_view;
+    }
+  }
+
+  String _viewModeLabel() {
+    switch (_viewMode) {
+      case OrderViewMode.table:
+        return 'Table';
+      case OrderViewMode.compact:
+        return 'Compact';
+      case OrderViewMode.card:
+        return 'Card';
+    }
+  }
+
+  void _cycleViewMode() {
+    setState(() {
+      _viewMode = OrderViewMode
+          .values[(_viewMode.index + 1) % OrderViewMode.values.length];
+    });
+  }
+
+  void _showInsightsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppBar(
+                title: const Text("Order Insights"),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                automaticallyImplyLeading: false,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: OrderInsightCard(
+                    orders: _orders,
+                    loading: _loading,
+                    lastUpdated: DateTime.now(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return _buildShimmerList();
+    }
+
+    if (_filtered.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.inventory_2_outlined,
+              size: 72,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "No orders found",
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_searchController.text.isNotEmpty ||
+                _quickFilter != null ||
+                _showPendingOnly)
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _searchController.clear();
+                    _quickFilter = null;
+                    _showPendingOnly = false;
+                    _selectedDateRange = null;
+                  });
+                  _applyFilters();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text("Clear all filters"),
+              ),
+          ],
+        ),
+      );
+    }
+
+    switch (_viewMode) {
+      case OrderViewMode.table:
+        return _buildTableView();
+      case OrderViewMode.compact:
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _filtered.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) => _buildCompactItem(_filtered[index]),
+        );
+      case OrderViewMode.card:
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: _filtered.length,
+          itemBuilder: (context, index) => _buildCardItem(_filtered[index]),
+        );
+    }
+  }
+
+  Widget _buildTableView() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
+          columns: const [
+            DataColumn(label: Text('ID')),
+            DataColumn(label: Text('Date')),
+            DataColumn(label: Text('Customer')),
+            DataColumn(label: Text('Total')),
+            DataColumn(label: Text('Pending')),
+            DataColumn(label: Text('Status')),
+            DataColumn(label: Text('Actions')),
+          ],
+          rows: _filtered.map((o) {
+            final isPending = o.pending > 0;
+            return DataRow(
+              cells: [
+                DataCell(
+                  Text(
+                    o.id
+                        .substring(o.id.length > 6 ? o.id.length - 6 : 0)
+                        .toUpperCase(),
+                  ),
+                ),
+                DataCell(Text(o.date)),
+                DataCell(Text(o.customerName ?? 'N/A')),
+                DataCell(Text("Rs ${o.total.toStringAsFixed(0)}")),
+                DataCell(
+                  Text(
+                    "Rs ${o.pending.toStringAsFixed(0)}",
+                    style: TextStyle(
+                      color: isPending ? Colors.red : Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                DataCell(_buildStatusChip(o)),
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.visibility, size: 20),
+                        onPressed: () => _viewDetails(o),
+                        tooltip: "View Details",
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.print, size: 20),
+                        onPressed: () => _fastPrintOrder(o),
+                        tooltip: "Fast Print",
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactItem(Invoice o) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: _getStatusColor(o).withValues(alpha: 0.1),
+        child: Icon(Icons.receipt_long, color: _getStatusColor(o), size: 20),
+      ),
+      title: Text(
+        o.customerName ?? "Unknown Customer",
+        style: const TextStyle(fontWeight: FontWeight.bold),
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        "#${o.id.substring(o.id.length > 6 ? o.id.length - 6 : 0).toUpperCase()} • ${o.date}",
+      ),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            "Rs ${o.total.toStringAsFixed(0)}",
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          if (o.pending > 0)
+            Text(
+              "Rs ${o.pending.toStringAsFixed(0)} pending",
+              style: const TextStyle(color: Colors.red, fontSize: 11),
+            ),
+        ],
+      ),
+      onTap: () => _viewDetails(o),
+    );
+  }
+
+  Widget _buildCardItem(Invoice o) {
+    final isPending = o.pending > 0;
+    final date = _safeParseDate(o.date) ?? DateTime.now();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _viewDetails(o),
+        onLongPress: () => _showOrderActions(o),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.receipt_long,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          o.customerName ?? "Unknown Customer",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          "Invoice #${o.id.substring(o.id.length > 6 ? o.id.length - 6 : 0).toUpperCase()}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildStatusChip(o),
+                ],
+              ),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildMetric(
+                    "TOTAL",
+                    "Rs ${o.total.toStringAsFixed(0)}",
+                    Colors.blue,
+                  ),
+                  _buildMetric(
+                    "PAID",
+                    "Rs ${o.paid.toStringAsFixed(0)}",
+                    Colors.green,
+                  ),
+                  _buildMetric(
+                    "PENDING",
+                    "Rs ${o.pending.toStringAsFixed(0)}",
+                    isPending ? Colors.red : Colors.green,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateFormat('MMM dd, yyyy').format(date),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _fastPrintOrder(o),
+                        icon: const Icon(Icons.print, size: 16),
+                        label: const Text(
+                          "PRINT",
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (isPending)
+                        ElevatedButton(
+                          onPressed: () => _payInvoice(o),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            "PAY",
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(Invoice o) {
+    final color = _getStatusColor(o);
+    final isPending = o.pending > 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        isPending ? "PENDING" : "PAID",
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor(Invoice o) {
+    return o.pending > 0 ? Colors.red : Colors.green;
+  }
+
+  void _viewDetails(Invoice o) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => OrderDetailScreen(invoice: o)),
+    );
   }
 }

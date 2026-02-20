@@ -31,9 +31,9 @@ class CustomerDao {
     return id;
   }
 
-  /// Get all customers with proper typing
+  /// Get all customers with proper typing (Active only)
   Future<List<Customer>> getAllCustomers() async {
-    final data = await db.query("customers");
+    final data = await db.query("customers", where: "status != 'deleted'");
     return data.map<Customer>((e) => Customer.fromMap(e)).toList();
   }
 
@@ -44,16 +44,18 @@ class CustomerDao {
     String query = "",
     String sortField = "name",
     bool sortAsc = true,
+    bool showArchived = false,
   }) async {
     final offset = page * pageSize;
     final orderBy = "$sortField ${sortAsc ? 'ASC' : 'DESC'}";
 
-    String? whereClause;
-    List<Object?>? whereArgs;
+    // Filter by status based on showArchived flag
+    String whereClause = "status ${showArchived ? '=' : '!='} 'deleted'";
+    List<Object?> whereArgs = [];
 
     if (query.isNotEmpty) {
-      whereClause = "name LIKE ? OR phone LIKE ? OR email LIKE ?";
-      whereArgs = ['%$query%', '%$query%', '%$query%'];
+      whereClause += " AND (name LIKE ? OR phone LIKE ? OR email LIKE ?)";
+      whereArgs.addAll(['%$query%', '%$query%', '%$query%']);
     }
 
     final data = await db.query(
@@ -99,20 +101,48 @@ class CustomerDao {
     return count;
   }
 
-  /// Delete a customer
+  /// Soft Delete a customer (mark as deleted)
   Future<int> deleteCustomer(String id) async {
     // Fetch old data
     final oldData = await getCustomerById(id);
 
-    final count = await db.delete(
+    // Perform Soft Delete (Update status)
+    final count = await db.update(
       "customers",
+      {'status': 'deleted'},
       where: "id = ?",
       whereArgs: [id],
     );
 
     if (oldData != null) {
       await AuditLogger.log(
-        'DELETE',
+        'SOFT_DELETE',
+        'customers',
+        recordId: id,
+        userId: AuthService.instance.currentUser?.id ?? 'system',
+        oldData: oldData.toMap(),
+        txn: db,
+      );
+    }
+
+    return count;
+  }
+
+  /// Restore an archived customer
+  Future<int> restoreCustomer(String id) async {
+    // Fetch old data
+    final oldData = await getCustomerById(id);
+
+    final count = await db.update(
+      "customers",
+      {'status': 'active'},
+      where: "id = ?",
+      whereArgs: [id],
+    );
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'RESTORE',
         'customers',
         recordId: id,
         userId: AuthService.instance.currentUser?.id ?? 'system',

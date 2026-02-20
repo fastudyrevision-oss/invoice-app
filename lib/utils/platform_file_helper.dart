@@ -90,7 +90,7 @@ class PlatformFileHelper {
       await file.writeAsBytes(bytes);
 
       // Share the file
-      await Share.shareXFiles([XFile(file.path)], subject: suggestedName);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], subject: suggestedName));
 
       return file;
     } else {
@@ -129,7 +129,7 @@ class PlatformFileHelper {
       await file.writeAsString(csvContent);
 
       // Share the file
-      await Share.shareXFiles([XFile(file.path)], subject: suggestedName);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], subject: suggestedName));
 
       return file;
     } else {
@@ -149,13 +149,53 @@ class PlatformFileHelper {
     }
   }
 
+  /// Save any binary file with platform-specific handling
+  static Future<File?> saveFile({
+    required Uint8List bytes,
+    required String suggestedName,
+    required String extension,
+    String dialogTitle = 'Save File',
+  }) async {
+    if (kIsWeb) {
+      throw UnimplementedError('File export not yet supported on web');
+    }
+
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+
+    if (isAndroid) {
+      // Android: Save to temp directory and share
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$suggestedName');
+      await file.writeAsBytes(bytes);
+
+      // Share the file
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], subject: suggestedName));
+
+      return file;
+    } else {
+      // Desktop: Use file picker
+      final savePath = await FilePicker.platform.saveFile(
+        dialogTitle: dialogTitle,
+        fileName: suggestedName,
+        type: FileType.custom,
+        allowedExtensions: [extension],
+      );
+
+      if (savePath == null) return null;
+
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+      return file;
+    }
+  }
+
   /// Share any file using the platform's share dialog
   /// Useful for Android where we want to share files directly
   static Future<void> shareFile({
     required String filePath,
     String? subject,
   }) async {
-    await Share.shareXFiles([XFile(filePath)], subject: subject);
+    await SharePlus.instance.share(ShareParams(files: [XFile(filePath)], subject: subject));
   }
 
   /// Share PDF bytes directly (useful when file doesn't need to be saved)

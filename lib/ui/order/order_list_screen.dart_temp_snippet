@@ -1,0 +1,36 @@
+  Future<void> _fastPrintOrder(Invoice invoice) async {
+    try {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("🖨️ Preparing thermal receipt...")),
+      );
+
+      final db = await dbHelper.db;
+      final rawItems = await db.rawQuery(
+        '''
+        SELECT ii.qty, ii.price, p.name as product_name
+        FROM invoice_items ii
+        JOIN products p ON ii.product_id = p.id
+        WHERE ii.invoice_id = ?
+      ''',
+        [invoice.id],
+      );
+
+      final file = await generateThermalReceipt(invoice, items: rawItems);
+      if (file != null) {
+        await printPdfFile(file);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("✅ Sent to printer")),
+          );
+        }
+      }
+    } catch (e) {
+      logger.error('OrderList', 'Fast print error', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Print error: $e")),
+        );
+      }
+    }
+  }

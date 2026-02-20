@@ -6,11 +6,11 @@ import '../models/product_batch.dart';
 import '../models/product.dart';
 import '../models/supplier.dart';
 import '../services/thermal_printer/index.dart';
-import 'purchase_pdf_export_helper.dart';
 import '../../utils/date_helper.dart';
 import '../db/database_helper.dart';
 import '../core/services/audit_logger.dart';
 import '../services/auth_service.dart';
+import 'order/pdf_export_helper.dart';
 
 class PurchaseDetailFrame extends StatefulWidget {
   final PurchaseRepository repo;
@@ -165,7 +165,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white, width: 2),
                 ),
@@ -243,20 +243,20 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                                 end: Alignment.bottomRight,
                                 colors: [
                                   Colors.white,
-                                  Colors.blue.withOpacity(0.05),
+                                  Colors.blue.withValues(alpha: 0.05),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.blue.withOpacity(0.1),
+                                  color: Colors.blue.withValues(alpha: 0.1),
                                   spreadRadius: 1,
                                   blurRadius: 6,
                                   offset: const Offset(0, 3),
                                 ),
                               ],
                               border: Border.all(
-                                color: Colors.blue.withOpacity(0.2),
+                                color: Colors.blue.withValues(alpha: 0.2),
                                 width: 1,
                               ),
                             ),
@@ -279,7 +279,9 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                                     borderRadius: BorderRadius.circular(10),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.blue.withOpacity(0.3),
+                                        color: Colors.blue.withValues(
+                                          alpha: 0.3,
+                                        ),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),
@@ -464,7 +466,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.3),
+                  color: Colors.grey.withValues(alpha: 0.3),
                   spreadRadius: 1,
                   blurRadius: 10,
                   offset: const Offset(0, -3),
@@ -604,48 +606,67 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        // Convert purchase items to receipt items
-                        final receiptItems = _buildReceiptItems();
-
-                        // Use new ESC/POS thermal printing service
-                        await thermalPrinting.printPurchase(
-                          _purchase,
-                          items: receiptItems,
-                          supplierName: _supplier?.name,
-                          context: context,
-                        );
-                      },
-                      icon: const Icon(Icons.receipt_long),
-                      label: const Text("Thermal Receipt"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
+                    Flexible(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _printThermal(false),
+                        icon: const Icon(Icons.receipt_long, size: 18),
+                        label: const Text(
+                          "Network",
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _handleUsbPrint,
-                      icon: const Icon(Icons.usb),
-                      label: const Text("USB Print"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        foregroundColor: Colors.white,
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _printThermal(true),
+                        icon: const Icon(Icons.usb, size: 18),
+                        label: const Text(
+                          "USB",
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Print feature available'),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.print),
-                      label: const Text("Print"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final items = await _buildReceiptItems();
+                          final mappedItems = items
+                              .map(
+                                (e) => {
+                                  'product_name': e.name,
+                                  'qty': e.quantity,
+                                  'price': e.price,
+                                },
+                              )
+                              .toList();
+                          await generatePurchasePdf(
+                            _purchase,
+                            mappedItems,
+                            _supplier?.name ?? 'Unknown',
+                          );
+                        },
+                        icon: const Icon(Icons.print, size: 18),
+                        label: const Text(
+                          "PDF",
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
                       ),
                     ),
                   ],
@@ -658,40 +679,21 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
     );
   }
 
-  Future<void> _handleUsbPrint() async {
-    // 1. Show loading
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Preparing print data...')));
+  Future<void> _printThermal(bool isUsb) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Preparing thermal receipt...')),
+    );
 
     try {
-      // 2. Fetch items
-      final items = await widget.repo.getItemsByPurchaseId(_purchase.id);
-
-      // 3. Map to print format (requires fetching product names)
-      final List<Map<String, dynamic>> printItems = [];
-      for (var item in items) {
-        final product = await widget.repo.getProductById(item.productId);
-        printItems.add({
-          'product_name': product?.name ?? 'Item ${item.productId}',
-          'qty': item.qty,
-          'price': item.purchasePrice,
-        });
-      }
-
-      // 4. Generate PDF bytes/file for thermal layout
-      final pdfFile = await generateThermalReceipt(
+      final items = await _buildReceiptItems();
+      await thermalPrinting.printPurchase(
         _purchase,
-        items: printItems,
-        supplierName: _supplier?.name,
+        items: items,
+        supplierName: _supplier?.name ?? 'Unknown',
+        context: mounted ? context : null,
       );
-
-      // 5. Trigger System Print Dialog (USB/Default Printer)
-      if (pdfFile != null) {
-        await printPdfFile(pdfFile);
-      }
     } catch (e) {
-      debugPrint("Print Error: $e");
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -701,10 +703,20 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
   }
 
   /// Helper method to convert purchase items to receipt items
-  List<ReceiptItem> _buildReceiptItems() {
-    final items = <ReceiptItem>[];
-    // In a real app, you would fetch PurchaseItems from database
-    // For now, returning empty list (pass it from parent or fetch dynamically)
+  Future<List<ReceiptItem>> _buildReceiptItems() async {
+    final purchaseItems = await widget.repo.getItemsByPurchaseId(_purchase.id);
+    final List<ReceiptItem> items = [];
+
+    for (var item in purchaseItems) {
+      final product = await widget.repo.getProductById(item.productId);
+      items.add(
+        ReceiptItem(
+          name: product?.name ?? 'Item ${item.productId}',
+          quantity: item.qty.toDouble(),
+          price: item.purchasePrice,
+        ),
+      );
+    }
     return items;
   }
 
@@ -712,9 +724,9 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -740,28 +752,35 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
     Color color,
     IconData icon,
   ) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            color: color,
-            fontWeight: FontWeight.bold,
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

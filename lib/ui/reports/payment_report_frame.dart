@@ -392,6 +392,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
                   _startDate == null && _endDate == null
                       ? 'Select Date Range'
                       : '${_startDate != null ? DateFormat('dd/MM/yy').format(_startDate!) : ''} - ${_endDate != null ? DateFormat('dd/MM/yy').format(_endDate!) : ''}',
+                  overflow: TextOverflow.ellipsis,
                 ),
                 onPressed: () async {
                   final range = await showDateRangePicker(

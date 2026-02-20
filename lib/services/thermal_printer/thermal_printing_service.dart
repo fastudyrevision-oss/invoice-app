@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'package:printing/printing.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 import '../../models/invoice.dart';
 import '../../models/purchase.dart';
+import '../../models/stock_disposal.dart';
+import '../../db/database_helper.dart';
+import '../../dao/invoice_item_dao.dart';
+import '../../dao/product_dao.dart';
 import '../printer_settings_service.dart';
 import '../logger_service.dart';
 import '../exception_handler.dart';
@@ -9,6 +16,7 @@ import '../error_message_service.dart';
 import 'receipt_widget.dart';
 import 'receipt_image_generator.dart';
 import 'printer_service.dart';
+import '../../ui/order/pdf_export_helper.dart';
 
 /// 🎯 High-Level Thermal Printing Facade
 ///
@@ -43,79 +51,70 @@ class ThermalPrintingService {
   Future<bool> printInvoice(
     Invoice invoice, {
     required List<ReceiptItem> items,
-    String? printerAddress,
-    int? printerPort,
     BuildContext? context,
   }) async {
     try {
-      logger.info(
-        _tag,
-        '📄 Printing invoice: ${invoice.id}',
-        context: {
-          'invoiceId': invoice.id,
-          'itemCount': items.length,
-          'printer': printerAddress,
-        },
+      logger.info(_tag, '📄 Printing invoice via PDF engine: ${invoice.id}');
+
+      final mappedItems = items
+          .map(
+            (e) => {
+              'product_name': e.name,
+              'qty': e.quantity,
+              'price': e.price,
+            },
+          )
+          .toList();
+
+      // Use the PDF export helper's silent print function
+      return await printSilentThermalReceiptInternal(
+        invoice,
+        items: mappedItems,
       );
+    } catch (e, st) {
+      logger.error(
+        _tag,
+        'Failed to print invoice via PDF engine',
+        error: e,
+        stackTrace: st,
+      );
+      return false;
+    }
+  }
 
-      logger.startPerformanceTimer('print_invoice');
+  /// Print an order by fetching its items from the database
+  /// This is a convenience method for "Fast Print" buttons
+  Future<bool> printOrder(Invoice invoice, {BuildContext? context}) async {
+    try {
+      logger.info(_tag, '🚀 Fast Printing Order: ${invoice.id}');
 
-      // Use saved settings if not provided
-      printerAddress ??= await _settingsService.getPrinterAddress();
-      printerPort ??= await _settingsService.getPrinterPort();
+      // Fetch items with product names
+      final db = await DatabaseHelper.instance.db;
+      final itemDao = InvoiceItemDao(db);
+      final productDao = ProductDao(db);
 
-      if (printerAddress == null || printerAddress.isEmpty) {
-        throw PrinterException(
-          message: 'No printer address configured',
-          originalError: 'Printer settings not saved',
+      final invoiceItems = await itemDao.getByInvoiceId(invoice.id);
+      final receiptItems = <ReceiptItem>[];
+
+      for (final item in invoiceItems) {
+        final product = await productDao.getById(item.productId);
+        receiptItems.add(
+          ReceiptItem(
+            name: product?.name ?? 'Product ${item.productId}',
+            quantity: item.qty.toDouble(),
+            price: item.price,
+          ),
         );
       }
 
-      logger.debug(_tag, 'Using printer: $printerAddress:$printerPort');
-
-      // Create receipt widget
-      final receipt = ReceiptFactory.fromInvoice(invoice, items: items);
-
-      // Generate image
-      logger.debug(_tag, '🖼️  Generating receipt image...');
-      final receiptImage = await ReceiptImageGenerator.generateReceiptImage(
-        receipt,
-        pixelRatio: 2.0,
-      );
-
-      logger.debug(
-        _tag,
-        'Receipt image generated: ${receiptImage.lengthInBytes} bytes',
-      );
-
-      // Print
-      final success = await _printWithPrinterSelection(
-        receiptImage,
-        printerAddress: printerAddress,
-        printerPort: printerPort,
-        context: (context != null && context.mounted) ? context : null,
-      );
-
-      logger.endPerformanceTimer('print_invoice', tag: _tag);
-
-      if (success) {
-        logger.info(_tag, '✅ Invoice printed successfully');
-      } else {
-        logger.warning(_tag, '⚠️ Invoice print failed');
-      }
-
-      return success;
+      return await printInvoice(invoice, items: receiptItems, context: context);
     } catch (e, st) {
-      logger.endPerformanceTimer('print_invoice', tag: _tag);
-      final exception = ExceptionHandler.handleException(
-        e,
+      logger.error(
+        _tag,
+        'Failed to fast print order',
+        error: e,
         stackTrace: st,
-        tag: _tag,
-        context: {'invoiceId': invoice.id},
       );
-      if (context != null && context.mounted) {
-        ErrorMessageService.showError(context, exception);
-      }
       return false;
     }
   }
@@ -133,86 +132,351 @@ class ThermalPrintingService {
   Future<bool> printPurchase(
     Purchase purchase, {
     required List<ReceiptItem> items,
-    String? supplierName,
-    String? printerAddress,
-    int? printerPort,
+    required String supplierName,
+    BuildContext? context,
+  }) async {
+    try {
+      logger.info(_tag, '📦 Printing purchase via PDF engine: ${purchase.id}');
+
+      final mappedItems = items
+          .map(
+            (e) => {
+              'product_name': e.name,
+              'qty': e.quantity,
+              'price': e.price,
+            },
+          )
+          .toList();
+
+      return await printSilentPurchaseThermalReceiptInternal(
+        purchase,
+        mappedItems,
+        supplierName,
+      );
+    } catch (e, st) {
+      logger.error(
+        _tag,
+        'Failed to print purchase via PDF engine',
+        error: e,
+        stackTrace: st,
+      );
+      return false;
+    }
+  }
+
+  /// Print a stock disposal receipt
+  Future<bool> printStockDisposal(
+    StockDisposal disposal, {
     BuildContext? context,
   }) async {
     try {
       logger.info(
         _tag,
-        '📦 Printing purchase: ${purchase.id}',
-        context: {
-          'purchaseId': purchase.id,
-          'supplier': supplierName,
-          'itemCount': items.length,
-        },
+        '♻️ Printing stock disposal via PDF engine: ${disposal.id}',
       );
-
-      logger.startPerformanceTimer('print_purchase');
-
-      // Use saved settings if not provided
-      printerAddress ??= await _settingsService.getPrinterAddress();
-      printerPort ??= await _settingsService.getPrinterPort();
-
-      if (printerAddress == null || printerAddress.isEmpty) {
-        throw PrinterException(
-          message: 'No printer address configured',
-          originalError: 'Printer settings not saved',
-        );
-      }
-
-      logger.debug(_tag, 'Using printer: $printerAddress:$printerPort');
-
-      // Create receipt widget
-      final receipt = ReceiptFactory.fromPurchase(
-        purchase,
-        items: items,
-        supplierName: supplierName,
-      );
-
-      // Generate image
-      logger.debug(_tag, '🖼️  Generating receipt image...');
-      final receiptImage = await ReceiptImageGenerator.generateReceiptImage(
-        receipt,
-        pixelRatio: 2.0,
-      );
-
-      logger.debug(
-        _tag,
-        'Receipt image generated: ${receiptImage.lengthInBytes} bytes',
-      );
-
-      // Print
-      final success = await _printWithPrinterSelection(
-        receiptImage,
-        printerAddress: printerAddress,
-        printerPort: printerPort,
-        context: (context != null && context.mounted) ? context : null,
-      );
-
-      logger.endPerformanceTimer('print_purchase', tag: _tag);
-
-      if (success) {
-        logger.info(_tag, '✅ Purchase printed successfully');
-      } else {
-        logger.warning(_tag, '⚠️ Purchase print failed');
-      }
-
-      return success;
+      return await printSilentStockDisposalThermalReceiptInternal(disposal);
     } catch (e, st) {
-      logger.endPerformanceTimer('print_purchase', tag: _tag);
-      final exception = ExceptionHandler.handleException(
-        e,
+      logger.error(
+        _tag,
+        'Failed to print stock disposal via PDF engine',
+        error: e,
         stackTrace: st,
-        tag: _tag,
-        context: {'purchaseId': purchase.id},
       );
-      if (context != null && context.mounted) {
-        ErrorMessageService.showError(context, exception);
-      }
       return false;
     }
+  }
+
+  /// Internal: Silent print invoice thermal receipt
+  Future<bool> printSilentThermalReceiptInternal(
+    Invoice invoice, {
+    List<Map<String, dynamic>>? items,
+  }) async {
+    try {
+      logger.info(
+        _tag,
+        '🖨️ Silent printing thermal receipt for #${invoice.id}',
+      );
+
+      // Generate PDF bytes for thermal receipt
+      final pdfBytes = await _generateInvoiceThermalPdf(invoice, items);
+
+      // Use the existing silent print method
+      return await printPdfSilently(pdfBytes, docName: 'Receipt_${invoice.id}');
+    } catch (e, st) {
+      logger.error(
+        _tag,
+        'Silent thermal print failed',
+        error: e,
+        stackTrace: st,
+      );
+      return false;
+    }
+  }
+
+  /// Internal: Silent print purchase thermal receipt
+  Future<bool> printSilentPurchaseThermalReceiptInternal(
+    Purchase purchase,
+    List<Map<String, dynamic>> items,
+    String supplierName,
+  ) async {
+    try {
+      logger.info(
+        _tag,
+        '🖨️ Silent printing purchase receipt for #${purchase.id}',
+      );
+
+      // Generate simple purchase PDF for thermal printing
+      final pdfBytes = await _generatePurchaseThermalPdf(
+        purchase,
+        items,
+        supplierName,
+      );
+
+      return await printPdfSilently(
+        pdfBytes,
+        docName: 'Purchase_${purchase.invoiceNo}',
+      );
+    } catch (e, st) {
+      logger.error(
+        _tag,
+        'Silent purchase print failed',
+        error: e,
+        stackTrace: st,
+      );
+      return false;
+    }
+  }
+
+  /// Internal: Silent print stock disposal thermal receipt
+  Future<bool> printSilentStockDisposalThermalReceiptInternal(
+    StockDisposal disposal,
+  ) async {
+    try {
+      logger.info(
+        _tag,
+        '🖨️ Silent printing disposal receipt for #${disposal.id}',
+      );
+
+      // Generate simple disposal PDF for thermal printing
+      final pdfBytes = await _generateDisposalThermalPdf(disposal);
+
+      return await printPdfSilently(
+        pdfBytes,
+        docName: 'Disposal_${disposal.id}',
+      );
+    } catch (e, st) {
+      logger.error(
+        _tag,
+        'Silent disposal print failed',
+        error: e,
+        stackTrace: st,
+      );
+      return false;
+    }
+  }
+
+  /// Generate thermal PDF for invoice
+  Future<Uint8List> _generateInvoiceThermalPdf(
+    Invoice invoice,
+    List<Map<String, dynamic>>? items,
+  ) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        margin: pw.EdgeInsets.zero,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                'Receipt #${invoice.id}',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Customer: ${invoice.customerName ?? 'N/A'}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Divider(),
+              if (items != null)
+                ...items.map(
+                  (item) => pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Expanded(
+                          child: pw.Text(
+                            '${item['product_name']}',
+                            style: const pw.TextStyle(fontSize: 9),
+                          ),
+                        ),
+                        pw.Text(
+                          '${item['qty']} x ${item['price']}',
+                          style: const pw.TextStyle(fontSize: 9),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Total:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    'Rs ${invoice.total.toStringAsFixed(0)}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text('Thank You!', style: const pw.TextStyle(fontSize: 10)),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  /// Generate thermal PDF for purchase
+  Future<Uint8List> _generatePurchaseThermalPdf(
+    Purchase purchase,
+    List<Map<String, dynamic>> items,
+    String supplierName,
+  ) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        margin: pw.EdgeInsets.zero,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                'Purchase #${purchase.invoiceNo}',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Supplier: $supplierName',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Divider(),
+              ...items.map(
+                (item) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Expanded(
+                        child: pw.Text(
+                          '${item['product_name']}',
+                          style: const pw.TextStyle(fontSize: 9),
+                        ),
+                      ),
+                      pw.Text(
+                        '${item['qty']} x ${item['price']}',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Total:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    'Rs ${purchase.total.toStringAsFixed(0)}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  /// Generate thermal PDF for disposal
+  Future<Uint8List> _generateDisposalThermalPdf(StockDisposal disposal) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        margin: pw.EdgeInsets.zero,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                'Stock Disposal',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Product: ${disposal.productName ?? 'N/A'}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.Text(
+                'Qty: ${disposal.qty}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.Text(
+                'Type: ${disposal.disposalType}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Cost Loss:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    'Rs ${disposal.costLoss.toStringAsFixed(0)}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
   }
 
   /// Print custom receipt
@@ -243,7 +507,15 @@ class ThermalPrintingService {
 
       // Generate image
       logger.debug(_tag, 'Generating custom receipt image...');
+
+      if (context == null) {
+        throw PrinterException(
+          message: 'Context required for receipt image generation',
+        );
+      }
+
       final receiptImage = await ReceiptImageGenerator.generateReceiptImage(
+        context,
         receipt,
         pixelRatio: 2.0,
       );
@@ -258,7 +530,7 @@ class ThermalPrintingService {
         receiptImage,
         printerAddress: printerAddress,
         printerPort: printerPort,
-        context: (context != null && context.mounted) ? context : null,
+        context: (context.mounted) ? context : null,
       );
 
       logger.endPerformanceTimer('print_custom', tag: _tag);
@@ -470,29 +742,38 @@ class ThermalPrintingService {
     BuildContext? context,
   }) async {
     try {
-      // If printer address provided, connect and print
-      if (printerAddress != null) {
-        logger.debug(
-          _tag,
-          'Connecting to specified printer: $printerAddress:$printerPort',
-        );
+      final address = (printerAddress != null && printerAddress.isNotEmpty)
+          ? printerAddress
+          : null;
 
-        final connected = await _printerService.connectNetwork(
-          printerAddress,
-          port: printerPort,
-        );
+      if (address != null) {
+        final isIP = ThermalPrinterService.isValidIPAddress(address);
 
-        if (!connected) {
+        if (isIP) {
+          logger.debug(
+            _tag,
+            'Connecting to network printer: $printerAddress:$printerPort',
+          );
+          final connected = await _printerService.connectNetwork(
+            address,
+            port: printerPort,
+          );
+
+          if (connected) {
+            // Send to network printer
+            return await _printerService.printReceipt(
+              receiptImage,
+              autoClose: true,
+            );
+          }
           logger.warning(
             _tag,
-            'Could not connect to printer at $printerAddress:$printerPort',
-          );
-          throw PrinterException(
-            message: 'Could not connect to printer',
-            printerAddress: printerAddress,
-            printerPort: printerPort,
+            'Network connection failed, falling back to system print',
           );
         }
+
+        // Try USB/System print for names or failed network IPs
+        return await _printViaSystem(receiptImage, printerName: address);
       } else if (!_printerService.isConnected) {
         // No printer connected, show setup dialog
         logger.warning(_tag, 'No printer connected, showing setup dialog');
@@ -556,6 +837,217 @@ class ThermalPrintingService {
       }
       rethrow;
     }
+  }
+
+  /// Print via system (USB/Windows) using the printing package
+  /// This bypasses the socket-based ESC/POS but still allows silent printing
+  Future<bool> _printViaSystem(
+    Uint8List receiptImage, {
+    String? printerName,
+  }) async {
+    try {
+      logger.info(
+        _tag,
+        '🖨️ System Print Request: ${printerName ?? "Default (Interactive)"}',
+      );
+
+      final pdfBytes = await _generatePdfFromImage(receiptImage);
+
+      if (printerName != null && printerName.isNotEmpty) {
+        // Find specific printer for silent printing
+        try {
+          final printers = await Printing.listPrinters();
+          logger.debug(
+            _tag,
+            'Available system printers: ${printers.map((p) => p.name).join(", ")}',
+          );
+
+          final printer = printers.firstWhere(
+            (p) => p.name.toLowerCase() == printerName.toLowerCase(),
+            orElse: () => printers.firstWhere(
+              (p) => p.name.toLowerCase().contains(printerName.toLowerCase()),
+              orElse: () => throw Exception('Printer not found'),
+            ),
+          );
+
+          logger.info(_tag, '✅ Found matching printer: ${printer.name}');
+          return await Printing.directPrintPdf(
+            printer: printer,
+            onLayout: (format) => pdfBytes,
+            name: 'Invoice_${DateTime.now().millisecondsSinceEpoch}',
+          );
+        } catch (e) {
+          logger.warning(
+            _tag,
+            'Silent print failed - Printer "$printerName" not found or error',
+            error: e,
+          );
+        }
+      }
+
+      // Fallback to dialog if printer not found or not specified
+      logger.info(_tag, 'Falling back to system print dialog');
+      return await Printing.layoutPdf(
+        onLayout: (format) async => pdfBytes,
+        name: 'Invoice_${DateTime.now().millisecondsSinceEpoch}',
+      );
+    } catch (e) {
+      logger.error(_tag, 'System print failed', error: e);
+      return false;
+    }
+  }
+
+  /// 🚀 Print a PDF silently using saved settings
+  /// Respects Network/USB priority and avoids all dialogs
+  Future<bool> printPdfSilently(Uint8List pdfBytes, {String? docName}) async {
+    try {
+      final docTitle =
+          docName ?? 'Receipt_${DateTime.now().millisecondsSinceEpoch}';
+      logger.info(_tag, '🚀 Starting silent PDF print: $docTitle');
+
+      // Get saved settings
+      final address = await _settingsService.getPrinterAddress();
+      final port = await _settingsService.getPrinterPort();
+      final usbName = await _settingsService.getUsbPrinterName();
+      final priority = await _settingsService.getPrinterPriority();
+
+      logger.debug(
+        _tag,
+        'Settings for silent print',
+        context: {
+          'address': address,
+          'port': port,
+          'usbName': usbName,
+          'priority': priority,
+        },
+      );
+
+      if (priority == 'network') {
+        // 1. Try Network (Silent ESC/POS)
+        if (address != null && address.isNotEmpty) {
+          logger.debug(_tag, 'Attempting silent network print to $address');
+          final success = await _printPdfViaNetwork(pdfBytes, address, port);
+          if (success) return true;
+          logger.warning(
+            _tag,
+            'Network silent print failed, falling back to USB if available',
+          );
+        }
+
+        // 2. Fallback to USB (Silent System Print)
+        if (usbName != null && usbName.isNotEmpty) {
+          logger.debug(_tag, 'Attempting silent USB fallback to $usbName');
+          return await _printPdfViaSystemSilent(pdfBytes, usbName, docTitle);
+        }
+      } else {
+        // 1. Try USB (Silent System Print)
+        if (usbName != null && usbName.isNotEmpty) {
+          logger.debug(_tag, 'Attempting silent USB print to $usbName');
+          final success = await _printPdfViaSystemSilent(
+            pdfBytes,
+            usbName,
+            docTitle,
+          );
+          if (success) return true;
+          logger.warning(
+            _tag,
+            'USB silent print failed, falling back to network if available',
+          );
+        }
+
+        // 2. Fallback to Network (Silent ESC/POS)
+        if (address != null && address.isNotEmpty) {
+          logger.debug(_tag, 'Attempting silent network fallback to $address');
+          return await _printPdfViaNetwork(pdfBytes, address, port);
+        }
+      }
+
+      logger.error(
+        _tag,
+        'No printer configured or all silent print attempts failed',
+      );
+      return false;
+    } catch (e, st) {
+      logger.error(_tag, 'Error in silent PDF print', error: e, stackTrace: st);
+      return false;
+    }
+  }
+
+  /// Internal: Print PDF to network printer (converts to image → ESC/POS)
+  Future<bool> _printPdfViaNetwork(
+    Uint8List pdfBytes,
+    String address,
+    int port,
+  ) async {
+    try {
+      // Rasterize PDF to images (one per page)
+      int pageIndex = 0;
+      bool allPagesSuccess = true;
+
+      await for (final page in Printing.raster(pdfBytes, dpi: 200)) {
+        final imageBytes = await page.toPng();
+
+        final connected = await _printerService.connectNetwork(
+          address,
+          port: port,
+        );
+        if (!connected) return false;
+
+        final success = await _printerService.printReceipt(
+          imageBytes,
+          autoClose: true,
+        );
+
+        if (!success) allPagesSuccess = false;
+        pageIndex++;
+      }
+
+      return pageIndex > 0 && allPagesSuccess;
+    } catch (e) {
+      logger.error(_tag, 'Network PDF print failed', error: e);
+      return false;
+    }
+  }
+
+  /// Internal: Print PDF to specific USB printer silently
+  Future<bool> _printPdfViaSystemSilent(
+    Uint8List pdfBytes,
+    String printerName,
+    String docName,
+  ) async {
+    try {
+      final printers = await Printing.listPrinters();
+      final printer = printers.firstWhere(
+        (p) => p.name.toLowerCase() == printerName.toLowerCase(),
+        orElse: () => printers.firstWhere(
+          (p) => p.name.toLowerCase().contains(printerName.toLowerCase()),
+          orElse: () => throw Exception('Printer not found'),
+        ),
+      );
+
+      return await Printing.directPrintPdf(
+        printer: printer,
+        onLayout: (format) => pdfBytes,
+        name: docName,
+      );
+    } catch (e) {
+      logger.error(_tag, 'System silent print failed', error: e);
+      return false;
+    }
+  }
+
+  /// Helper: Convert the receipt image to a PDF for system printing
+  Future<Uint8List> _generatePdfFromImage(Uint8List imageBytes) async {
+    final pdf = pw.Document();
+    final image = pw.MemoryImage(imageBytes);
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        margin: pw.EdgeInsets.zero,
+        build: (context) => pw.Center(child: pw.Image(image)),
+      ),
+    );
+    return pdf.save();
   }
 }
 

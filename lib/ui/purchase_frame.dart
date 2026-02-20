@@ -18,6 +18,8 @@ import '../utils/responsive_utils.dart';
 import '../services/thermal_printer/index.dart';
 import '../services/logger_service.dart';
 
+enum PurchaseViewMode { table, compact, card }
+
 class PurchaseFrame extends StatefulWidget {
   final PurchaseRepository repo;
   final ProductRepository productRepo;
@@ -51,7 +53,80 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
   String _searchQuery = "";
   String? _selectedSupplierId;
   final String _sortBy = "date_desc";
+  PurchaseViewMode _viewMode = PurchaseViewMode.card;
   final TextEditingController _searchController = TextEditingController();
+
+  IconData _viewModeIcon() {
+    switch (_viewMode) {
+      case PurchaseViewMode.table:
+        return Icons.table_chart;
+      case PurchaseViewMode.compact:
+        return Icons.view_list;
+      case PurchaseViewMode.card:
+        return Icons.grid_view;
+    }
+  }
+
+  String _viewModeLabel() {
+    switch (_viewMode) {
+      case PurchaseViewMode.table:
+        return 'Table';
+      case PurchaseViewMode.compact:
+        return 'Compact';
+      case PurchaseViewMode.card:
+        return 'Card';
+    }
+  }
+
+  void _cycleViewMode() {
+    setState(() {
+      _viewMode = PurchaseViewMode
+          .values[(_viewMode.index + 1) % PurchaseViewMode.values.length];
+    });
+  }
+
+  void _showInsightsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppBar(
+                title: const Text("Purchase Insights"),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                automaticallyImplyLeading: false,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: PurchaseInsightCard(
+                    purchases: _allPurchases,
+                    loading: false,
+                    lastUpdated: DateTime.now(),
+                    stats: _overallStats,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -254,9 +329,19 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
               title: const Text("Print Thermal Receipt"),
               onTap: () async {
                 Navigator.pop(context);
+                final supplier = _suppliers.firstWhere(
+                  (s) => s.id == purchase.supplierId,
+                  orElse: () => Supplier(
+                    id: '',
+                    name: 'Unknown',
+                    createdAt: '',
+                    updatedAt: '',
+                  ),
+                );
                 await thermalPrinting.printPurchase(
                   purchase,
                   items: const [],
+                  supplierName: supplier.name,
                   context: context,
                 );
               },
@@ -312,6 +397,16 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
             actions: isMobile
                 ? [
                     IconButton(
+                      icon: Icon(_viewModeIcon()),
+                      tooltip: 'View: ${_viewModeLabel()}',
+                      onPressed: _cycleViewMode,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.insights),
+                      tooltip: 'Insights',
+                      onPressed: _showInsightsDialog,
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: _loadInitialData,
                       tooltip: 'Refresh',
@@ -360,6 +455,26 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                   ]
                 : [
                     const SizedBox(width: 10),
+                    Tooltip(
+                      message: 'View: ${_viewModeLabel()}',
+                      child: TextButton.icon(
+                        icon: Icon(_viewModeIcon(), size: 20),
+                        label: Text(_viewModeLabel()),
+                        onPressed: _cycleViewMode,
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).appBarTheme.foregroundColor ??
+                              Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.insights),
+                      tooltip: 'Insights',
+                      onPressed: _showInsightsDialog,
+                    ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.print),
                       tooltip: 'Print List',
@@ -476,20 +591,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
               ),
             ),
           ),
-          body: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: PurchaseInsightCard(
-                  purchases: _displayedPurchases,
-                  stats: _overallStats, // Pass the calculated stats
-                  loading: false,
-                  lastUpdated: DateTime.now(),
-                ),
-              ),
-              Expanded(child: _buildPurchaseList(isMobile)),
-            ],
-          ),
+          body: _buildBody(),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () async {
               final added = await Navigator.push(
@@ -510,6 +612,173 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildBody() {
+    if (_allPurchases.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.shopping_bag_outlined,
+              size: 72,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "No purchases found",
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    switch (_viewMode) {
+      case PurchaseViewMode.table:
+        return _buildTableView();
+      case PurchaseViewMode.compact:
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _displayedPurchases.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) =>
+              _buildCompactItem(_displayedPurchases[index]),
+        );
+      case PurchaseViewMode.card:
+        return _buildPurchaseList(ResponsiveUtils.isMobile(context));
+    }
+  }
+
+  Widget _buildTableView() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
+          columns: const [
+            DataColumn(label: Text('Invoice #')),
+            DataColumn(label: Text('Supplier')),
+            DataColumn(label: Text('Date')),
+            DataColumn(label: Text('Total')),
+            DataColumn(label: Text('Pending')),
+            DataColumn(label: Text('Status')),
+            DataColumn(label: Text('Actions')),
+          ],
+          rows: _displayedPurchases.map((p) {
+            return DataRow(
+              cells: [
+                DataCell(Text(p.invoiceNo)),
+                DataCell(
+                  FutureBuilder<Supplier?>(
+                    future: widget.repo.getSupplierById(p.supplierId),
+                    builder: (context, snap) =>
+                        Text(snap.data?.name ?? 'Loading...'),
+                  ),
+                ),
+                DataCell(Text(p.date)),
+                DataCell(Text("Rs ${p.total.toStringAsFixed(0)}")),
+                DataCell(
+                  Text(
+                    "Rs ${p.pending.toStringAsFixed(0)}",
+                    style: TextStyle(
+                      color: p.pending > 0 ? Colors.red : Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                DataCell(_buildStatusChip(p)),
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.visibility, size: 20),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PurchaseDetailFrame(
+                              repo: widget.repo,
+                              purchase: p,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.more_vert, size: 20),
+                        onPressed: () => _showPurchaseOptions(p),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactItem(Purchase p) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Colors.blue.shade50,
+        child: const Icon(Icons.shopping_cart, color: Colors.blue, size: 20),
+      ),
+      title: Text(
+        p.invoiceNo,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Text(p.date),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            "Rs ${p.total.toStringAsFixed(0)}",
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          if (p.pending > 0)
+            Text(
+              "Rs ${p.pending.toStringAsFixed(0)} pending",
+              style: const TextStyle(color: Colors.red, fontSize: 11),
+            ),
+        ],
+      ),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PurchaseDetailFrame(repo: widget.repo, purchase: p),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(Purchase p) {
+    final isPaid = p.pending <= 0;
+    final color = isPaid ? Colors.green : Colors.orange;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        isPaid ? "PAID" : "PENDING",
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 

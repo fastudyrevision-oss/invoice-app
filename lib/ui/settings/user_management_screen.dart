@@ -25,6 +25,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
     final users = await _repo.getAllUsers();
+    if (!mounted) return;
     setState(() {
       _users = users;
       _isLoading = false;

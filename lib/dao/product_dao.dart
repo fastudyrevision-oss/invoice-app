@@ -246,6 +246,32 @@ class ProductDao {
     return count;
   }
 
+  /// Restore product (set is_deleted = 0)
+  Future<int> restoreProduct(String id) async {
+    // Fetch old data for audit
+    final oldData = await getById(id, includeDeleted: true);
+
+    final count = await db.update(
+      "products",
+      {"is_deleted": 0, "updated_at": DateTime.now().toIso8601String()},
+      where: "id = ?",
+      whereArgs: [id],
+    );
+
+    if (oldData != null) {
+      await AuditLogger.log(
+        'RESTORE',
+        'products',
+        recordId: id,
+        userId: AuthService.instance.currentUser?.id ?? 'system',
+        oldData: oldData.toMap(),
+        txn: db,
+      );
+    }
+
+    return count;
+  }
+
   /// Update product quantity safely
   Future<int> updateQuantity(String id, int newQuantity) async {
     final args = [newQuantity, DateTime.now().toIso8601String(), id];

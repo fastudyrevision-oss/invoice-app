@@ -1,3 +1,4 @@
+import '../db/database_helper.dart';
 import '../dao/supplier_dao.dart';
 import '../dao/supplier_payment_dao.dart';
 import '../dao/supplier_report_dao.dart';
@@ -6,6 +7,7 @@ import '../models/supplier.dart';
 import '../models/supplier_payment.dart';
 import '../models/supplier_report.dart';
 import '../models/supplier_company.dart';
+import '../models/purchase.dart';
 
 class SupplierRepository {
   final SupplierDao _supplierDao;
@@ -33,6 +35,7 @@ class SupplierRepository {
     int pageSize = 50,
     String? keyword,
     bool showDeleted = false,
+    String? companyId,
   }) async {
     // async added
     final offset = page * pageSize;
@@ -41,6 +44,7 @@ class SupplierRepository {
       limit: pageSize,
       keyword: keyword,
       showDeleted: showDeleted,
+      companyId: companyId,
     );
     return suppliers;
   }
@@ -175,5 +179,36 @@ class SupplierRepository {
     String endDate,
   ) async {
     return _reportDao.getReports(startDate, endDate);
+  }
+
+  /// Get all purchases from this supplier
+  Future<List<Purchase>> getPurchases(String supplierId) async {
+    final db = await DatabaseHelper.instance.db;
+    final List<Map<String, dynamic>> result = await db.query(
+      'purchases',
+      where:
+          'supplier_id = ?', // ✅ Using correct underscore column name from model
+      whereArgs: [supplierId],
+      orderBy: 'date DESC',
+    );
+    return result.map<Purchase>((e) => Purchase.fromMap(e)).toList();
+  }
+
+  /// Get supplier count for each company (for company frame badges)
+  Future<Map<String, int>> getSupplierCountByCompany({
+    bool includeDeleted = false,
+  }) async {
+    return _supplierDao.getSupplierCountByCompany(
+      includeDeleted: includeDeleted,
+    );
+  }
+
+  /// Get supplier names for each company
+  Future<Map<String, List<String>>> getSupplierNamesByCompany({
+    bool includeDeleted = false,
+  }) async {
+    return _supplierDao.getSupplierNamesByCompany(
+      includeDeleted: includeDeleted,
+    );
   }
 }

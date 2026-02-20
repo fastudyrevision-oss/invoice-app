@@ -1,24 +1,51 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'receipt_widget.dart';
 
 /// 🖼️ Converts Flutter Receipt Widget to Image (Bitmap)
 /// This is required for ESC/POS imageRaster mode to support Urdu text rendering
 class ReceiptImageGenerator {
   /// Convert receipt widget to PNG bytes
-  /// 
+  ///
   /// [receiptWidget]: The ThermalReceiptWidget to render
   /// [dpi]: Device pixel ratio (higher = better quality, slower printing)
   /// Returns PNG bytes ready for ESC/POS imageRaster
   static Future<Uint8List> generateReceiptImage(
+    BuildContext context,
     ThermalReceiptWidget receiptWidget, {
     double pixelRatio = 2.0,
   }) async {
-    throw UnimplementedError(
-      'Use ReceiptCapture widget wrapper in actual Flutter app for proper rendering.'
+    final Completer<Uint8List> completer = Completer<Uint8List>();
+
+    // Use the Overlay approach to render the widget off-screen and capture it
+    final OverlayState overlay = Overlay.of(context);
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: -1000, // Move off-screen
+        top: 0,
+        child: Material(
+          child: ReceiptCapture(
+            receipt: receiptWidget,
+            onImageGenerated: (Uint8List? imageBytes) {
+              if (imageBytes != null && !completer.isCompleted) {
+                completer.complete(imageBytes);
+              } else if (!completer.isCompleted) {
+                completer.completeError('Failed to capture receipt image');
+              }
+              entry.remove();
+            },
+          ),
+        ),
+      ),
     );
+
+    overlay.insert(entry);
+    return completer.future;
   }
 
   /// Alternative: Use context + RepaintBoundary for simpler widget hierarchy
@@ -31,9 +58,7 @@ class ReceiptImageGenerator {
       final RenderRepaintBoundary boundary =
           globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary;
 
-      final ui.Image image = await boundary.toImage(
-        pixelRatio: pixelRatio,
-      );
+      final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
 
       final ByteData? byteData = await image.toByteData(
         format: ui.ImageByteFormat.png,
@@ -97,9 +122,6 @@ class _ReceiptCaptureState extends State<ReceiptCapture> {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      key: _receiptKey,
-      child: widget.receipt,
-    );
+    return RepaintBoundary(key: _receiptKey, child: widget.receipt);
   }
 }

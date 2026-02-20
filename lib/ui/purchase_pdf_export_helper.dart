@@ -102,7 +102,7 @@ Future<File?> generatePurchaseInvoicePdf(
     final logoBytes = await rootBundle.load('assets/logo.png');
     logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
   } catch (e) {
-    print('⚠️ Logo not found, skipping: $e');
+    // Logo not found, skipping
   }
 
   final date = DateFormat(
@@ -187,7 +187,7 @@ Future<File?> generatePurchaseInvoicePdf(
                   style: pw.TextStyle(font: boldFont, fontSize: 16),
                 ),
                 pw.SizedBox(height: 8),
-                pw.Table.fromTextArray(
+                pw.TableHelper.fromTextArray(
                   border: pw.TableBorder.all(width: 0.5),
                   cellAlignment: pw.Alignment.centerLeft,
                   headerDecoration: const pw.BoxDecoration(
@@ -249,7 +249,7 @@ Future<void> printPdfFile(File pdfFile) async {
       name: pdfFile.path.split(Platform.pathSeparator).last,
     );
   } else {
-    print("⚠️ PDF file not found: ${pdfFile.path}");
+    // PDF file not found: ${pdfFile.path}
   }
 }
 
@@ -261,7 +261,7 @@ Future<void> shareOrPrintPdf(File pdfFile) async {
       filename: pdfFile.path.split(Platform.pathSeparator).last,
     );
   } else {
-    print("⚠️ PDF file not found: ${pdfFile.path}");
+    // PDF file not found: ${pdfFile.path}
   }
 }
 
@@ -387,7 +387,7 @@ Future<File?> generateThermalReceipt(
 
           // Items Table
           if (items != null && items.isNotEmpty) ...[
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               border: pw.TableBorder.all(width: 0.5),
               cellAlignment: pw.Alignment.centerLeft,
               headerDecoration: const pw.BoxDecoration(

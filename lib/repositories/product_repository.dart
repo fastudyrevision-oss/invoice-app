@@ -32,6 +32,7 @@ class ProductRepository {
     bool onlyLowStock = false,
     String orderBy = 'name',
     bool isAscending = true,
+    bool includeDeleted = false,
   }) async {
     final dao = await _dao();
     return dao.getProductsPage(
@@ -43,6 +44,7 @@ class ProductRepository {
       onlyLowStock: onlyLowStock,
       orderBy: orderBy,
       isAscending: isAscending,
+      includeDeleted: includeDeleted,
     );
   }
 
@@ -74,6 +76,11 @@ class ProductRepository {
   Future<int> deleteProduct(String id) async {
     final dao = await _dao();
     return dao.delete(id);
+  }
+
+  Future<int> restoreProduct(String id) async {
+    final dao = await _dao();
+    return dao.restoreProduct(id);
   }
 
   Future<int> increaseStock(String id, int qty) async {

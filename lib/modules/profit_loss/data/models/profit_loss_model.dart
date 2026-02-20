@@ -28,6 +28,7 @@ class ProfitLossModel {
   final List<CustomerProfit> customerProfits;
   final List<Map<String, dynamic>> recentTransactions;
   final Map<String, double> expenseBreakdown;
+  final Map<String, double> incomeBreakdown; // ✅ Added
 
   ProfitLossModel({
     this.totalSales = 0.0,
@@ -49,6 +50,7 @@ class ProfitLossModel {
     this.customerProfits = const [],
     this.recentTransactions = const [],
     this.expenseBreakdown = const {},
+    this.incomeBreakdown = const {}, // ✅ Added
   });
 
   // Factory from ProfitLossSummary
@@ -68,6 +70,7 @@ class ProfitLossModel {
       expiredStockRefunds: s.expiredStockRefunds,
       netExpiredLoss: s.netExpiredLoss,
       expenseBreakdown: s.expenseBreakdown,
+      incomeBreakdown: s.incomeBreakdown, // ✅ Added
     );
   }
 

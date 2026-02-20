@@ -123,10 +123,7 @@ class ErrorMessageService {
                   const SizedBox(height: 4),
                   Text(
                     message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ],
               ),
@@ -214,37 +211,38 @@ class ErrorMessageService {
   }
 
   /// Get detailed error context for debugging
-  static String getDetailedMessage(dynamic error, [Map<String, dynamic>? additionalContext]) {
+  static String getDetailedMessage(
+    dynamic error, [
+    Map<String, dynamic>? additionalContext,
+  ]) {
     final buffer = StringBuffer();
-    
+
     buffer.writeln('═══ Error Details ═══');
     buffer.writeln('Type: ${error.runtimeType}');
     buffer.writeln('Message: ${getMessage(error)}');
-    
+
     if (error is AppException) {
       buffer.writeln('Original Error: ${error.originalError}');
       if (error.context != null) {
         buffer.writeln('Context: ${error.context}');
       }
     }
-    
+
     if (additionalContext != null && additionalContext.isNotEmpty) {
       buffer.writeln('Additional Context:');
       additionalContext.forEach((key, value) {
         buffer.writeln('  $key: $value');
       });
     }
-    
+
     buffer.writeln('═══════════════════');
-    
+
     return buffer.toString();
   }
 }
 
 /// 📋 Error Recovery Service - Suggests recovery actions
 class ErrorRecoveryService {
-  static const String _tag = '📋 ErrorRecoveryService';
-
   /// Get recovery suggestions
   static List<RecoverySuggestion> getSuggestions(dynamic error) {
     final suggestions = <RecoverySuggestion>[];
@@ -253,7 +251,8 @@ class ErrorRecoveryService {
       suggestions.addAll([
         RecoverySuggestion(
           title: 'Check Internet Connection',
-          description: 'Ensure your device is connected to a stable internet network',
+          description:
+              'Ensure your device is connected to a stable internet network',
           action: 'open_settings',
         ),
         RecoverySuggestion(
@@ -266,7 +265,8 @@ class ErrorRecoveryService {
       suggestions.addAll([
         RecoverySuggestion(
           title: 'Restart App',
-          description: 'Close and reopen the application to resolve database issues',
+          description:
+              'Close and reopen the application to resolve database issues',
           action: 'restart_app',
         ),
         RecoverySuggestion(
@@ -340,7 +340,8 @@ class ErrorRecoveryService {
 class RecoverySuggestion {
   final String title;
   final String description;
-  final String action; // 'retry', 'restart_app', 'open_settings', 'open_printer_settings', 'review'
+  final String
+  action; // 'retry', 'restart_app', 'open_settings', 'open_printer_settings', 'review'
 
   RecoverySuggestion({
     required this.title,
@@ -383,9 +384,9 @@ class ErrorStateWidget extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                  ),
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -398,35 +399,37 @@ class ErrorStateWidget extends StatelessWidget {
               const SizedBox(height: 20),
               Text(
                 'Recovery Suggestions:',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              ...suggestions.map((suggestion) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '• ${suggestion.title}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        suggestion.description,
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
+              ...suggestions.map(
+                (suggestion) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '• ${suggestion.title}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          suggestion.description,
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              )),
+              ),
             ],
             const SizedBox(height: 24),
             Row(

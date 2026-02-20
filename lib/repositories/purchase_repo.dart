@@ -48,22 +48,20 @@ class PurchaseRepository {
       final pDao = PurchaseDao(txn);
       final iDao = PurchaseItemDao(txn);
       final bDao = ProductBatchDao(txn);
-      // prodDao removed - not currently used (product qty updates commented out)
+      final prodDao = ProductDao(txn);
 
       await pDao.insertPurchase(purchase);
 
       for (var item in items) {
         await iDao.insertPurchaseItem(item);
-
-        //final product = await prodDao.getById(item.productId);
-        //if (product != null && product.isDeleted == 0) {
-        //  final updatedQty = product.quantity + item.qty;
-        //await prodDao.update(product.copyWith(quantity: updatedQty));
-        //}
+        // Refresh product stats (quantity and weighted average cost) from batches
+        await prodDao.recalculateProductFromBatches(item.productId);
       }
 
       for (var batch in batches) {
         await bDao.insertBatch(batch);
+        // Recalculate again after batch insertion to be absolutely sure
+        await prodDao.recalculateProductFromBatches(batch.productId);
       }
     });
   }
@@ -183,12 +181,12 @@ class PurchaseRepository {
     final result = await db.rawQuery(
       '''
     SELECT pb.id as batch_id, pb.batch_no, pb.expiry_date, pb.qty, pb.purchase_price,
-           p.id as product_id, p.name as product_name,
+           p.id as product_id, p.name as product_name, p.sku as product_code,
            s.id as supplier_id, s.name as supplier_name,
            pb.purchase_id
     FROM product_batches pb
     INNER JOIN products p ON pb.product_id = p.id
-    LEFT JOIN suppliers s ON p.supplier_id = s.id
+    LEFT JOIN suppliers s ON COALESCE(pb.supplier_id, p.supplier_id) = s.id
     WHERE date(pb.expiry_date) <= date(?)
     ORDER BY pb.expiry_date ASC
   ''',

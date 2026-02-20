@@ -14,7 +14,7 @@ class StockDisposalDao {
     FROM stock_disposal sd
     LEFT JOIN products p ON sd.product_id = p.id
     LEFT JOIN product_batches pb ON sd.batch_id = pb.id
-    LEFT JOIN suppliers s ON sd.supplier_id = s.id
+    LEFT JOIN suppliers s ON COALESCE(sd.supplier_id, pb.supplier_id, p.supplier_id) = s.id
   ''';
 
   /// Insert a new disposal record

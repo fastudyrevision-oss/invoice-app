@@ -155,7 +155,9 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
                                   dotData: const FlDotData(show: false),
                                   belowBarData: BarAreaData(
                                     show: true,
-                                    color: Colors.blueAccent.withOpacity(0.2),
+                                    color: Colors.blueAccent.withValues(
+                                      alpha: 0.2,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -193,7 +195,7 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
       mainAxisSize: MainAxisSize.min,
       children: [
         CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
+          backgroundColor: color.withValues(alpha: 0.1),
           child: Icon(icon, color: color),
         ),
         const SizedBox(height: 6),
@@ -238,11 +240,13 @@ class _OrderInsightCardState extends State<OrderInsightCard> {
 
       if (pdfFile != null) {
         await shareOrPrintPdf(pdfFile);
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('✅ PDF saved: ${pdfFile.path}')));
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('❌ Failed to generate PDF')));

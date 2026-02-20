@@ -90,6 +90,7 @@ class _ProductDialogState extends State<ProductDialog> {
       await widget.productRepo.updateProduct(newProduct);
     }
 
+    if (!context.mounted) return;
     Navigator.pop(context, newProduct); // return product
   }
 

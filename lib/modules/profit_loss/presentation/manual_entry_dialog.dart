@@ -17,7 +17,7 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _descriptionController;
   late TextEditingController _amountController;
-  late TextEditingController _categoryController;
+  late String _category;
   late String _type;
   late DateTime _date;
 
@@ -42,9 +42,7 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
     _amountController = TextEditingController(
       text: widget.entry?.amount.toString() ?? '',
     );
-    _categoryController = TextEditingController(
-      text: widget.entry?.category ?? 'General',
-    );
+    _category = widget.entry?.category ?? 'General';
     _type = widget.entry?.type ?? 'income';
     _date = widget.entry?.date ?? DateTime.now();
   }
@@ -53,7 +51,6 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
   void dispose() {
     _descriptionController.dispose();
     _amountController.dispose();
-    _categoryController.dispose();
     super.dispose();
   }
 
@@ -65,7 +62,7 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
         amount: double.parse(_amountController.text),
         type: _type,
         date: _date,
-        category: _categoryController.text,
+        category: _category,
       );
 
       if (widget.entry == null) {
@@ -109,6 +106,7 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
               ),
               const SizedBox(height: 16),
               Autocomplete<String>(
+                initialValue: TextEditingValue(text: _category),
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   if (textEditingValue.text == '') {
                     return const Iterable<String>.empty();
@@ -119,9 +117,13 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
                     );
                   });
                 },
+                onSelected: (String selection) {
+                  setState(() {
+                    _category = selection;
+                  });
+                },
                 fieldViewBuilder:
                     (context, controller, focusNode, onFieldSubmitted) {
-                      _categoryController = controller; // Sync controllers
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
@@ -129,6 +131,9 @@ class _ManualEntryDialogState extends State<ManualEntryDialog> {
                           labelText: 'Category',
                           hintText: 'e.g. Rent, Electricity',
                         ),
+                        onChanged: (value) {
+                          _category = value;
+                        },
                         onFieldSubmitted: (value) => onFieldSubmitted(),
                       );
                     },

@@ -13,25 +13,90 @@ import 'ui/auth/inactivity_wrapper.dart';
 
 import 'services/logger_service.dart';
 
+// ----------------------------------------------------------------------
+// SYSTEM INITIALIZATION LOGIC (Shared)
+// ----------------------------------------------------------------------
+
+class AppSystem {
+  static final _logger = LoggerService.instance;
+
+  /// Performs all necessary system initialization.
+  /// safe to call multiple times (idempotent).
+  static Future<void> initialize() async {
+    _logger.info('Startup', "🔄 Starting System Initialization...");
+
+    // 1. Initialize Database
+    _logger.info('Startup', "💾 Initializing Database...");
+
+    // Android may need more time due to encryption/storage latency
+    final timeoutDuration = Platform.isAndroid
+        ? const Duration(seconds: 60)
+        : const Duration(seconds: 15);
+
+    await DatabaseHelper.instance.init().timeout(
+      timeoutDuration,
+      onTimeout: () {
+        throw TimeoutException(
+          'Database initialization timed out after ${timeoutDuration.inSeconds}s',
+        );
+      },
+    );
+    _logger.info('Startup', "✅ Database Ready");
+
+    // 2. Initialize Auth Service
+    _logger.info('Startup', "🔑 Initializing Auth Service...");
+    try {
+      await AuthService.instance.init();
+      _logger.info('Startup', "✅ Auth Service Ready");
+    } catch (e, st) {
+      _logger.warning(
+        'Startup',
+        "⚠️ Auth Service init warning",
+        error: e,
+        context: {'stack': st.toString()},
+      );
+    }
+
+    _logger.info('Startup', "✅ System Initialization Complete");
+  }
+}
+
+// ----------------------------------------------------------------------
+// ROOT WIDGET (Providers + App)
+// ----------------------------------------------------------------------
+
+class InvoiceAppRoot extends StatelessWidget {
+  const InvoiceAppRoot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AuthService.instance,
+      child: const InvoiceApp(),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------
+// MAIN ENTRY POINT
+// ----------------------------------------------------------------------
+
 void main() async {
   runZonedGuarded(
     () async {
-      // ----------------------------------------------------------
-      // 🔍 DEBUG LOGGING SETUP
-      // ----------------------------------------------------------
       WidgetsFlutterBinding.ensureInitialized();
 
-      // Initialize centralized logger
+      // Initialize centralized logger immediately
       final logger = LoggerService.instance;
       await logger.initialize(
         enableConsoleLogging: true,
         enableFileLogging: true,
       );
 
-      logger.info('Startup', "🚀 APPLICATION STARTING");
+      logger.info('Startup', "🚀 APPLICATION STARTING (Pid: $pid)");
       logger.debug('Startup', "✅ WidgetsBinding Initialized");
 
-      // 1. Setup Desktop FFI
+      // Setup Desktop FFI (Run once globally)
       if (!kIsWeb) {
         if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
           try {
@@ -49,133 +114,120 @@ void main() async {
         }
       }
 
-      // 2. Launch Splash Screen
-      logger.debug('Startup', "🎨 Calling runApp(LauncherApp)");
-      runApp(const LauncherApp());
+      // ----------------------------------------------------------
+      // 🚀 HYBRID INITIALIZATION STRATEGY
+      // ----------------------------------------------------------
 
-      // 3. Initialize Heavy Resources in Background
-      bool dbInitialized = false;
-      try {
-        logger.info('Startup', "💾 Initializing Database in background...");
-
-        // Run database initialization with timeout
-        await DatabaseHelper.instance.init().timeout(
-          const Duration(seconds: 15),
-          onTimeout: () {
-            logger.error(
-              'Startup',
-              "⏱️ Database initialization timed out after 15s",
-            );
-            throw TimeoutException('Database initialization timeout');
-          },
-        );
-
-        logger.info('Startup', "✅ Database Initialized Success");
-        dbInitialized = true;
-      } catch (e, stack) {
-        logger.critical(
-          'Startup',
-          "❌ Database initialization failed",
-          error: e,
-          stackTrace: stack,
-        );
-        // Don't crash - continue with limited functionality
-        dbInitialized = false;
-      }
-
-      try {
-        logger.info('Startup', "🔑 Initializing Auth Service...");
-        await AuthService.instance.init();
-        logger.info('Startup', "✅ Auth Service Initialized");
-      } catch (e, st) {
-        logger.warning(
-          'Startup',
-          "⚠️ Auth Service init failed",
-          error: e,
-          context: {'stack': st.toString()},
-        );
-        // Continue anyway
-      }
-
-      // 4. Launch Main App (even if DB failed)
-      logger.info(
-        'Startup',
-        "🚀 Launching Main App",
-        context: {'dbStatus': dbInitialized ? 'Ready' : 'Failed'},
-      );
-
-      if (!dbInitialized) {
-        // Show error app with option to retry
-        runApp(
-          MaterialApp(
-            home: Scaffold(
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: Colors.red),
-                      SizedBox(height: 16),
-                      Text(
-                        'Database Initialization Failed',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'The app cannot start because the database failed to initialize.',
-                        textAlign: TextAlign.center,
-                      ),
-                      SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          // Restart the app
-                          main();
-                        },
-                        icon: Icon(Icons.refresh),
-                        label: Text('Retry'),
-                      ),
-                      SizedBox(height: 16),
-                      Builder(
-                        builder: (context) => TextButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LogsFrame(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.bug_report),
-                          label: const Text('View System Logs'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        // DESKTOP: Eager Initialization
+        // We await initialization BEFORE runApp to ensure the app is ready immediately.
+        // This avoids a splash screen flicker on fast desktop machines.
+        try {
+          logger.info('Startup', "🖥️ Desktop Mode: Eager Initialization");
+          await AppSystem.initialize();
+          runApp(const InvoiceAppRoot());
+        } catch (e, stack) {
+          // If eager init fails, show ErrorApp
+          // Retry will switch to 'staged' mode (AppInitializer) for better UX on retry loops
+          logger.critical(
+            'Startup',
+            "❌ Eager Init Failed",
+            error: e,
+            stackTrace: stack,
+          );
+          runApp(
+            ErrorApp(
+              error: e.toString(),
+              stack: stack.toString(),
+              onRetry: () => runApp(const AppInitializer()),
             ),
-          ),
-        );
-        return;
+          );
+        }
+      } else {
+        // MOBILE / WEB: Staged Initialization
+        // We call runApp first (showing splash), then initialize in background.
+        // Better for perceived performance on slower devices.
+        logger.info('Startup', "📱 Mobile Mode: Staged Initialization");
+        runApp(const AppInitializer());
       }
-
-      runApp(
-        ChangeNotifierProvider(
-          create: (_) => AuthService.instance,
-          child: const InvoiceApp(),
-        ),
-      );
     },
     (error, stack) {
-      // Use the static crash logger we implemented
       LoggerService.logCrash(error, stack);
     },
   );
 }
+
+// ----------------------------------------------------------------------
+// STAGED INITIALIZER WIDGET (Mobile / Recovery Mode)
+// ----------------------------------------------------------------------
+
+/// Root widget that manages the application lifecycle state:
+/// - Initializing (Splash)
+/// - Error (Retryable)
+/// - Running (Main App)
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
+
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  // State variables to manage lifecycle
+  bool _isLoading = true;
+  String? _error;
+  String? _stackTrace;
+
+  @override
+  void initState() {
+    super.initState();
+    _startInit();
+  }
+
+  Future<void> _startInit() async {
+    // Reset state for retry scenarios
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _stackTrace = null;
+    });
+
+    try {
+      await AppSystem.initialize();
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } catch (e, stack) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = e.toString();
+          _stackTrace = stack.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. Show Splash while Loading
+    if (_isLoading) return const LauncherApp();
+    // 2. Show Error if failed
+    if (_error != null) {
+      return ErrorApp(
+        error: _error!,
+        stack: _stackTrace ?? '',
+        onRetry: _startInit,
+      );
+    }
+    // 3. Show Main App if successful
+    return const InvoiceAppRoot();
+  }
+}
+
+// ----------------------------------------------------------------------
+// UI COMPONENTS
+// ----------------------------------------------------------------------
 
 /// Simple Splash Screen shown while DB is initializing
 class LauncherApp extends StatelessWidget {
@@ -211,8 +263,14 @@ class LauncherApp extends StatelessWidget {
 class ErrorApp extends StatelessWidget {
   final String error;
   final String stack;
+  final VoidCallback onRetry;
 
-  const ErrorApp({super.key, required this.error, required this.stack});
+  const ErrorApp({
+    super.key,
+    required this.error,
+    required this.stack,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -239,23 +297,52 @@ class ErrorApp extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    "An error occurred while initializing the database.",
+                    "An error occurred while initializing the system.",
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
                   Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 200),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       border: Border.all(color: Colors.red.shade200),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      "$error\n\n$stack",
-                      style: const TextStyle(
-                        fontFamily: 'Courier',
-                        fontSize: 12,
+                    child: SingleChildScrollView(
+                      child: Text(
+                        "$error\n\n$stack",
+                        style: const TextStyle(
+                          fontFamily: 'Courier',
+                          fontSize: 12,
+                        ),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry Initialization'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Builder(
+                    builder: (context) => TextButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LogsFrame()),
+                        );
+                      },
+                      icon: const Icon(Icons.bug_report),
+                      label: const Text('View System Logs'),
                     ),
                   ),
                 ],
@@ -277,7 +364,7 @@ class InvoiceApp extends StatelessWidget {
       builder: (context, auth, _) {
         return InactivityWrapper(
           child: MaterialApp(
-            title: 'Invoice App',
+            title: 'Mian Traders',
             debugShowCheckedModeBanner: false,
             // If not logged in, show LoginScreen.
             // If logged in, show MainFrame.

@@ -46,13 +46,14 @@ class NetworkException extends AppException {
   });
 
   @override
-  String getUserMessage() => 'Network error: $message. Please check your internet connection.';
+  String getUserMessage() =>
+      'Network error: $message. Please check your internet connection.';
 }
 
 /// 🗄️ Database/DAO Errors
 class DatabaseException extends AppException {
   final String? operation;
-  
+
   DatabaseException({
     super.message = 'Database operation failed',
     this.operation,
@@ -73,7 +74,7 @@ class DatabaseException extends AppException {
 /// 🔐 Authentication/Authorization Errors
 class AuthException extends AppException {
   final String? reason;
-  
+
   AuthException({
     super.message = 'Authentication failed',
     this.reason,
@@ -93,7 +94,7 @@ class AuthException extends AppException {
 class ValidationException extends AppException {
   final String? field;
   final dynamic invalidValue;
-  
+
   ValidationException({
     required super.message,
     this.field,
@@ -116,7 +117,7 @@ class ValidationException extends AppException {
 class PrinterException extends AppException {
   final String? printerAddress;
   final int? printerPort;
-  
+
   PrinterException({
     super.message = 'Printer operation failed',
     this.printerAddress,
@@ -128,7 +129,9 @@ class PrinterException extends AppException {
 
   @override
   String getUserMessage() {
-    final printerInfo = printerAddress != null ? ' ($printerAddress:$printerPort)' : '';
+    final printerInfo = printerAddress != null
+        ? ' ($printerAddress:$printerPort)'
+        : '';
     return 'Printer error$printerInfo: $message. Please check printer connection.';
   }
 }
@@ -136,7 +139,7 @@ class PrinterException extends AppException {
 /// 📄 File/Export Errors
 class FileException extends AppException {
   final String? filename;
-  
+
   FileException({
     super.message = 'File operation failed',
     this.filename,
@@ -155,7 +158,7 @@ class FileException extends AppException {
 /// 💾 Storage/Permission Errors
 class StorageException extends AppException {
   final String? requiredPermission;
-  
+
   StorageException({
     super.message = 'Storage operation failed',
     this.requiredPermission,
@@ -176,7 +179,7 @@ class StorageException extends AppException {
 /// ⏱️ Timeout Errors
 class TimeoutException extends AppException {
   final Duration? timeout;
-  
+
   TimeoutException({
     super.message = 'Operation timed out',
     this.timeout,
@@ -196,7 +199,7 @@ class TimeoutException extends AppException {
 class ServiceException extends AppException {
   final String? serviceName;
   final int? statusCode;
-  
+
   ServiceException({
     super.message = 'Service operation failed',
     this.serviceName,
@@ -233,7 +236,8 @@ class UnknownException extends AppException {
 
 /// 🛡️ Exception Handling Utilities
 class ExceptionHandler {
-  static const String _tag = '🛡️ ExceptionHandler';
+  // Tag used for logging throughout this class
+  static const String tag = '🛡️ ExceptionHandler';
 
   /// Convert generic exception to AppException
   static AppException handleException(
@@ -285,12 +289,12 @@ class ExceptionHandler {
     try {
       logger.debug(tag, 'Starting operation...');
       logger.startPerformanceTimer('$tag-operation');
-      
+
       final result = await operation();
-      
+
       logger.endPerformanceTimer('$tag-operation', tag: tag);
       logger.info(tag, '✅ Operation completed successfully');
-      
+
       return result;
     } catch (e, st) {
       logger.endPerformanceTimer('$tag-operation', tag: tag);
@@ -300,12 +304,12 @@ class ExceptionHandler {
         tag: tag,
         context: context,
       );
-      
+
       if (fallbackValue != null) {
-        logger.warning(tag, 'Using fallback value');
+        logger.warning(tag, 'Using fallback value due to: ${e.runtimeType}');
         return fallbackValue;
       }
-      
+
       rethrow;
     }
   }
@@ -320,12 +324,12 @@ class ExceptionHandler {
     try {
       logger.debug(tag, 'Starting sync operation...');
       logger.startPerformanceTimer('$tag-sync-operation');
-      
+
       final result = operation();
-      
+
       logger.endPerformanceTimer('$tag-sync-operation', tag: tag);
       logger.info(tag, '✅ Sync operation completed successfully');
-      
+
       return result;
     } catch (e, st) {
       logger.endPerformanceTimer('$tag-sync-operation', tag: tag);
@@ -335,29 +339,22 @@ class ExceptionHandler {
         tag: tag,
         context: context,
       );
-      
+
       if (fallbackValue != null) {
         logger.warning(tag, 'Using fallback value');
         return fallbackValue;
       }
-      
+
       rethrow;
     }
   }
 
   /// Log exception and return null
-  static T? tryExecute<T>(
-    T Function() operation, {
-    required String tag,
-  }) {
+  static T? tryExecute<T>(T Function() operation, {required String tag}) {
     try {
       return operation();
     } catch (e, st) {
-      ExceptionHandler.handleException(
-        e,
-        stackTrace: st,
-        tag: tag,
-      );
+      ExceptionHandler.handleException(e, stackTrace: st, tag: tag);
       return null;
     }
   }
@@ -371,11 +368,7 @@ class ExceptionHandler {
     try {
       return operation();
     } catch (e, st) {
-      ExceptionHandler.handleException(
-        e,
-        stackTrace: st,
-        tag: tag,
-      );
+      ExceptionHandler.handleException(e, stackTrace: st, tag: tag);
       return fallback;
     }
   }

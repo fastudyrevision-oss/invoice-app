@@ -53,6 +53,7 @@ class SupplierDao {
     required int limit,
     bool showDeleted = false,
     String? keyword,
+    String? companyId,
   }) async {
     final dbClient = await _db;
     final whereClauses = <String>[];
@@ -65,6 +66,11 @@ class SupplierDao {
     if (keyword != null && keyword.isNotEmpty) {
       whereClauses.add('(name LIKE ? OR phone LIKE ?)');
       args.addAll(['%$keyword%', '%$keyword%']);
+    }
+
+    if (companyId != null && companyId.isNotEmpty) {
+      whereClauses.add('company_id = ?');
+      args.add(companyId);
     }
 
     final whereString = whereClauses.isNotEmpty
@@ -179,5 +185,61 @@ class SupplierDao {
       where: "id = ?",
       whereArgs: [id],
     );
+  }
+
+  /// Get count of suppliers for each company
+  Future<Map<String, int>> getSupplierCountByCompany({
+    bool includeDeleted = false,
+  }) async {
+    final dbClient = await _db;
+
+    final whereClause = includeDeleted ? '' : 'WHERE deleted = 0';
+
+    final result = await dbClient.rawQuery('''
+      SELECT company_id, COUNT(*) as count
+      FROM suppliers
+      $whereClause
+      AND company_id IS NOT NULL
+      GROUP BY company_id
+    ''');
+
+    final Map<String, int> counts = {};
+    for (final row in result) {
+      final companyId = row['company_id'] as String?;
+      final count = row['count'] as int? ?? 0;
+      if (companyId != null) {
+        counts[companyId] = count;
+      }
+    }
+
+    return counts;
+  }
+
+  /// Get list of supplier names for each company
+  Future<Map<String, List<String>>> getSupplierNamesByCompany({
+    bool includeDeleted = false,
+  }) async {
+    final dbClient = await _db;
+
+    final whereClause = includeDeleted ? '' : 'WHERE deleted = 0';
+
+    final result = await dbClient.rawQuery('''
+      SELECT company_id, name
+      FROM suppliers
+      $whereClause
+      AND company_id IS NOT NULL
+      ORDER BY name ASC
+    ''');
+
+    final Map<String, List<String>> names = {};
+    for (final row in result) {
+      final companyId = row['company_id'] as String?;
+      final name = row['name'] as String? ?? '';
+      if (companyId != null) {
+        names.putIfAbsent(companyId, () => []).add(name);
+      }
+    }
+
+    return names;
   }
 }

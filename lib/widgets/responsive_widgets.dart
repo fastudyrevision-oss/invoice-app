@@ -83,7 +83,7 @@ class ResponsiveCard extends StatelessWidget {
         border: border,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: responsiveElevation * 3,
             offset: Offset(0, responsiveElevation),

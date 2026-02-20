@@ -1,7 +1,8 @@
 name: invoice_app
-description: "A new Flutter project."
+description: "Mian Traders Invoice Management System"
 publish_to: 'none'
-version: 0.1.0
+version: 1.1.0
+
 
 environment:
   sdk: ^3.9.2
@@ -33,6 +34,8 @@ dependencies:
   shimmer: ^3.0.0
   open_file: ^3.5.10
   dropdown_search: ^6.0.2
+  url_launcher: ^6.3.2
+  package_info_plus: ^9.0.0
   
 
   
@@ -49,6 +52,7 @@ flutter:
     - assets/fonts/NotoSansArabic-Regular.ttf
     - assets/fonts/NotoSansArabic-Bold.ttf
     - assets/fonts/SchehrazadeNew-Regular.ttf
+    - assets/fonts/Lalezar-Regular.ttf
     - assets/logo.png
   fonts:
     - family: Roboto
@@ -64,4 +68,10 @@ flutter:
     - family: Scheherazade
       fonts:
         - asset: assets/fonts/SchehrazadeNew-Regular.ttf
+    - family: Lalezar
+      fonts:
+        - asset: assets/fonts/Lalezar-Regular.ttf
+    - family: JameelNoori
+      fonts:
+        - asset: assets/fonts/Jameel-Noori.ttf
 

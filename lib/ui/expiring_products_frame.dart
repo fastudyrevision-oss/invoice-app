@@ -132,16 +132,17 @@ class _ExpiringProductsFrameState extends State<ExpiringProductsFrame> {
     Color color;
     if (diff < 0) {
       color = Colors.grey.shade600;
-    } else if (diff <= 7)
+    } else if (diff <= 7) {
       color = const Color.fromARGB(255, 245, 2, 2);
-    else if (diff <= 15)
+    } else if (diff <= 15) {
       color = Colors.orange.shade300;
-    else if (diff <= 30)
+    } else if (diff <= 30) {
       color = Colors.yellow.shade300;
-    else if (diff <= 90)
+    } else if (diff <= 90) {
       color = Colors.blue.shade200;
-    else
+    } else {
       color = Colors.green.shade100;
+    }
 
     return isDark ? color.withValues(alpha: 0.3) : color;
   }

@@ -9,32 +9,40 @@ class ProfitLossDao {
 
   // ---------- Summary Queries ----------
   Future<double> getTotalSales(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
-      'SELECT SUM(total) AS total FROM invoices WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      "SELECT SUM(total) AS total FROM invoices WHERE (status = 'posted' OR status = 'draft' OR status IS NULL) AND date BETWEEN ? AND ?",
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['total'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getTotalDiscounts(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
+    // Use sum of line item discounts for maximum precision, or invoice discount if aligned
+    // Using invoice discount is faster and should be aligned now with rounding fix
     final result = await db.rawQuery(
-      'SELECT SUM(discount) AS discount FROM invoices WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      "SELECT SUM(discount) AS discount FROM invoices WHERE (status = 'posted' OR status = 'draft' OR status IS NULL) AND date BETWEEN ? AND ?",
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['discount'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getTotalExpenses(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       'SELECT SUM(amount) AS amount FROM expenses WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['amount'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getCustomerPendings() async {
     final result = await db.rawQuery(
-      'SELECT SUM(pending) AS pending FROM invoices',
+      "SELECT SUM(pending) AS pending FROM invoices WHERE (status = 'posted' OR status = 'draft' OR status IS NULL)",
     );
     return (result.first['pending'] as num? ?? 0) * 1.0;
   }
@@ -47,47 +55,52 @@ class ProfitLossDao {
   }
 
   Future<double> getTotalPaidPurchases(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       'SELECT SUM(paid) AS paid FROM purchases WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['paid'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getTotalPurchases(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       'SELECT SUM(total) AS total FROM purchases WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['total'] as num? ?? 0) * 1.0;
   }
 
   Future<double> getInHandCash(DateTime start, DateTime end) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
-      'SELECT SUM(paid) AS paid FROM invoices WHERE date BETWEEN ? AND ?',
-      [start.toIso8601String(), end.toIso8601String()],
+      "SELECT SUM(paid) AS paid FROM invoices WHERE (status = 'posted' OR status = 'draft' OR status IS NULL) AND date BETWEEN ? AND ?",
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     final paid = (result.first['paid'] as num? ?? 0) * 1.0;
     final expenses = await getTotalExpenses(start, end);
+    // Note: Purchases paid should also decrease cash in hand?
+    // The previous implementation only deducted expenses. I will keep it consistent with previous logic
+    // unless explicitly asked to change. But usually Cash In Hand = Sales Paid - Expenses - Purchases Paid.
+    // The verified constraint is `paid - expenses`. I will stick to it.
     return paid - expenses;
   }
 
   Future<double> getTotalCostOfGoodsSold(DateTime start, DateTime end) async {
-    // Using weighted average cost to avoid Cartesian product from LEFT JOIN
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       '''
-      SELECT COALESCE(SUM(ii.qty * p.weighted_avg_cost), 0) AS cogs
+      SELECT COALESCE(SUM(ii.qty * ii.cost_price), 0) AS cogs
       FROM invoice_items ii
-      LEFT JOIN invoices inv ON ii.invoice_id = inv.id
-      LEFT JOIN (
-        SELECT product_id, 
-          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
-        FROM purchase_items
-        GROUP BY product_id
-      ) p ON ii.product_id = p.product_id
-      WHERE inv.date BETWEEN ? AND ?
+      JOIN invoices inv ON ii.invoice_id = inv.id
+      WHERE (inv.status = 'posted' OR inv.status = 'draft' OR inv.status IS NULL) AND inv.date BETWEEN ? AND ?
     ''',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     return (result.first['cogs'] as num? ?? 0) * 1.0;
   }
@@ -96,9 +109,11 @@ class ProfitLossDao {
     DateTime start,
     DateTime end,
   ) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       'SELECT category, SUM(amount) AS total FROM expenses WHERE date BETWEEN ? AND ? GROUP BY category',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
     Map<String, double> breakdown = {};
     for (var row in result) {
@@ -113,27 +128,23 @@ class ProfitLossDao {
     DateTime start,
     DateTime end,
   ) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       '''
       SELECT 
         p.id AS product_id,
         p.name AS product_name,
-        SUM(ii.qty * ii.price) AS total_sales,
-        SUM(ii.qty * COALESCE(wa.weighted_avg_cost, 0)) AS total_cost,
+        SUM((ii.qty * ii.price) - COALESCE(ii.discount, 0)) AS total_sales,
+        SUM(ii.qty * ii.cost_price) AS total_cost,
         SUM(ii.qty) AS sold_qty
       FROM products p
       LEFT JOIN invoice_items ii ON ii.product_id = p.id
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
-      LEFT JOIN (
-        SELECT product_id, 
-          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
-        FROM purchase_items
-        GROUP BY product_id
-      ) wa ON p.id = wa.product_id
-      WHERE inv.date BETWEEN ? AND ?
+      WHERE (inv.status = 'posted' OR inv.status = 'draft' OR inv.status IS NULL) AND inv.date BETWEEN ? AND ?
       GROUP BY p.id
     ''',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
 
     return result.map((row) {
@@ -157,27 +168,23 @@ class ProfitLossDao {
     DateTime start,
     DateTime end,
   ) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       '''
       SELECT 
         c.id AS category_id,
         c.name AS category_name,
-        SUM(ii.qty * ii.price) AS total_sales,
-        SUM(ii.qty * COALESCE(wa.weighted_avg_cost, 0)) AS total_cost
+        SUM((ii.qty * ii.price) - COALESCE(ii.discount, 0)) AS total_sales,
+        SUM(ii.qty * ii.cost_price) AS total_cost
       FROM categories c
       LEFT JOIN products p ON p.category_id = c.id
       LEFT JOIN invoice_items ii ON ii.product_id = p.id
       LEFT JOIN invoices inv ON ii.invoice_id = inv.id
-      LEFT JOIN (
-        SELECT product_id, 
-          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
-        FROM purchase_items
-        GROUP BY product_id
-      ) wa ON p.id = wa.product_id
-      WHERE inv.date BETWEEN ? AND ?
+      WHERE (inv.status = 'posted' OR inv.status = 'draft' OR inv.status IS NULL) AND inv.date BETWEEN ? AND ?
       GROUP BY c.id
     ''',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
 
     return result.map((row) {
@@ -198,6 +205,8 @@ class ProfitLossDao {
     DateTime start,
     DateTime end,
   ) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       '''
       SELECT 
@@ -210,7 +219,7 @@ class ProfitLossDao {
       WHERE pur.date BETWEEN ? AND ?
       GROUP BY s.id
     ''',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
 
     return result.map((row) {
@@ -226,11 +235,11 @@ class ProfitLossDao {
   // ---------- Recent Transactions ----------
   Future<List<Map<String, dynamic>>> getRecentTransactions(int limit) async {
     final invoices = await db.rawQuery(
-      'SELECT id, "sale" as type, total, date FROM invoices ORDER BY date DESC LIMIT ?',
+      "SELECT id, 'sale' as type, total, date FROM invoices WHERE (status = 'posted' OR status = 'draft' OR status IS NULL) ORDER BY date DESC LIMIT ?",
       [limit],
     );
     final purchases = await db.rawQuery(
-      'SELECT id, "purchase" as type, total, date FROM purchases ORDER BY date DESC LIMIT ?',
+      "SELECT id, 'purchase' as type, total, date FROM purchases ORDER BY date DESC LIMIT ?",
       [limit],
     );
 
@@ -244,25 +253,21 @@ class ProfitLossDao {
     DateTime start,
     DateTime end,
   ) async {
+    final startStr = start.toIso8601String().split('T')[0];
+    final endStr = end.toIso8601String().split('T')[0];
     final result = await db.rawQuery(
       '''
       SELECT 
         COALESCE(inv.customer_id, 'walk-in') AS customer_id,
         COALESCE(inv.customer_name, 'Walk-in Customer') AS customer_name,
-        SUM(ii.qty * ii.price) AS total_sales,
-        SUM(ii.qty * COALESCE(wa.weighted_avg_cost, 0)) AS total_cost
+        SUM((ii.qty * ii.price) - COALESCE(ii.discount, 0)) AS total_sales,
+        SUM(ii.qty * ii.cost_price) AS total_cost
       FROM invoices inv
       JOIN invoice_items ii ON ii.invoice_id = inv.id
-      LEFT JOIN (
-        SELECT product_id, 
-          SUM(qty * purchase_price) / NULLIF(SUM(qty), 0) as weighted_avg_cost
-        FROM purchase_items
-        GROUP BY product_id
-      ) wa ON ii.product_id = wa.product_id
-      WHERE inv.date BETWEEN ? AND ?
+      WHERE (inv.status = 'posted' OR inv.status = 'draft' OR inv.status IS NULL) AND inv.date BETWEEN ? AND ?
       GROUP BY inv.customer_id, inv.customer_name
     ''',
-      [start.toIso8601String(), end.toIso8601String()],
+      ['${startStr}T00:00:00', '${endStr}T23:59:59'],
     );
 
     return result.map((row) {

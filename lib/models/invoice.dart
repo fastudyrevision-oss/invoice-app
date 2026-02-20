@@ -6,6 +6,7 @@ class Invoice {
   final double discount;
   final double paid;
   final double pending;
+  final String status; // 'draft' or 'posted'
   final String date;
   final String createdAt;
   final String updatedAt;
@@ -18,6 +19,7 @@ class Invoice {
     this.discount = 0.0,
     this.paid = 0.0,
     required this.pending,
+    this.status = 'draft',
     required this.date,
     required this.createdAt,
     required this.updatedAt,
@@ -32,20 +34,24 @@ class Invoice {
     "discount": discount,
     "paid": paid,
     "pending": pending,
+    "status": status,
     "date": date,
     "created_at": createdAt,
     "updated_at": updatedAt,
   };
 
   factory Invoice.fromMap(Map<String, dynamic> map) => Invoice(
-    id: map["id"],
-    customerId: map["customer_id"],
-    total: map["total"],
-    discount: map["discount"] ?? 0.0,
-    paid: map["paid"] ?? 0.0,
-    pending: map["pending"],
-    date: map["date"],
-    createdAt: map["created_at"],
-    updatedAt: map["updated_at"],
+    id: map["id"]?.toString() ?? '',
+    customerId: map["customer_id"]?.toString() ?? '',
+    total: (map["total"] as num?)?.toDouble() ?? 0.0,
+    discount: (map["discount"] as num?)?.toDouble() ?? 0.0,
+    paid: (map["paid"] as num?)?.toDouble() ?? 0.0,
+    pending: (map["pending"] as num?)?.toDouble() ?? 0.0,
+    status: map["status"]?.toString() ?? 'draft',
+    date: map["date"]?.toString() ?? DateTime.now().toIso8601String(),
+    createdAt:
+        map["created_at"]?.toString() ?? DateTime.now().toIso8601String(),
+    updatedAt:
+        map["updated_at"]?.toString() ?? DateTime.now().toIso8601String(),
   );
 }

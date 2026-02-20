@@ -13,11 +13,13 @@ enum ExpenseSortMode { date, amount }
 
 enum ExpenseFilterType { daily, weekly, monthly, yearly, all }
 
+enum ExpenseViewMode { table, compact, card }
+
 class ExpenseFrame extends StatefulWidget {
   const ExpenseFrame({super.key});
 
   @override
-  _ExpenseFrameState createState() => _ExpenseFrameState();
+  State<ExpenseFrame> createState() => _ExpenseFrameState();
 }
 
 class _ExpenseFrameState extends State<ExpenseFrame> {
@@ -32,6 +34,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
   ExpenseSortMode _sortMode = ExpenseSortMode.date;
   ExpenseFilterType _filterType = ExpenseFilterType.all;
   double _filteredTotal = 0.0;
+  ExpenseViewMode _viewMode = ExpenseViewMode.card;
 
   final int _pageSize = 50;
   int _currentMax = 50;
@@ -221,7 +224,8 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                   await _repo.updateExpense(newExpense);
                 }
 
-                if (context.mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
                 _loadExpenses();
               }
             },
@@ -436,7 +440,17 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
             actions: isMobile
                 ? [
                     IconButton(
-                      onPressed: () => _showAddEditExpenseDialog(),
+                      icon: Icon(_viewModeIcon()),
+                      tooltip: 'View: ${_viewModeLabel()}',
+                      onPressed: _cycleViewMode,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.insights),
+                      tooltip: 'Insights',
+                      onPressed: _showInsightsDialog,
+                    ),
+                    IconButton(
+                      onPressed: _showAddEditExpenseDialog,
                       icon: const Icon(Icons.add_circle),
                       tooltip: 'Add Expense',
                     ),
@@ -497,6 +511,27 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                   ]
                 : [
                     const SizedBox(width: 10),
+                    // View toggle
+                    Tooltip(
+                      message: 'View: ${_viewModeLabel()}',
+                      child: TextButton.icon(
+                        icon: Icon(_viewModeIcon(), size: 20),
+                        label: Text(_viewModeLabel()),
+                        onPressed: _cycleViewMode,
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).appBarTheme.foregroundColor ??
+                              Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.insights),
+                      tooltip: 'Insights',
+                      onPressed: _showInsightsDialog,
+                    ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.print),
                       tooltip: 'Print List',
@@ -530,9 +565,12 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     const SizedBox(width: 10),
                   ],
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(
-                190,
-              ), // Adjusted for proper spacing
+              preferredSize: Size.fromHeight(
+                ResponsiveUtils.getAppBarBottomHeight(
+                  context,
+                  baseHeight: isMobile ? 190 : 160,
+                ),
+              ),
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -549,7 +587,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: UnifiedSearchBar(
-                        hintText: "Search by description, category, date...",
+                        hintText: "Search expenses...",
                         controller: _searchController,
                         onChanged: _onSearchChanged,
                         onClear: () {
@@ -560,74 +598,72 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                         },
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Row(
-                        children: [
-                          const Text(
-                            "Sort by: ",
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          const SizedBox(width: 8),
-                          FilterChip(
-                            label: const Text("Date"),
-                            selected: _sortMode == ExpenseSortMode.date,
-                            onSelected: (selected) {
-                              setState(() {
+                    if (!isMobile)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Row(
+                          children: [
+                            const Text(
+                              "Sort: ",
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            FilterChip(
+                              label: const Text("Date"),
+                              selected: _sortMode == ExpenseSortMode.date,
+                              onSelected: (_) => setState(() {
                                 _sortMode = ExpenseSortMode.date;
                                 _applyFilterAndSort();
-                              });
-                            },
-                            selectedColor: Colors.blue.shade100,
-                            checkmarkColor: Colors.blue,
-                          ),
-                          const SizedBox(width: 8),
-                          FilterChip(
-                            label: const Text("Amount"),
-                            selected: _sortMode == ExpenseSortMode.amount,
-                            onSelected: (selected) {
-                              setState(() {
+                              }),
+                              selectedColor: Colors.blue.shade100,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            const SizedBox(width: 8),
+                            FilterChip(
+                              label: const Text("Amount"),
+                              selected: _sortMode == ExpenseSortMode.amount,
+                              onSelected: (_) => setState(() {
                                 _sortMode = ExpenseSortMode.amount;
                                 _applyFilterAndSort();
-                              });
-                            },
-                            selectedColor: Colors.red.shade100,
-                            checkmarkColor: Colors.red,
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey.shade300),
+                              }),
+                              selectedColor: Colors.red.shade100,
+                              visualDensity: VisualDensity.compact,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  "Order:",
-                                  style: TextStyle(fontSize: 12),
+                            const Spacer(),
+                            InkWell(
+                              onTap: _toggleSort,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
                                 ),
-                                IconButton(
-                                  icon: Icon(
-                                    _sortAscending
-                                        ? Icons.arrow_upward
-                                        : Icons.arrow_downward,
-                                    size: 18,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
                                   ),
-                                  onPressed: _toggleSort,
-                                  padding: const EdgeInsets.all(4),
-                                  constraints: const BoxConstraints(),
                                 ),
-                              ],
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      "Order:",
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                    Icon(
+                                      _sortAscending
+                                          ? Icons.arrow_upward
+                                          : Icons.arrow_downward,
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
@@ -648,7 +684,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                        vertical: 12,
+                        vertical: 8,
                         horizontal: 16,
                       ),
                       decoration: BoxDecoration(
@@ -662,13 +698,13 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                           const Icon(
                             Icons.account_balance_wallet,
                             color: Colors.white,
-                            size: 20,
+                            size: 16,
                           ),
                           const SizedBox(width: 8),
                           Text(
                             "Total: Rs ${_filteredTotal.toStringAsFixed(0)}",
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -681,411 +717,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
               ),
             ),
           ),
-          body: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  children: [
-                    // Expense Insights Card
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: ExpenseInsightsCard(
-                        expenses: _expenses,
-                        loading: false,
-                        lastUpdated: DateTime.now(),
-                      ),
-                    ),
-
-                    // Expense list
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          setState(() => _currentMax = _pageSize);
-                          await _loadExpenses();
-                        },
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.only(bottom: 80),
-                          itemCount: _currentMax > _filteredExpenses.length
-                              ? _filteredExpenses.length
-                              : _currentMax,
-                          itemBuilder: (context, index) {
-                            final expense = _filteredExpenses[index];
-                            final categoryColor = _getCategoryColor(
-                              expense.category,
-                            );
-                            final categoryIcon = _getCategoryIcon(
-                              expense.category,
-                            );
-                            final date =
-                                DateTime.tryParse(expense.date) ??
-                                DateTime.now();
-
-                            return Container(
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Colors.white,
-                                    categoryColor.withValues(alpha: 0.05),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: categoryColor.withValues(alpha: 0.2),
-                                    spreadRadius: 1,
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                                border: Border.all(
-                                  color: categoryColor.withValues(alpha: 0.3),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Colored strip
-                                    Container(
-                                      width: double.infinity,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            categoryColor,
-                                            categoryColor.withValues(
-                                              alpha: 0.6,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                    Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          // Header Row
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              // Category Icon
-                                              Container(
-                                                padding: const EdgeInsets.all(
-                                                  12,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    begin: Alignment.topLeft,
-                                                    end: Alignment.bottomRight,
-                                                    colors: [
-                                                      categoryColor,
-                                                      categoryColor.withValues(
-                                                        alpha: 0.7,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: categoryColor
-                                                          .withValues(
-                                                            alpha: 0.3,
-                                                          ),
-                                                      blurRadius: 8,
-                                                      offset: const Offset(
-                                                        0,
-                                                        2,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Icon(
-                                                  categoryIcon,
-                                                  color: Colors.white,
-                                                  size: 28,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 16),
-
-                                              // Description & Category
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      expense.description,
-                                                      style: const TextStyle(
-                                                        fontSize: 18,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Colors.black87,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 8,
-                                                            vertical: 4,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: categoryColor
-                                                            .withValues(
-                                                              alpha: 0.15,
-                                                            ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              6,
-                                                            ),
-                                                        border: Border.all(
-                                                          color: categoryColor
-                                                              .withValues(
-                                                                alpha: 0.3,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                      child: Text(
-                                                        expense.category,
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: categoryColor
-                                                              .withValues(
-                                                                alpha: 0.9,
-                                                              ),
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              // Actions
-                                              Column(
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.edit_outlined,
-                                                      color: Colors.blue,
-                                                    ),
-                                                    onPressed: () =>
-                                                        _showAddEditExpenseDialog(
-                                                          expense,
-                                                        ),
-                                                    tooltip: 'Edit',
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.delete_outline,
-                                                      color: Colors.red,
-                                                    ),
-                                                    onPressed: () async {
-                                                      final confirm = await showDialog<bool>(
-                                                        context: context,
-                                                        builder: (ctx) => AlertDialog(
-                                                          title: const Text(
-                                                            "Delete Expense?",
-                                                          ),
-                                                          content: Text(
-                                                            "Are you sure you want to delete '${expense.description}'?",
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () =>
-                                                                  Navigator.pop(
-                                                                    ctx,
-                                                                    false,
-                                                                  ),
-                                                              child: const Text(
-                                                                "Cancel",
-                                                              ),
-                                                            ),
-                                                            ElevatedButton(
-                                                              style: ElevatedButton.styleFrom(
-                                                                backgroundColor:
-                                                                    Colors.red,
-                                                                foregroundColor:
-                                                                    Colors
-                                                                        .white,
-                                                              ),
-                                                              onPressed: () =>
-                                                                  Navigator.pop(
-                                                                    ctx,
-                                                                    true,
-                                                                  ),
-                                                              child: const Text(
-                                                                "Delete",
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      );
-
-                                                      if (confirm == true) {
-                                                        await _repo
-                                                            .deleteExpense(
-                                                              expense.id,
-                                                            );
-                                                        _loadExpenses();
-                                                      }
-                                                    },
-                                                    tooltip: 'Delete',
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-
-                                          const SizedBox(height: 16),
-                                          const Divider(),
-                                          const SizedBox(height: 12),
-
-                                          // Amount & Date Row
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              // Amount
-                                              Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    "AMOUNT",
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 12,
-                                                          vertical: 6,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      gradient: LinearGradient(
-                                                        colors: [
-                                                          Colors.red.shade600,
-                                                          Colors.red.shade400,
-                                                        ],
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            8,
-                                                          ),
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.red
-                                                              .withValues(
-                                                                alpha: 0.3,
-                                                              ),
-                                                          blurRadius: 6,
-                                                          offset: const Offset(
-                                                            0,
-                                                            2,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    child: Text(
-                                                      "Rs ${expense.amount.toStringAsFixed(0)}",
-                                                      style: const TextStyle(
-                                                        fontSize: 20,
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-
-                                              // Date Badge
-                                              Container(
-                                                padding: const EdgeInsets.all(
-                                                  12,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: categoryColor
-                                                      .withValues(alpha: 0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: categoryColor
-                                                        .withValues(alpha: 0.3),
-                                                    width: 2,
-                                                  ),
-                                                ),
-                                                child: Column(
-                                                  children: [
-                                                    Text(
-                                                      date.day.toString(),
-                                                      style: TextStyle(
-                                                        fontSize: 24,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: categoryColor,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      _getMonthName(date.month),
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: categoryColor
-                                                            .withValues(
-                                                              alpha: 0.8,
-                                                            ),
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      date.year.toString(),
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color: Colors
-                                                            .grey
-                                                            .shade600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+          body: _buildBody(),
         );
       },
     );
@@ -1107,5 +739,495 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
       'Dec',
     ];
     return months[month - 1];
+  }
+
+  IconData _viewModeIcon() {
+    switch (_viewMode) {
+      case ExpenseViewMode.table:
+        return Icons.table_chart;
+      case ExpenseViewMode.compact:
+        return Icons.view_list;
+      case ExpenseViewMode.card:
+        return Icons.view_agenda;
+    }
+  }
+
+  void _cycleViewMode() {
+    setState(() {
+      switch (_viewMode) {
+        case ExpenseViewMode.table:
+          _viewMode = ExpenseViewMode.compact;
+          break;
+        case ExpenseViewMode.compact:
+          _viewMode = ExpenseViewMode.card;
+          break;
+        case ExpenseViewMode.card:
+          _viewMode = ExpenseViewMode.table;
+          break;
+      }
+    });
+  }
+
+  String _viewModeLabel() {
+    switch (_viewMode) {
+      case ExpenseViewMode.table:
+        return 'Table';
+      case ExpenseViewMode.compact:
+        return 'Compact';
+      case ExpenseViewMode.card:
+        return 'Card';
+    }
+  }
+
+  void _showInsightsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Expense Insights',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(8),
+                  child: ExpenseInsightsCard(
+                    expenses: _expenses,
+                    loading: false,
+                    lastUpdated: DateTime.now(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_filteredExpenses.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.receipt_long_outlined,
+              size: 64,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "No expenses found",
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() => _currentMax = _pageSize);
+        await _loadExpenses();
+      },
+      child: _viewMode == ExpenseViewMode.table
+          ? _buildTableView()
+          : ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: _currentMax > _filteredExpenses.length
+                  ? _filteredExpenses.length
+                  : _currentMax,
+              itemBuilder: (context, index) {
+                final expense = _filteredExpenses[index];
+                if (_viewMode == ExpenseViewMode.compact) {
+                  return _buildCompactItem(expense);
+                }
+                return _buildCardItem(expense);
+              },
+            ),
+    );
+  }
+
+  Widget _buildTableView() {
+    return Scrollbar(
+      controller: _scrollController,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columnSpacing: 24,
+            columns: const [
+              DataColumn(label: Text("DATE")),
+              DataColumn(label: Text("DESCRIPTION")),
+              DataColumn(label: Text("CATEGORY")),
+              DataColumn(label: Text("AMOUNT")),
+              DataColumn(label: Text("ACTIONS")),
+            ],
+            rows: _filteredExpenses.take(_currentMax).map((e) {
+              final date = DateTime.tryParse(e.date) ?? DateTime.now();
+              return DataRow(
+                cells: [
+                  DataCell(Text(DateHelper.formatDate(date))),
+                  DataCell(
+                    SizedBox(
+                      width: 200,
+                      child: Text(
+                        e.description,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  DataCell(Text(e.category)),
+                  DataCell(
+                    Text(
+                      "Rs ${e.amount.toStringAsFixed(0)}",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blue,
+                            size: 18,
+                          ),
+                          onPressed: () => _showAddEditExpenseDialog(e),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                            size: 18,
+                          ),
+                          onPressed: () => _deleteExpense(e),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteExpense(Expense expense) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Expense?"),
+        content: Text(
+          "Are you sure you want to delete '${expense.description}'?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _repo.deleteExpense(expense.id);
+      _loadExpenses();
+    }
+  }
+
+  Widget _buildCompactItem(Expense expense) {
+    final date = DateTime.tryParse(expense.date) ?? DateTime.now();
+    final categoryColor = _getCategoryColor(expense.category);
+    final categoryIcon = _getCategoryIcon(expense.category);
+
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        backgroundColor: categoryColor.withValues(alpha: 0.1),
+        child: Icon(categoryIcon, color: categoryColor, size: 20),
+      ),
+      title: Text(
+        expense.description,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Text("${expense.category} | ${DateHelper.formatDate(date)}"),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "Rs ${expense.amount.toStringAsFixed(0)}",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.red,
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+            onPressed: () => _showAddEditExpenseDialog(expense),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardItem(Expense expense) {
+    final categoryColor = _getCategoryColor(expense.category);
+    final categoryIcon = _getCategoryIcon(expense.category);
+    final date = DateTime.tryParse(expense.date) ?? DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, categoryColor.withValues(alpha: 0.05)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: categoryColor.withValues(alpha: 0.2),
+            spreadRadius: 1,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: categoryColor.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Colored strip
+            Container(
+              width: double.infinity,
+              height: 4,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [categoryColor, categoryColor.withValues(alpha: 0.6)],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              categoryColor,
+                              categoryColor.withValues(alpha: 0.7),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          categoryIcon,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              expense.description,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: categoryColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: categoryColor.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Text(
+                                expense.category,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: categoryColor.withValues(alpha: 0.9),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          color: Colors.blue,
+                        ),
+                        onPressed: () => _showAddEditExpenseDialog(expense),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
+                        onPressed: () => _deleteExpense(expense),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "AMOUNT",
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red.shade600,
+                                  Colors.red.shade400,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              "Rs ${expense.amount.toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                fontSize: 20,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: categoryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: categoryColor.withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              date.day.toString(),
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: categoryColor,
+                              ),
+                            ),
+                            Text(
+                              _getMonthName(date.month),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: categoryColor.withValues(alpha: 0.8),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              date.year.toString(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -119,6 +119,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     await _loadAvailableStock();
 
     if (_availableStock <= 0) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("This product is out of stock!")),
       );
@@ -128,6 +129,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final qty = (num.tryParse(_qtyController.text) ?? 1).toInt();
 
     if (qty <= 0) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Quantity must be greater than zero")),
       );
@@ -135,6 +137,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     }
 
     if (qty > _availableStock) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Only $_availableStock items available!")),
       );
@@ -146,13 +149,19 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final prefs = PreferencesService.instance;
     final includeExpired = await prefs.getIncludeExpiredInOrders();
 
-    // ✅ Use centralized DAO deduction logic
+    // ✅ Use stored weighted average cost from products table
+    // The products.cost_price is automatically updated via recalculateProductFromBatches()
+    // when new stock arrives or batches are modified, ensuring consistent costing
+    final costPrice = _selectedProduct!.costPrice;
+
+    // Deduct stock (FIFO)
     final reservedBatches = await batchDao.deductFromBatches(
       _selectedProduct!.id,
       qty,
       trackUsage: true,
       includeExpired: includeExpired,
     );
+    assert(costPrice >= 0, "Cost price cannot be negative");
 
     final item = InvoiceItem(
       id: _uuid.v4(),
@@ -160,6 +169,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       productId: _selectedProduct!.id,
       qty: qty,
       price: _selectedProduct!.sellPrice,
+      costPrice: costPrice, // 👈 Capture historical cost for COGS
       reservedBatches: reservedBatches,
       createdAt: DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
@@ -222,16 +232,48 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       return;
     }
 
+    // 1️⃣ Calculate totals and pending
+    final discount = double.tryParse(_discountController.text) ?? 0;
+    final paid = double.tryParse(_paidController.text) ?? 0;
+    final total = _total;
+    // The actual balance change for the customer (can be negative if overpaid)
+    final realPending = total - discount - paid;
+    // The invoice pending amount (cannot be negative)
+    final invoicePending = realPending.clamp(0, double.infinity);
+
+    // 2️⃣ Overpayment Validation
+    if (realPending < 0) {
+      final overpaidAmount = realPending.abs();
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Overpayment Detected"),
+          content: Text(
+            "The paid amount exceeds the total due by ${_selectedCustomer != null ? "" : "Rs "}${overpaidAmount.toStringAsFixed(2)}.\n\n"
+            "Do you want to credit this excess amount to the customer's wallet?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Yes, Credit Customer"),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
     showDialog(
       barrierDismissible: false,
       context: context,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
-
-    final discount = double.tryParse(_discountController.text) ?? 0;
-    final paid = double.tryParse(_paidController.text) ?? 0;
-    final total = _total;
-    final pending = (total - discount - paid).clamp(0, double.infinity);
 
     final db = await DatabaseHelper.instance.db;
     final invoiceId = _uuid.v4();
@@ -248,7 +290,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         total: total,
         discount: discount,
         paid: paid,
-        pending: pending.toDouble(),
+        pending: invoicePending
+            .toDouble(), // Invoice record gets 0 if fully paid
+        status: 'posted',
         date: DateTime.now().toIso8601String(),
         createdAt: DateTime.now().toIso8601String(),
         updatedAt: DateTime.now().toIso8601String(),
@@ -256,18 +300,50 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
       await invoiceDao.insert(invoice, _selectedCustomer!.name);
 
-      for (final item in _items) {
-        item.invoiceId = invoiceId;
-        await itemDao.insert(item);
+      // 👇 Allocate discount proportionally to items
+      double remainingDiscount = discount;
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        double itemDiscount = 0.0;
+
+        if (i == _items.length - 1) {
+          // Last item gets remainder to avoid rounding drift
+          itemDiscount = remainingDiscount;
+        } else {
+          // Proportional allocation
+          final itemTotal = item.qty * item.price;
+          itemDiscount = double.parse(
+            ((itemTotal / total) * discount).toStringAsFixed(2),
+          );
+          remainingDiscount -= itemDiscount;
+        }
+
+        // Create item with allocated discount
+        final itemWithDiscount = InvoiceItem(
+          id: item.id,
+          invoiceId: invoiceId,
+          productId: item.productId,
+          qty: item.qty,
+          price: item.price,
+          costPrice: item.costPrice,
+          discount: itemDiscount,
+          reservedBatches: item.reservedBatches,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        );
+
+        await itemDao.insert(itemWithDiscount);
         await productDao.refreshProductQuantityFromBatches(item.productId);
       }
 
+      // 3️⃣ Update Customer Ledger with REAL Pending (allows negative/credit)
       await customerDao.updatePendingAmount(
         _selectedCustomer!.id,
-        invoice.pending,
+        realPending.toDouble(),
       );
     });
 
+    if (!mounted) return;
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Order created successfully!")),
@@ -336,6 +412,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                   updatedAt: now,
                 );
                 await customerDao.insertCustomer(newCustomer);
+                if (!context.mounted) return;
                 Navigator.pop(context, newCustomer);
               }
             },

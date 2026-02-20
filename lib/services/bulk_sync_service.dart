@@ -28,12 +28,19 @@ class BulkSyncService {
     return [
       'customers',
       'suppliers',
+      'supplier_companies', // Added
       'products',
       'categories',
+      'product_batches', // Added
       'invoices',
+      'invoice_items', // Added
       'purchases',
-      'purchase_items', // if exists
-      'invoice_items', // if exists
+      'purchase_items', // Added
+      'customer_payments', // Added
+      'supplier_payments', // Added
+      'expenses', // Added
+      'manual_entries', // Added
+      'stock_disposal', // Added
     ];
   }
 }

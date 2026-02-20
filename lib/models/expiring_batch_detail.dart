@@ -5,6 +5,7 @@ class ExpiringBatchDetail {
   final int qty;
   final String productId;
   final String productName;
+  final String? productCode;
   final String? supplierId;
   final String? supplierName;
   final String? supplierPhone;
@@ -19,6 +20,7 @@ class ExpiringBatchDetail {
     required this.qty,
     required this.productId,
     required this.productName,
+    this.productCode,
     this.supplierId,
     this.supplierName,
     this.supplierPhone,
@@ -35,6 +37,7 @@ class ExpiringBatchDetail {
       qty: map['qty'] ?? 0,
       productId: map['product_id'] ?? '',
       productName: map['product_name'] ?? 'Unknown',
+      productCode: map['product_code'],
       supplierId: map['supplier_id'],
       supplierName: map['supplier_name'],
       supplierPhone: map['supplier_phone'],

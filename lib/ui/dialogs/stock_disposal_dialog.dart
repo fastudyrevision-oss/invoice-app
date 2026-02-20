@@ -8,6 +8,7 @@ import '../../db/database_helper.dart';
 import '../../core/services/audit_logger.dart';
 import '../../services/auth_service.dart';
 import '../../services/logger_service.dart';
+import '../../services/thermal_printer/thermal_printing_service.dart';
 
 class StockDisposalDialog extends StatefulWidget {
   final ExpiringBatchDetail batch;
@@ -70,6 +71,10 @@ class _StockDisposalDialogState extends State<StockDisposalDialog> {
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        productName: widget.batch.productName,
+        productCode: widget.batch.productCode,
+        batchNo: widget.batch.batchNo,
+        supplierName: widget.batch.supplierName,
         createdAt: DateTime.now().toIso8601String(),
       );
 
@@ -77,6 +82,7 @@ class _StockDisposalDialogState extends State<StockDisposalDialog> {
       final disposalDao = StockDisposalDao(db);
       final batchDao = ProductBatchDao(db);
       final messenger = ScaffoldMessenger.of(context);
+      if (!mounted) return;
 
       // Insert disposal record
       await disposalDao.insert(disposal);
@@ -113,6 +119,11 @@ class _StockDisposalDialogState extends State<StockDisposalDialog> {
                   : '✅ Return to supplier recorded',
             ),
             backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'PRINT RECEIPT',
+              textColor: Colors.white,
+              onPressed: () => thermalPrinting.printStockDisposal(disposal),
+            ),
           ),
         );
       }
