@@ -968,7 +968,12 @@ class ThermalPrintingService {
       );
       return false;
     } catch (e, st) {
-      logger.error(_tag, 'Error in silent PDF print', error: e, stackTrace: st);
+      logger.error(
+        _tag,
+        '❌ Error in silent PDF print',
+        error: e,
+        stackTrace: st,
+      );
       return false;
     }
   }
@@ -1021,9 +1026,17 @@ class ThermalPrintingService {
         (p) => p.name.toLowerCase() == printerName.toLowerCase(),
         orElse: () => printers.firstWhere(
           (p) => p.name.toLowerCase().contains(printerName.toLowerCase()),
-          orElse: () => throw Exception('Printer not found'),
+          orElse: () {
+            logger.warning(
+              _tag,
+              '⚠️ Printer "$printerName" not found in system list',
+            );
+            throw Exception('Printer "$printerName" not found');
+          },
         ),
       );
+
+      logger.info(_tag, '✅ Selected system printer: ${printer.name}');
 
       return await Printing.directPrintPdf(
         printer: printer,
@@ -1031,7 +1044,11 @@ class ThermalPrintingService {
         name: docName,
       );
     } catch (e) {
-      logger.error(_tag, 'System silent print failed', error: e);
+      logger.error(
+        _tag,
+        '❌ System silent print failed for printer "$printerName"',
+        error: e,
+      );
       return false;
     }
   }
@@ -1040,14 +1057,23 @@ class ThermalPrintingService {
   Future<Uint8List> _generatePdfFromImage(Uint8List imageBytes) async {
     final pdf = pw.Document();
     final image = pw.MemoryImage(imageBytes);
+    final paperFormat = await _getPaperFormat();
+
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.roll80,
+        pageFormat: paperFormat,
         margin: pw.EdgeInsets.zero,
         build: (context) => pw.Center(child: pw.Image(image)),
       ),
     );
     return pdf.save();
+  }
+
+  /// Helper: Get dynamic paper format based on settings
+  Future<PdfPageFormat> _getPaperFormat() async {
+    final paperWidthMm = await _settingsService.getPaperWidth();
+    // 1mm = 2.8346 points
+    return PdfPageFormat(paperWidthMm * 2.8346, double.infinity);
   }
 }
 

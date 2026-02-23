@@ -10,7 +10,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../../utils/platform_file_helper.dart';
 import '../../utils/pdf_font_helper.dart';
 import '../../services/logger_service.dart';
+import '../../services/printer_settings_service.dart';
 import '../../utils/date_helper.dart';
+import '../../services/thermal_printer/thermal_printing_service.dart';
 
 /// Helper function to create and export a PDF report with a chart image.
 Future<File?> generatePdfReportWithChart({
@@ -1213,7 +1215,16 @@ Future<bool> printSilentThermalReceipt(
       'Silent printing thermal receipt for #${invoice.id}',
     );
 
-    // Generate the thermal receipt PDF using existing function
+    // Get paper width from settings
+    final settingsService = PrinterSettingsService();
+    await settingsService.initialize();
+    final paperWidthMm = await settingsService.getPaperWidth();
+
+    // Convert mm to points (1mm = 2.8346 points)
+    // Common: 58mm ~ 164pt, 80mm ~ 226pt
+    final double widthPoints = paperWidthMm * 2.8346;
+
+    // Generate the thermal receipt PDF
     final pdf = pw.Document();
 
     // Load fonts
@@ -1238,7 +1249,7 @@ Future<bool> printSilentThermalReceipt(
 
     pdf.addPage(
       pw.Page(
-        pageFormat: const PdfPageFormat(260, double.infinity),
+        pageFormat: PdfPageFormat(widthPoints, double.infinity),
         margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         build: (context) {
           return pw.Column(
@@ -1246,7 +1257,13 @@ Future<bool> printSilentThermalReceipt(
             children: [
               // Logo
               if (logoImage != null)
-                pw.Center(child: pw.Image(logoImage, width: 80, height: 80)),
+                pw.Center(
+                  child: pw.Image(
+                    logoImage,
+                    width: widthPoints * 0.4, // 40% of paper width
+                    height: widthPoints * 0.4,
+                  ),
+                ),
               if (logoImage != null) pw.SizedBox(height: 4),
 
               // Company Header
@@ -1258,7 +1275,10 @@ Future<bool> printSilentThermalReceipt(
                     pw.Text(
                       'میاں ٹریڈرز',
                       textDirection: pw.TextDirection.rtl,
-                      style: pw.TextStyle(font: regularFont, fontSize: 20),
+                      style: pw.TextStyle(
+                        font: regularFont,
+                        fontSize: paperWidthMm < 60 ? 14 : 20,
+                      ),
                       textAlign: pw.TextAlign.center,
                     ),
                   ],
@@ -1267,15 +1287,24 @@ Future<bool> printSilentThermalReceipt(
               pw.SizedBox(height: 2),
               pw.Text(
                 'Whole Sale & Retail Store',
-                style: pw.TextStyle(font: regularFont, fontSize: 7),
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: paperWidthMm < 60 ? 8 : 10,
+                ),
               ),
               pw.Text(
-                'Sargodha, Bhagtanawala, Kotmomin Road',
-                style: pw.TextStyle(font: regularFont, fontSize: 7),
+                'Kotmomin Road,Bhagtanawala,Sargodha',
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: paperWidthMm < 60 ? 6 : 7,
+                ),
               ),
               pw.Text(
                 '+92 345 4297128',
-                style: pw.TextStyle(font: regularFont, fontSize: 7),
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: paperWidthMm < 60 ? 8 : 14,
+                ),
               ),
               pw.SizedBox(height: 6),
               pw.Container(height: 1, color: PdfColors.black),
@@ -1286,7 +1315,10 @@ Future<bool> printSilentThermalReceipt(
                 alignment: pw.Alignment.centerLeft,
                 child: pw.Text(
                   'Customer: ${invoice.customerName ?? 'N/A'}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 6),
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: paperWidthMm < 60 ? 8 : 15,
+                  ),
                 ),
               ),
               pw.SizedBox(height: 1),
@@ -1294,7 +1326,10 @@ Future<bool> printSilentThermalReceipt(
                 alignment: pw.Alignment.centerLeft,
                 child: pw.Text(
                   'Date: $date',
-                  style: pw.TextStyle(font: regularFont, fontSize: 7),
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: paperWidthMm < 60 ? 8 : 10,
+                  ),
                 ),
               ),
               pw.SizedBox(height: 4),
@@ -1306,10 +1341,10 @@ Future<bool> printSilentThermalReceipt(
                 pw.Table(
                   border: pw.TableBorder.all(width: 0.3),
                   columnWidths: {
-                    0: const pw.FixedColumnWidth(80),
-                    1: const pw.FixedColumnWidth(30),
-                    2: const pw.FixedColumnWidth(20),
-                    3: const pw.FixedColumnWidth(60),
+                    0: const pw.FlexColumnWidth(2.0), // Product name
+                    1: const pw.FlexColumnWidth(0.7), // Qty
+                    2: const pw.FlexColumnWidth(1.5), // Price
+                    3: const pw.FlexColumnWidth(1.8), // Total
                   },
                   children: [
                     pw.TableRow(
@@ -1321,30 +1356,47 @@ Future<bool> printSilentThermalReceipt(
                           padding: const pw.EdgeInsets.all(1),
                           child: pw.Text(
                             'Item',
-                            style: pw.TextStyle(font: boldFont, fontSize: 6),
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                            ),
+                            softWrap: true,
                           ),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(1),
                           child: pw.Text(
                             'Qty',
-                            style: pw.TextStyle(font: boldFont, fontSize: 6),
-                            textAlign: pw.TextAlign.center,
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                            ),
+                            textAlign: pw.TextAlign.left,
+                            softWrap: true,
                           ),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(1),
                           child: pw.Text(
                             'Price',
-                            style: pw.TextStyle(font: boldFont, fontSize: 6),
-                            textAlign: pw.TextAlign.center,
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                            ),
+                            textAlign: pw.TextAlign.left,
+                            softWrap: true,
                           ),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(1),
                           child: pw.Text(
                             'Total',
-                            style: pw.TextStyle(font: boldFont, fontSize: 6),
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                            ),
+                            textAlign: pw.TextAlign.left,
+                            softWrap: true,
                           ),
                         ),
                       ],
@@ -1361,7 +1413,7 @@ Future<bool> printSilentThermalReceipt(
                               item['product_name'] ?? '',
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 6,
                               ),
                               softWrap: true,
                               maxLines: 2,
@@ -1373,9 +1425,10 @@ Future<bool> printSilentThermalReceipt(
                               qty.toString(),
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 6,
                               ),
                               textAlign: pw.TextAlign.center,
+                              softWrap: true,
                             ),
                           ),
                           pw.Padding(
@@ -1384,8 +1437,10 @@ Future<bool> printSilentThermalReceipt(
                               price.toStringAsFixed(0),
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 6,
                               ),
+                              textAlign: pw.TextAlign.left,
+                              softWrap: true,
                             ),
                           ),
                           pw.Padding(
@@ -1394,8 +1449,10 @@ Future<bool> printSilentThermalReceipt(
                               total.toStringAsFixed(0),
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 6,
                               ),
+                              textAlign: pw.TextAlign.left,
+                              softWrap: true,
                             ),
                           ),
                         ],
@@ -1411,7 +1468,7 @@ Future<bool> printSilentThermalReceipt(
 
               // Totals
               pw.Container(
-                width: 200,
+                width: widthPoints * 0.9,
                 child: pw.Table(
                   border: pw.TableBorder.all(width: 0.5),
                   columnWidths: {
@@ -1425,36 +1482,78 @@ Future<bool> printSilentThermalReceipt(
                           padding: const pw.EdgeInsets.all(2),
                           child: pw.Text(
                             'Total',
-                            style: pw.TextStyle(font: boldFont, fontSize: 9),
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: paperWidthMm < 60 ? 8 : 9,
+                            ),
+                            softWrap: true,
                           ),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(2),
                           child: pw.Text(
                             invoice.total.toStringAsFixed(0),
-                            style: pw.TextStyle(font: boldFont, fontSize: 9),
-                            textAlign: pw.TextAlign.right,
+                            style: pw.TextStyle(
+                              font: boldFont,
+                              fontSize: paperWidthMm < 60 ? 8 : 9,
+                            ),
+                            textAlign: pw.TextAlign.left,
+                            softWrap: true,
                           ),
                         ),
                       ],
                     ),
+                    if (invoice.discount > 0)
+                      pw.TableRow(
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(2),
+                            child: pw.Text(
+                              'Discount',
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: paperWidthMm < 60 ? 7 : 8,
+                              ),
+                              softWrap: true,
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(2),
+                            child: pw.Text(
+                              invoice.discount.toStringAsFixed(0),
+                              style: pw.TextStyle(
+                                font: regularFont,
+                                fontSize: paperWidthMm < 60 ? 7 : 8,
+                              ),
+                              textAlign: pw.TextAlign.left,
+                              softWrap: true,
+                            ),
+                          ),
+                        ],
+                      ),
                     pw.TableRow(
                       children: [
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(2),
                           child: pw.Text(
                             'Paid',
-                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: paperWidthMm < 60 ? 7 : 8,
+                            ),
+                            softWrap: true,
                           ),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(2),
                           child: pw.Text(
-                            (invoice.total - invoice.pending).toStringAsFixed(
-                              0,
+                            (invoice.paid).toStringAsFixed(0),
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: paperWidthMm < 60 ? 7 : 8,
                             ),
-                            style: pw.TextStyle(font: regularFont, fontSize: 8),
-                            textAlign: pw.TextAlign.right,
+                            textAlign: pw.TextAlign.left,
+                            softWrap: true,
                           ),
                         ),
                       ],
@@ -1465,15 +1564,23 @@ Future<bool> printSilentThermalReceipt(
                           padding: const pw.EdgeInsets.all(2),
                           child: pw.Text(
                             'Due',
-                            style: pw.TextStyle(font: regularFont, fontSize: 8),
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: paperWidthMm < 60 ? 7 : 8,
+                            ),
+                            softWrap: true,
                           ),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(2),
                           child: pw.Text(
                             invoice.pending.toStringAsFixed(0),
-                            style: pw.TextStyle(font: regularFont, fontSize: 8),
-                            textAlign: pw.TextAlign.right,
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: paperWidthMm < 60 ? 7 : 8,
+                            ),
+                            textAlign: pw.TextAlign.left,
+                            softWrap: true,
                           ),
                         ),
                       ],
@@ -1496,29 +1603,26 @@ Future<bool> printSilentThermalReceipt(
 
     final pdfBytes = await pdf.save();
 
-    // Use silent printing via the printing package
-    final printers = await Printing.listPrinters();
-    if (printers.isEmpty) {
-      logger.warning('PDFHelper', 'No printers available for silent print');
-      // Fallback to layout (shows dialog)
-      await Printing.layoutPdf(onLayout: (format) => pdfBytes);
-      return true;
+    // Use centralized thermal printing service for consistent behavior
+    final success = await thermalPrinting.printPdfSilently(
+      pdfBytes,
+      docName: 'Receipt_${invoice.id}',
+    );
+
+    if (success) {
+      logger.info('PDFHelper', 'Silent thermal print sent successfully');
+    } else {
+      logger.warning(
+        'PDFHelper',
+        'Silent thermal print failed or no printer configured',
+      );
+      // If silent print fails, fall back to layout (shows dialog) so the user can still print
+      await Printing.layoutPdf(
+        onLayout: (format) => pdfBytes,
+        name: 'Receipt_${invoice.id}',
+      );
     }
-
-    // Try to find a thermal printer or use the first available
-    final printer = printers.firstWhere(
-      (p) =>
-          p.name.toLowerCase().contains('thermal') ||
-          p.name.toLowerCase().contains('pos') ||
-          p.name.toLowerCase().contains('80'),
-      orElse: () => printers.first,
-    );
-
-    return await Printing.directPrintPdf(
-      printer: printer,
-      onLayout: (format) => pdfBytes,
-      name: 'Receipt_${invoice.id}',
-    );
+    return true;
   } catch (e, st) {
     logger.error(
       'PDFHelper',
@@ -1970,27 +2074,26 @@ Future<bool> printSilentStockDisposalThermalReceipt(dynamic disposal) async {
 
     final pdfBytes = await pdf.save();
 
-    // Use silent printing via the printing package
-    final printers = await Printing.listPrinters();
-    if (printers.isEmpty) {
-      logger.warning('PDFHelper', 'No printers available for silent print');
-      await Printing.layoutPdf(onLayout: (format) => pdfBytes);
-      return true;
+    // Use centralized thermal printing service for consistent behavior
+    final success = await thermalPrinting.printPdfSilently(
+      pdfBytes,
+      docName: 'Disposal_${disposal.id}',
+    );
+
+    if (success) {
+      logger.info('PDFHelper', 'Silent disposal print sent successfully');
+    } else {
+      logger.warning(
+        'PDFHelper',
+        'Silent disposal print failed or no printer configured',
+      );
+      // Fallback to layout (shows dialog)
+      await Printing.layoutPdf(
+        onLayout: (format) => pdfBytes,
+        name: 'Disposal_${disposal.id}',
+      );
     }
-
-    final printer = printers.firstWhere(
-      (p) =>
-          p.name.toLowerCase().contains('thermal') ||
-          p.name.toLowerCase().contains('pos') ||
-          p.name.toLowerCase().contains('80'),
-      orElse: () => printers.first,
-    );
-
-    return await Printing.directPrintPdf(
-      printer: printer,
-      onLayout: (format) => pdfBytes,
-      name: 'Disposal_${disposal.id}',
-    );
+    return true;
   } catch (e, st) {
     logger.error(
       'PDFHelper',

@@ -646,6 +646,15 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     child: Text(p.name),
                   ),
                 ),
+                // ✅ Safety: Add selected printer if it's missing from scanned list
+                if (_selectedUsbPrinter != null &&
+                    !_availablePrinters.any(
+                      (p) => p.name == _selectedUsbPrinter,
+                    ))
+                  DropdownMenuItem<String>(
+                    value: _selectedUsbPrinter,
+                    child: Text("$_selectedUsbPrinter (NotFound)"),
+                  ),
               ],
               onChanged: (value) {
                 setState(() => _selectedUsbPrinter = value);

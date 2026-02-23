@@ -7,6 +7,7 @@ import 'ui/purchase_frame.dart';
 import 'ui/expiring_products_frame.dart';
 import 'ui/reports/reports_dashboard.dart';
 import 'ui/order/order_list_screen.dart';
+import 'ui/order/order_form_screen.dart';
 import 'ui/category/category_list_frame.dart';
 import 'ui/backup/backup_frame.dart';
 import 'modules/audit_log/presentation/audit_log_screen.dart';
@@ -74,6 +75,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
   void _updateTabs() {
     final auth = AuthService.instance;
     final allTabs = [
+      _TabDef(
+        tab: const Tab(text: "Create Order"),
+        view: const OrderFormScreen(isTab: true),
+        perm: 'orders',
+      ),
       _TabDef(
         tab: const Tab(text: "Reports"),
         view: ReportsDashboard(sqlAgent: _sqlAgent),

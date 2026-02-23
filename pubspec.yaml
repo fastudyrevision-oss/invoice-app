@@ -54,6 +54,7 @@ flutter:
     - assets/fonts/SchehrazadeNew-Regular.ttf
     - assets/fonts/Lalezar-Regular.ttf
     - assets/logo.png
+    - assets/printing_logo.png
   fonts:
     - family: Roboto
       fonts:

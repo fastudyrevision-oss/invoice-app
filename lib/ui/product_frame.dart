@@ -320,15 +320,6 @@ class _ProductFrameState extends State<ProductFrame> {
     final unitController = TextEditingController(
       text: product?.defaultUnit ?? "",
     );
-    final costController = TextEditingController(
-      text: product?.costPrice.toString() ?? "",
-    );
-    final sellController = TextEditingController(
-      text: product?.sellPrice.toString() ?? "",
-    );
-    final quantityController = TextEditingController(
-      text: product?.quantity.toString() ?? "",
-    );
     final minStockController = TextEditingController(
       text: product?.minStock.toString() ?? "",
     );
@@ -373,43 +364,6 @@ class _ProductFrameState extends State<ProductFrame> {
                     ),
                   ),
                   TextFormField(
-                    controller: costController,
-                    decoration: const InputDecoration(
-                      labelText: "Cost Price *",
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Required';
-                      final v = double.tryParse(value);
-                      if (v == null || v < 0) return 'Invalid amount';
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: sellController,
-                    decoration: const InputDecoration(
-                      labelText: "Sell Price *",
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Required';
-                      final v = double.tryParse(value);
-                      if (v == null || v <= 0) return 'Must be > 0';
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: quantityController,
-                    decoration: const InputDecoration(labelText: "Quantity *"),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Required';
-                      final v = int.tryParse(value);
-                      if (v == null || v < 0) return 'Must be 0 or more';
-                      return null;
-                    },
-                  ),
-                  TextFormField(
                     controller: minStockController,
                     decoration: const InputDecoration(labelText: "Min Stock"),
                     keyboardType: TextInputType.number,
@@ -429,7 +383,8 @@ class _ProductFrameState extends State<ProductFrame> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: DropdownSearch<Category>(
-                      items: (filter, _) => _categories,
+                      items: (filter, _) =>
+                          _categories.where((c) => c.id != 'all').toList(),
                       selectedItem: selectedCategory,
                       itemAsString: (c) => c.name,
                       compareFn: (a, b) => a.id == b.id,
@@ -439,10 +394,11 @@ class _ProductFrameState extends State<ProductFrame> {
                       ),
                       decoratorProps: DropDownDecoratorProps(
                         decoration: InputDecoration(
-                          labelText: "Category",
+                          labelText: "Category *",
                           border: OutlineInputBorder(),
                         ),
                       ),
+                      validator: (c) => c == null ? 'Required' : null,
                       onChanged: (c) => setStateDialog(
                         () => selectedCategory =
                             c ??
@@ -499,9 +455,9 @@ class _ProductFrameState extends State<ProductFrame> {
                     description: descController.text,
                     sku: skuController.text,
                     defaultUnit: unitController.text,
-                    costPrice: double.tryParse(costController.text) ?? 0.0,
-                    sellPrice: double.tryParse(sellController.text) ?? 0.0,
-                    quantity: int.tryParse(quantityController.text) ?? 0,
+                    costPrice: product?.costPrice ?? 0.0,
+                    sellPrice: product?.sellPrice ?? 0.0,
+                    quantity: product?.quantity ?? 0,
                     minStock: int.tryParse(minStockController.text) ?? 0,
                     trackExpiry: trackExpiry,
                     supplierId: (selectedSupplierId == "all")
@@ -916,7 +872,7 @@ class _ProductFrameState extends State<ProductFrame> {
               preferredSize: Size.fromHeight(
                 ResponsiveUtils.getAppBarBottomHeight(
                   context,
-                  baseHeight: isMobile ? 220 : 160,
+                  baseHeight: isMobile ? 220 : 190,
                 ),
               ),
               child: Container(

@@ -568,7 +568,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
               preferredSize: Size.fromHeight(
                 ResponsiveUtils.getAppBarBottomHeight(
                   context,
-                  baseHeight: isMobile ? 190 : 160,
+                  baseHeight: isMobile ? 170 : 210,
                 ),
               ),
               child: Container(

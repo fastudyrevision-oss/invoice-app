@@ -482,7 +482,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
       builder: (context, constraints) {
         final appBarBottomHeight = ResponsiveUtils.getAppBarBottomHeight(
           context,
-          baseHeight: 100,
+          baseHeight: 130,
         );
 
         return Scaffold(
@@ -499,6 +499,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
                 ? [
                     // View toggle
                     IconButton(
+                      color: Colors.blueAccent,
                       icon: Icon(_viewModeIcon()),
                       tooltip: 'View: ${_viewModeLabel()}',
                       onPressed: _cycleViewMode,

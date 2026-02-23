@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/services.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import '../repositories/purchase_repo.dart';
 import '../models/purchase.dart';
@@ -335,13 +336,17 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
+    final qty = int.tryParse(_qtyCtrl.text) ?? 0;
+    final purchasePrice = double.tryParse(_purchasePriceCtrl.text) ?? 0.0;
+    final sellPrice = double.tryParse(_sellPriceCtrl.text) ?? 0.0;
+
     final item = PurchaseItem(
       id: const Uuid().v4(),
       purchaseId: "",
       productId: _selectedProductId!,
-      qty: int.parse(_qtyCtrl.text),
-      purchasePrice: double.parse(_purchasePriceCtrl.text),
-      sellPrice: double.parse(_sellPriceCtrl.text),
+      qty: qty,
+      purchasePrice: purchasePrice,
+      sellPrice: sellPrice,
       batchNo: _batchNoCtrl.text,
       expiryDate: _expiryCtrl.text.isEmpty ? null : _expiryCtrl.text,
     );
@@ -352,9 +357,9 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
       batchNo: _batchNoCtrl.text,
       supplierId: widget.supplierId, // ✅ assign supplierId here
       expiryDate: _expiryCtrl.text.isEmpty ? null : _expiryCtrl.text,
-      qty: int.parse(_qtyCtrl.text),
-      purchasePrice: double.parse(_purchasePriceCtrl.text),
-      sellPrice: double.parse(_sellPriceCtrl.text),
+      qty: qty,
+      purchasePrice: purchasePrice,
+      sellPrice: sellPrice,
       purchaseId: "",
       createdAt: DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
@@ -432,19 +437,46 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
                     controller: _qtyCtrl,
                     decoration: const InputDecoration(labelText: "Quantity"),
                     keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? "Required" : null,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return "Required";
+                      if (int.tryParse(v) == null) return "Invalid number";
+                      return null;
+                    },
                   ),
                   TextFormField(
                     controller: _purchasePriceCtrl,
                     decoration: const InputDecoration(
                       labelText: "Purchase Price",
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    ],
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty) {
+                        if (double.tryParse(v) == null) return "Invalid price";
+                      }
+                      return null;
+                    },
                   ),
                   TextFormField(
                     controller: _sellPriceCtrl,
                     decoration: const InputDecoration(labelText: "Sell Price"),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    ],
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty) {
+                        if (double.tryParse(v) == null) return "Invalid price";
+                      }
+                      return null;
+                    },
                   ),
                   TextFormField(
                     controller: _batchNoCtrl,

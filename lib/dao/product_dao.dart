@@ -17,8 +17,8 @@ class ProductDao {
 
   /// Insert or replace a product
   Future<int> insert(Product p) async {
-    // Assign "Uncategorized" if categoryId is null
-    if (p.categoryId == null) {
+    // Assign "Uncategorized" if categoryId is null or "all"
+    if (p.categoryId == null || p.categoryId == "all") {
       p = p.copyWith(categoryId: 'cat-001');
     }
     final id = await db.insert(
@@ -195,8 +195,12 @@ class ProductDao {
     return res.isNotEmpty ? Product.fromMap(res.first) : null;
   }
 
-  /// Update an existing product
   Future<int> update(Product p) async {
+    // Assign "Uncategorized" if categoryId is null or "all"
+    if (p.categoryId == null || p.categoryId == "all") {
+      p = p.copyWith(categoryId: 'cat-001');
+    }
+
     // Fetch old data
     final oldData = await getById(p.id, includeDeleted: true);
 
