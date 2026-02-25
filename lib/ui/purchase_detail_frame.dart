@@ -11,6 +11,7 @@ import '../db/database_helper.dart';
 import '../core/services/audit_logger.dart';
 import '../services/auth_service.dart';
 import 'order/pdf_export_helper.dart';
+import 'purchase_pdf_export_helper.dart';
 
 class PurchaseDetailFrame extends StatefulWidget {
   final PurchaseRepository repo;

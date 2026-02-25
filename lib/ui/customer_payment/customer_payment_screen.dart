@@ -5,6 +5,7 @@ import '../../models/customer_payment.dart';
 import '../../dao/customer_dao.dart';
 import '../../models/customer.dart';
 import 'customer_payment_dialog.dart';
+import '../../services/thermal_printer/thermal_printing_service.dart';
 
 class CustomerPaymentScreen extends StatefulWidget {
   const CustomerPaymentScreen({super.key});
@@ -352,6 +353,19 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  TextButton.icon(
+                    onPressed: () => thermalPrinting.printPayment(
+                      payment: CustomerPayment.fromMap(payment),
+                      partyName: customerName,
+                      type: 'Customer',
+                    ),
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text("Print"),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.teal.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () => _showPaymentDialog(payment),
                     icon: const Icon(Icons.edit_outlined, size: 18),

@@ -4,15 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
-import '/../../models/invoice.dart';
+import '../../models/invoice.dart';
+import '../../models/stock_disposal.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../utils/platform_file_helper.dart';
 import '../../utils/pdf_font_helper.dart';
 import '../../services/logger_service.dart';
 import '../../services/printer_settings_service.dart';
-import '../../utils/date_helper.dart';
 import '../../services/thermal_printer/thermal_printing_service.dart';
+import '../common/thermal_receipt_helper.dart';
+import '../../utils/date_helper.dart';
 
 /// Helper function to create and export a PDF report with a chart image.
 Future<File?> generatePdfReportWithChart({
@@ -143,9 +145,10 @@ Future<File?> generateInvoicePdf(
                       style: pw.TextStyle(font: regularFont, fontSize: 12),
                     ),
                     pw.Text(
-                      'Phone: +92 345 4297128 | bilalahmadgh@gmail.com',
+                      'Phone: 0345 4297128  03009101050',
                       style: pw.TextStyle(font: regularFont, fontSize: 12),
                     ),
+                     
                   ],
                 ),
               ),
@@ -889,7 +892,12 @@ Future<File?> generateThermalReceipt(
               textAlign: pw.TextAlign.left,
             ),
             pw.Text(
-              '+92 345 4297128',
+              '0345 4297128',
+              style: pw.TextStyle(font: regularFont, fontSize: 7),
+              textAlign: pw.TextAlign.left,
+            ),
+            pw.Text(
+              '03009101050',
               style: pw.TextStyle(font: regularFont, fontSize: 7),
               textAlign: pw.TextAlign.left,
             ),
@@ -1300,7 +1308,14 @@ Future<bool> printSilentThermalReceipt(
                 ),
               ),
               pw.Text(
-                '+92 345 4297128',
+                '0345 4297128',
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: paperWidthMm < 60 ? 8 : 14,
+                ),
+              ),
+              pw.Text(
+                '0300 9101050',
                 style: pw.TextStyle(
                   font: regularFont,
                   fontSize: paperWidthMm < 60 ? 8 : 14,
@@ -2004,68 +2019,78 @@ Future<bool> printSilentStockDisposalThermalReceipt(dynamic disposal) async {
       'Silent printing disposal receipt for #${disposal.id}',
     );
 
+    final fonts = await PdfFontHelper.getBothFonts();
+    final regularFont = fonts['regular']!;
+    final boldFont = fonts['bold']!;
+
+    final settingsService = PrinterSettingsService();
+    await settingsService.initialize();
+    final paperWidthMm = (await settingsService.getPaperWidth()).toDouble();
+    final widthPoints = paperWidthMm * ThermalReceiptHelper.mmToPoints;
+
     final pdf = pw.Document();
-
-    // Load fonts
-    final regularFont = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
-    );
-    final boldFont = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'),
-    );
-
     pdf.addPage(
       pw.Page(
-        pageFormat: const PdfPageFormat(260, double.infinity),
+        pageFormat: PdfPageFormat(widthPoints, double.infinity),
         margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         build: (context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Text(
-                'Stock Disposal',
-                style: pw.TextStyle(font: boldFont, fontSize: 14),
+              ThermalReceiptHelper.buildHeader(
+                regularFont: regularFont,
+                boldFont: boldFont,
+                subHeader: 'Stock Disposal / Return',
               ),
-              pw.SizedBox(height: 6),
-              pw.Container(height: 1, color: PdfColors.black),
-              pw.SizedBox(height: 4),
-              pw.Align(
-                alignment: pw.Alignment.centerLeft,
-                child: pw.Text(
-                  'Product: ${disposal.productName ?? 'N/A'}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
+              ThermalReceiptHelper.buildInfoRow(
+                'Disposal ID:',
+                disposal.id,
+                regularFont,
               ),
-              pw.Align(
-                alignment: pw.Alignment.centerLeft,
-                child: pw.Text(
-                  'Qty: ${disposal.qty}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
+              ThermalReceiptHelper.buildInfoRow(
+                'Type:',
+                disposal.disposalType ?? 'N/A',
+                regularFont,
               ),
-              pw.Align(
-                alignment: pw.Alignment.centerLeft,
-                child: pw.Text(
-                  'Type: ${disposal.disposalType ?? 'N/A'}',
-                  style: pw.TextStyle(font: regularFont, fontSize: 8),
-                ),
+              ThermalReceiptHelper.buildInfoRow(
+                'Date:',
+                DateHelper.formatIso(disposal.date),
+                regularFont,
               ),
+
               pw.SizedBox(height: 4),
               pw.Container(height: 1, color: PdfColors.black),
               pw.SizedBox(height: 4),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Cost Loss:',
-                    style: pw.TextStyle(font: boldFont, fontSize: 9),
-                  ),
-                  pw.Text(
-                    'Rs ${disposal.costLoss?.toStringAsFixed(0) ?? '0'}',
-                    style: pw.TextStyle(font: boldFont, fontSize: 9),
-                  ),
+
+              ThermalReceiptHelper.buildItemsTable(
+                data: [
+                  [
+                    disposal.productName ?? 'Unknown',
+                    disposal.qty.toString(),
+                    'N/A', // Cost per unit not directly shown in disposal model as a 'price'
+                    disposal.costLoss?.toStringAsFixed(0) ?? '0',
+                  ],
                 ],
+                regularFont: regularFont,
+                boldFont: boldFont,
+                paperWidthMm: paperWidthMm,
               ),
+
+              pw.SizedBox(height: 4),
+              pw.Container(height: 1, color: PdfColors.black),
+              pw.SizedBox(height: 4),
+
+              ThermalReceiptHelper.buildTotalsTable(
+                rows: [
+                  ['Cost Loss', disposal.costLoss?.toStringAsFixed(0) ?? '0'],
+                  if (disposal is StockDisposal && disposal.refundAmount > 0)
+                    ['Refund', disposal.refundAmount.toStringAsFixed(0)],
+                ],
+                regularFont: regularFont,
+                boldFont: boldFont,
+                paperWidthMm: paperWidthMm,
+              ),
+              ThermalReceiptHelper.buildFooter(boldFont),
             ],
           );
         },
@@ -2073,27 +2098,10 @@ Future<bool> printSilentStockDisposalThermalReceipt(dynamic disposal) async {
     );
 
     final pdfBytes = await pdf.save();
-
-    // Use centralized thermal printing service for consistent behavior
-    final success = await thermalPrinting.printPdfSilently(
+    return await thermalPrinting.printPdfSilently(
       pdfBytes,
       docName: 'Disposal_${disposal.id}',
     );
-
-    if (success) {
-      logger.info('PDFHelper', 'Silent disposal print sent successfully');
-    } else {
-      logger.warning(
-        'PDFHelper',
-        'Silent disposal print failed or no printer configured',
-      );
-      // Fallback to layout (shows dialog)
-      await Printing.layoutPdf(
-        onLayout: (format) => pdfBytes,
-        name: 'Disposal_${disposal.id}',
-      );
-    }
-    return true;
   } catch (e, st) {
     logger.error(
       'PDFHelper',
@@ -2104,3 +2112,4 @@ Future<bool> printSilentStockDisposalThermalReceipt(dynamic disposal) async {
     return false;
   }
 }
+

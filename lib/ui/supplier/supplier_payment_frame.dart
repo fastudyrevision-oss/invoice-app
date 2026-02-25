@@ -6,6 +6,7 @@ import '../../models/supplier.dart';
 import '../../models/supplier_payment.dart';
 import '../../db/database_helper.dart';
 import '../../utils/responsive_utils.dart';
+import '../../services/thermal_printer/thermal_printing_service.dart';
 
 class SupplierPaymentFrame extends StatefulWidget {
   final SupplierPaymentRepository repo;
@@ -542,6 +543,13 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
                           if (value == 'edit') _addOrEditPayment(p);
                           if (value == 'delete') _deletePayment(p);
                           if (value == 'restore') _restorePayment(p);
+                          if (value == 'print') {
+                            thermalPrinting.printPayment(
+                              payment: p,
+                              partyName: widget.supplier.name,
+                              type: 'Supplier',
+                            );
+                          }
                         },
                         itemBuilder: (ctx) => [
                           if (!isDeleted)
@@ -553,6 +561,11 @@ class _SupplierPaymentFrameState extends State<SupplierPaymentFrame> {
                             const PopupMenuItem(
                               value: 'delete',
                               child: Text('Delete'),
+                            ),
+                          if (!isDeleted)
+                            const PopupMenuItem(
+                              value: 'print',
+                              child: Text('Print Receipt'),
                             ),
                           if (isDeleted)
                             const PopupMenuItem(
