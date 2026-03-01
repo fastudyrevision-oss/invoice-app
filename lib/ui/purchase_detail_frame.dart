@@ -145,7 +145,12 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
         return Scaffold(
           backgroundColor: Colors.grey[100],
           appBar: AppBar(
-            title: Text("Invoice #${_purchase.invoiceNo}"),
+            title: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text(
+                "Purchase #${_purchase.displayId ?? 'N/A'}${_purchase.invoiceNo.isNotEmpty ? " (Inv: ${_purchase.invoiceNo})" : ""}",
+              ),
+            ),
             elevation: 0,
             flexibleSpace: Container(
               decoration: BoxDecoration(

@@ -29,6 +29,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
   DateTime? _startDate;
   DateTime? _endDate;
   final _searchController = TextEditingController();
+  List<FlSpot> _chartSpots = [];
 
   @override
   void initState() {
@@ -96,6 +97,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
       setState(() {
         _allEntries = entries;
         _filteredEntries = entries;
+        _updateChartSpots();
         _isLoading = false;
       });
     } catch (e) {
@@ -106,6 +108,28 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
         ).showSnackBar(SnackBar(content: Text('Error loading payments: $e')));
       }
     }
+  }
+
+  void _updateChartSpots() {
+    if (_filteredEntries.isEmpty) {
+      _chartSpots = [];
+      return;
+    }
+
+    // Group by date
+    final Map<DateTime, double> dailyNet = {};
+    // Sort ascending for chart
+    final sorted = List<CombinedPaymentEntry>.from(_filteredEntries);
+    sorted.sort((a, b) => a.date.compareTo(b.date));
+
+    for (var e in sorted) {
+      final date = DateTime(e.date.year, e.date.month, e.date.day);
+      dailyNet[date] = (dailyNet[date] ?? 0) + (e.moneyIn - e.moneyOut);
+    }
+
+    _chartSpots = dailyNet.entries.map((e) {
+      return FlSpot(e.key.millisecondsSinceEpoch.toDouble(), e.value);
+    }).toList();
   }
 
   void _applyFilters() {
@@ -138,6 +162,7 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
 
         return true;
       }).toList();
+      _updateChartSpots();
     });
   }
 
@@ -256,65 +281,64 @@ class _PaymentReportFrameState extends State<PaymentReportFrame> {
   }
 
   Widget _buildChart() {
-    if (_filteredEntries.isEmpty) return const SizedBox.shrink();
+    if (_chartSpots.isEmpty) return const SizedBox.shrink();
 
-    // Group by date
-    final Map<DateTime, double> dailyNet = {};
-    // Sort ascending for chart
-    final sorted = List<CombinedPaymentEntry>.from(_filteredEntries);
-    sorted.sort((a, b) => a.date.compareTo(b.date));
-
-    for (var e in sorted) {
-      final date = DateTime(e.date.year, e.date.month, e.date.day);
-      dailyNet[date] = (dailyNet[date] ?? 0) + (e.moneyIn - e.moneyOut);
+    // Calculate dynamic interval for X-axis labels
+    double? interval;
+    if (_chartSpots.length > 1) {
+      final minX = _chartSpots.first.x;
+      final maxX = _chartSpots.last.x;
+      final diff = maxX - minX;
+      // Show ~5 labels
+      interval = (diff / 5).clamp(86400000.0, double.infinity);
     }
-
-    final spots = dailyNet.entries.map((e) {
-      return FlSpot(e.key.millisecondsSinceEpoch.toDouble(), e.value);
-    }).toList();
 
     return Container(
       height: 200,
       padding: const EdgeInsets.all(16),
-      child: LineChart(
-        LineChartData(
-          gridData: FlGridData(show: true),
-          titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  final date = DateTime.fromMillisecondsSinceEpoch(
-                    value.toInt(),
-                  );
-                  return Text(
-                    DateFormat('MM/dd').format(date),
-                    style: const TextStyle(fontSize: 10),
-                  );
-                },
-                interval: 86400000 * 5, // ~5 days
+      child: RepaintBoundary(
+        child: LineChart(
+          LineChartData(
+            gridData: FlGridData(show: true),
+            titlesData: FlTitlesData(
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    final date = DateTime.fromMillisecondsSinceEpoch(
+                      value.toInt(),
+                    );
+                    return Text(
+                      DateFormat('MM/dd').format(date),
+                      style: const TextStyle(fontSize: 10),
+                    );
+                  },
+                  interval: interval,
+                ),
+              ),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+              ),
+              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
               ),
             ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(showTitles: true, reservedSize: 40),
-            ),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            borderData: FlBorderData(show: true),
+            lineBarsData: [
+              LineChartBarData(
+                spots: _chartSpots,
+                isCurved: true,
+                color: Colors.blue,
+                barWidth: 3,
+                dotData: FlDotData(show: false),
+                belowBarData: BarAreaData(
+                  show: true,
+                  color: Colors.blue.withValues(alpha: 0.1),
+                ),
+              ),
+            ],
           ),
-          borderData: FlBorderData(show: true),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              color: Colors.blue,
-              barWidth: 3,
-              dotData: FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                color: Colors.blue.withOpacity(0.1),
-              ),
-            ),
-          ],
         ),
       ),
     );

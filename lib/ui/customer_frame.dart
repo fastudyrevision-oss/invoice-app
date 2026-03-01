@@ -488,6 +488,8 @@ class _CustomerFrameState extends State<CustomerFrame> {
         return Scaffold(
           backgroundColor: Colors.grey[100],
           appBar: AppBar(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
             title: Text(
               "Customers",
               style: TextStyle(

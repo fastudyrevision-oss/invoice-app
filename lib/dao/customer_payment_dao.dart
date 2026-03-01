@@ -20,14 +20,25 @@ class CustomerPaymentDao {
 
   Future<int> insert(CustomerPayment payment) async {
     final dbClient = await _db;
-    final id = await dbClient.insert("customer_payments", payment.toMap());
+
+    // 🔢 Calculate next Counting ID (UX display, preserves UUID structure)
+    final lastIdRes = await dbClient.rawQuery(
+      "SELECT MAX(display_id) as last_id FROM customer_payments",
+    );
+    final nextDisplayId = (lastIdRes.first['last_id'] as int? ?? 0) + 1;
+
+    // Inject display_id into map
+    final map = payment.toMap();
+    map['display_id'] = payment.displayId ?? nextDisplayId;
+
+    final id = await dbClient.insert("customer_payments", map);
 
     await AuditLogger.log(
       'CREATE',
       'customer_payments',
       recordId: payment.id,
       userId: AuthService.instance.currentUser?.id ?? 'system',
-      newData: payment.toMap(),
+      newData: map,
       txn: dbClient,
     );
 
@@ -93,9 +104,30 @@ class CustomerPaymentDao {
     }
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      whereClauses.add('(c.name LIKE ? OR cp.transaction_ref LIKE ?)');
-      args.add('%$searchQuery%');
-      args.add('%$searchQuery%');
+      final cleanQuery = searchQuery.trim();
+      if (cleanQuery.startsWith('#')) {
+        final idPart = cleanQuery.substring(1);
+        final idNum = int.tryParse(idPart);
+        if (idNum != null) {
+          whereClauses.add('cp.display_id = ?');
+          args.add(idNum);
+        } else {
+          whereClauses.add('(c.name LIKE ? OR cp.transaction_ref LIKE ?)');
+          args.add('%$searchQuery%');
+          args.add('%$searchQuery%');
+        }
+      } else {
+        final idNum = int.tryParse(cleanQuery);
+        if (idNum != null) {
+          whereClauses.add('(cp.display_id = ? OR c.phone LIKE ?)');
+          args.add(idNum);
+          args.add('%$cleanQuery%');
+        } else {
+          whereClauses.add('(c.name LIKE ? OR cp.transaction_ref LIKE ?)');
+          args.add('%$searchQuery%');
+          args.add('%$searchQuery%');
+        }
+      }
     }
 
     final whereString = whereClauses.isNotEmpty

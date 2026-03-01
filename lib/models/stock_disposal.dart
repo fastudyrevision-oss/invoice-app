@@ -1,5 +1,6 @@
 class StockDisposal {
   final String id;
+  final int? displayId; // 🔢 Counting ID (UX display, not UUID)
   final String batchId;
   final String productId;
   final String? supplierId;
@@ -17,6 +18,7 @@ class StockDisposal {
 
   StockDisposal({
     required this.id,
+    this.displayId,
     required this.batchId,
     required this.productId,
     this.supplierId,
@@ -35,6 +37,7 @@ class StockDisposal {
 
   Map<String, dynamic> toMap() => {
     'id': id,
+    'display_id': displayId,
     'batch_id': batchId,
     'product_id': productId,
     'supplier_id': supplierId,
@@ -49,6 +52,7 @@ class StockDisposal {
 
   factory StockDisposal.fromMap(Map<String, dynamic> map) => StockDisposal(
     id: map['id'],
+    displayId: map['display_id'] as int?,
     batchId: map['batch_id'],
     productId: map['product_id'],
     supplierId: map['supplier_id'],
@@ -67,6 +71,7 @@ class StockDisposal {
 
   StockDisposal copyWith({
     String? id,
+    int? displayId,
     String? batchId,
     String? productId,
     String? supplierId,
@@ -84,6 +89,7 @@ class StockDisposal {
   }) {
     return StockDisposal(
       id: id ?? this.id,
+      displayId: displayId ?? this.displayId,
       batchId: batchId ?? this.batchId,
       productId: productId ?? this.productId,
       supplierId: supplierId ?? this.supplierId,

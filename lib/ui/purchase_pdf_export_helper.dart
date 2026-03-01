@@ -160,7 +160,7 @@ Future<File?> generatePurchaseInvoicePdf(
               pw.SizedBox(height: 12),
 
               pw.Text(
-                'Purchase #${purchase.id}',
+                'Purchase #${purchase.displayId ?? purchase.invoiceNo}',
                 style: pw.TextStyle(font: boldFont, fontSize: 18),
               ),
               pw.SizedBox(height: 8),
@@ -234,7 +234,8 @@ Future<File?> generatePurchaseInvoicePdf(
   );
 
   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  final suggestedName = 'Purchase_${purchase.id}_$timestamp.pdf';
+  final displayId = purchase.displayId?.toString() ?? purchase.invoiceNo;
+  final suggestedName = 'Purchase_${displayId}_$timestamp.pdf';
 
   // Use platform-aware file handling (Android: share, Desktop: file picker)
   final pdfBytes = await pdf.save();
@@ -277,7 +278,7 @@ Future<File?> generateThermalReceipt(
 }) async {
   logger.info(
     'PDFHelper',
-    'Generating Thermal Receipt for Purchase #${purchase.invoiceNo}',
+    'Generating Thermal Receipt for Purchase #${purchase.displayId ?? purchase.invoiceNo}',
   );
 
   final pdf = pw.Document();
@@ -403,7 +404,7 @@ Future<File?> generateThermalReceipt(
             pw.Align(
               alignment: pw.Alignment.centerLeft,
               child: pw.Text(
-                'Invoice: ${purchase.invoiceNo}',
+                'Purchase: #${purchase.displayId ?? purchase.invoiceNo}',
                 style: pw.TextStyle(
                   font: regularFont,
                   fontSize: paperWidthMm < 60 ? 8 : 10,
@@ -643,7 +644,8 @@ Future<File?> generateThermalReceipt(
   );
 
   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  final suggestedName = 'Purchase_Receipt_${purchase.invoiceNo}_$timestamp.pdf';
+  final displayId = purchase.displayId?.toString() ?? purchase.invoiceNo;
+  final suggestedName = 'Purchase_Receipt_${displayId}_$timestamp.pdf';
 
   final pdfBytes = await pdf.save();
   return await PlatformFileHelper.savePdfFile(
@@ -662,7 +664,7 @@ Future<bool> printSilentPurchaseThermalReceipt(
   try {
     logger.info(
       'PDFHelper',
-      'Silent printing purchase receipt for #${purchase.invoiceNo}',
+      'Silent printing purchase receipt for #${purchase.displayId ?? purchase.invoiceNo}',
     );
 
     // Get paper width from settings
@@ -788,7 +790,7 @@ Future<bool> printSilentPurchaseThermalReceipt(
               pw.Align(
                 alignment: pw.Alignment.centerLeft,
                 child: pw.Text(
-                  'Invoice: ${purchase.invoiceNo}',
+                  'Purchase: #${purchase.displayId ?? purchase.invoiceNo}',
                   style: pw.TextStyle(
                     font: regularFont,
                     fontSize: paperWidthMm < 60 ? 8 : 10,
@@ -1030,7 +1032,7 @@ Future<bool> printSilentPurchaseThermalReceipt(
     final pdfBytes = await pdf.save();
     return await thermalPrinting.printPdfSilently(
       pdfBytes,
-      docName: 'Purchase_${purchase.invoiceNo}',
+      docName: 'Purchase_${purchase.displayId ?? purchase.invoiceNo}',
     );
   } catch (e, st) {
     logger.error(

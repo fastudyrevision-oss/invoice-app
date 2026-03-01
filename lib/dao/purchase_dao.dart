@@ -13,11 +13,17 @@ class PurchaseDao {
 
   Future<int> insertPurchase(Purchase purchase) async {
     final dbClient = await _db;
-    await dbClient.insert(
-      "purchases",
-      purchase.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+
+    // 🔢 Calculate next short ID (UX column)
+    final lastIdRes = await dbClient.rawQuery(
+      "SELECT MAX(display_id) as last_id FROM purchases",
     );
+    final nextDisplayId = (lastIdRes.first['last_id'] as int? ?? 0) + 1;
+
+    await dbClient.insert("purchases", {
+      ...purchase.toMap(),
+      "display_id": purchase.displayId ?? nextDisplayId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
 
     await AuditLogger.log(
       'CREATE',

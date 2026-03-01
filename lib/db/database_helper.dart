@@ -170,6 +170,116 @@ class DatabaseHelper {
                 "REAL NOT NULL DEFAULT 0",
               );
 
+              // ✅ Migration for Counting IDs (UX Optimized)
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "invoices",
+                "display_id",
+                "INTEGER",
+              );
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "purchases",
+                "display_id",
+                "INTEGER",
+              );
+
+              // Populate existing IDs sequentially
+              final existingInvoices = await txn.query(
+                'invoices',
+                orderBy: 'created_at ASC',
+              );
+              for (int i = 0; i < existingInvoices.length; i++) {
+                if (existingInvoices[i]['display_id'] == null) {
+                  await txn.update(
+                    'invoices',
+                    {'display_id': i + 1},
+                    where: 'id = ?',
+                    whereArgs: [existingInvoices[i]['id']],
+                  );
+                }
+              }
+
+              final existingPurchases = await txn.query(
+                'purchases',
+                orderBy: 'created_at ASC',
+              );
+              for (int i = 0; i < existingPurchases.length; i++) {
+                if (existingPurchases[i]['display_id'] == null) {
+                  await txn.update(
+                    'purchases',
+                    {'display_id': i + 1},
+                    where: 'id = ?',
+                    whereArgs: [existingPurchases[i]['id']],
+                  );
+                }
+              }
+
+              // ✅ Migration for Counting IDs on Stock Disposals
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "stock_disposal",
+                "display_id",
+                "INTEGER",
+              );
+              final existingDisposals = await txn.query(
+                'stock_disposal',
+                orderBy: 'created_at ASC',
+              );
+              for (int i = 0; i < existingDisposals.length; i++) {
+                if (existingDisposals[i]['display_id'] == null) {
+                  await txn.update(
+                    'stock_disposal',
+                    {'display_id': i + 1},
+                    where: 'id = ?',
+                    whereArgs: [existingDisposals[i]['id']],
+                  );
+                }
+              }
+
+              // ✅ Migration for Counting IDs on Payments
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "customer_payments",
+                "display_id",
+                "INTEGER",
+              );
+              final existingCustPayments = await txn.query(
+                'customer_payments',
+                orderBy: 'created_at ASC',
+              );
+              for (int i = 0; i < existingCustPayments.length; i++) {
+                if (existingCustPayments[i]['display_id'] == null) {
+                  await txn.update(
+                    'customer_payments',
+                    {'display_id': i + 1},
+                    where: 'id = ?',
+                    whereArgs: [existingCustPayments[i]['id']],
+                  );
+                }
+              }
+
+              await _addColumnIfNotExistsDirect(
+                txn,
+                "supplier_payments",
+                "display_id",
+                "INTEGER",
+              );
+              final existingSuppPayments = await txn.query(
+                'supplier_payments',
+                orderBy: 'created_at ASC',
+              );
+              for (int i = 0; i < existingSuppPayments.length; i++) {
+                if (existingSuppPayments[i]['display_id'] == null) {
+                  await txn.update(
+                    'supplier_payments',
+                    {'display_id': i + 1},
+                    where: 'id = ?',
+                    whereArgs: [existingSuppPayments[i]['id']],
+                  );
+                }
+              }
+
               // Data Migration: Populate existing invoice_items.cost_price from products.cost_price
               await txn.rawUpdate('''
                 UPDATE invoice_items 
@@ -441,6 +551,7 @@ class DatabaseHelper {
     batch.execute('''
       CREATE TABLE invoices (
         id TEXT PRIMARY KEY,
+        display_id INTEGER,
         customer_id TEXT,
         customer_name TEXT,
         invoice_no TEXT,
@@ -483,6 +594,7 @@ class DatabaseHelper {
     batch.execute('''
       CREATE TABLE purchases (
         id TEXT PRIMARY KEY,
+        display_id INTEGER,
         supplier_id TEXT,
         invoice_no TEXT,
         total REAL,
@@ -521,6 +633,7 @@ class DatabaseHelper {
     batch.execute('''
       CREATE TABLE customer_payments (
         id TEXT PRIMARY KEY,
+        display_id INTEGER,
         customer_id TEXT NOT NULL,
         invoice_id TEXT,
         amount REAL NOT NULL,
@@ -540,6 +653,7 @@ class DatabaseHelper {
     batch.execute('''
       CREATE TABLE supplier_payments (
         id TEXT PRIMARY KEY,
+        display_id INTEGER,
         supplier_id TEXT NOT NULL,
         purchase_id TEXT,
         amount REAL NOT NULL,
@@ -631,6 +745,7 @@ class DatabaseHelper {
     batch.execute('''
       CREATE TABLE stock_disposal (
         id TEXT PRIMARY KEY,
+        display_id INTEGER,
         batch_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
         supplier_id TEXT,

@@ -227,9 +227,21 @@ class SupplierPaymentRepository {
 
     return all.where((p) {
       final noteText = p.note ?? "";
-      final matchNote =
-          keyword == null ||
-          noteText.toLowerCase().contains(keyword.toLowerCase());
+      final refText = p.transactionRef ?? "";
+      final displayIdText = p.displayId?.toString() ?? "";
+
+      bool matchKeyword = true;
+      if (keyword != null && keyword.isNotEmpty) {
+        final cleanK = keyword.trim().toLowerCase();
+        if (cleanK.startsWith('#')) {
+          matchKeyword = displayIdText == cleanK.substring(1);
+        } else {
+          matchKeyword =
+              noteText.toLowerCase().contains(cleanK) ||
+              refText.toLowerCase().contains(cleanK) ||
+              displayIdText == cleanK;
+        }
+      }
 
       final paymentDate = DateTime.parse(p.date);
       final matchDate =
@@ -238,7 +250,7 @@ class SupplierPaymentRepository {
           (end == null ||
               paymentDate.isBefore(end.add(const Duration(days: 1))));
 
-      return matchNote && matchDate;
+      return matchKeyword && matchDate;
     }).toList();
   }
 

@@ -1,5 +1,6 @@
 class CustomerPayment {
   final String id;
+  final int? displayId; // 🔢 Counting ID (UX display, not UUID)
   final String customerId;
   final String? invoiceId;
   final double amount;
@@ -12,6 +13,7 @@ class CustomerPayment {
 
   CustomerPayment({
     required this.id,
+    this.displayId,
     required this.customerId,
     this.invoiceId,
     required this.amount,
@@ -25,6 +27,7 @@ class CustomerPayment {
 
   Map<String, dynamic> toMap() => {
     "id": id,
+    "display_id": displayId,
     "customer_id": customerId,
     "invoice_id": invoiceId,
     "amount": amount,
@@ -38,6 +41,7 @@ class CustomerPayment {
 
   factory CustomerPayment.fromMap(Map<String, dynamic> map) => CustomerPayment(
     id: map["id"],
+    displayId: map["display_id"],
     customerId: map["customer_id"],
     invoiceId: map["invoice_id"],
     amount: (map["amount"] as num).toDouble(),
@@ -51,6 +55,7 @@ class CustomerPayment {
 
   CustomerPayment copyWith({
     String? id,
+    int? displayId,
     String? customerId,
     String? invoiceId,
     double? amount,
@@ -63,6 +68,7 @@ class CustomerPayment {
   }) {
     return CustomerPayment(
       id: id ?? this.id,
+      displayId: displayId ?? this.displayId,
       customerId: customerId ?? this.customerId,
       invoiceId: invoiceId ?? this.invoiceId,
       amount: amount ?? this.amount,

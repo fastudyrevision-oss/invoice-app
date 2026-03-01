@@ -19,6 +19,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import '../../utils/date_helper.dart';
 import 'receipt_widget.dart';
+import '../../utils/pdf_font_helper.dart';
 
 import 'receipt_image_generator.dart';
 import 'printer_service.dart';
@@ -59,7 +60,10 @@ class ThermalPrintingService {
     BuildContext? context,
   }) async {
     try {
-      logger.info(_tag, '📄 Printing invoice via PDF engine: ${invoice.id}');
+      logger.info(
+        _tag,
+        '📄 Printing invoice via PDF engine: #${invoice.displayId ?? invoice.id.substring(0, 8)}',
+      );
 
       final mappedItems = items
           .map(
@@ -91,7 +95,10 @@ class ThermalPrintingService {
   /// This is a convenience method for "Fast Print" buttons
   Future<bool> printOrder(Invoice invoice, {BuildContext? context}) async {
     try {
-      logger.info(_tag, '🚀 Fast Printing Order: ${invoice.id}');
+      logger.info(
+        _tag,
+        '🚀 Fast Printing Order: #${invoice.displayId ?? invoice.id.substring(0, 8)}',
+      );
 
       // Fetch items with product names
       final db = await DatabaseHelper.instance.db;
@@ -142,7 +149,10 @@ class ThermalPrintingService {
     BuildContext? context,
   }) async {
     try {
-      logger.info(_tag, '📦 Printing purchase via PDF engine: ${purchase.id}');
+      logger.info(
+        _tag,
+        '📦 Printing purchase via PDF engine: #${purchase.displayId ?? purchase.invoiceNo}',
+      );
 
       final mappedItems = items
           .map(
@@ -211,7 +221,11 @@ class ThermalPrintingService {
         type: type,
       );
 
-      return await printPdfSilently(pdfBytes, docName: 'Payment_${payment.id}');
+      final shortId = payment.id.length > 8
+          ? payment.id.substring(0, 8).toUpperCase()
+          : payment.id.toUpperCase();
+      final displayRef = payment.displayId?.toString() ?? shortId;
+      return await printPdfSilently(pdfBytes, docName: 'Payment_$displayRef');
     } catch (e, st) {
       logger.error(
         _tag,
@@ -231,14 +245,15 @@ class ThermalPrintingService {
     try {
       logger.info(
         _tag,
-        '🖨️ Silent printing thermal receipt for #${invoice.id}',
+        '🖨️ Silent printing thermal receipt for #${invoice.displayId ?? invoice.id.substring(0, 8)}',
       );
 
       // Generate PDF bytes for thermal receipt
       final pdfBytes = await _generateInvoiceThermalPdf(invoice, items);
 
       // Use the existing silent print method
-      return await printPdfSilently(pdfBytes, docName: 'Receipt_${invoice.id}');
+      final docId = invoice.displayId?.toString() ?? invoice.id.substring(0, 8);
+      return await printPdfSilently(pdfBytes, docName: 'Receipt_$docId');
     } catch (e, st) {
       logger.error(
         _tag,
@@ -259,7 +274,7 @@ class ThermalPrintingService {
     try {
       logger.info(
         _tag,
-        '🖨️ Silent printing purchase receipt for #${purchase.id}',
+        '🖨️ Silent printing purchase receipt for #${purchase.displayId ?? purchase.invoiceNo}',
       );
 
       // Generate simple purchase PDF for thermal printing
@@ -271,7 +286,7 @@ class ThermalPrintingService {
 
       return await printPdfSilently(
         pdfBytes,
-        docName: 'Purchase_${purchase.invoiceNo}',
+        docName: 'Purchase_${purchase.displayId ?? purchase.invoiceNo}',
       );
     } catch (e, st) {
       logger.error(
@@ -297,10 +312,11 @@ class ThermalPrintingService {
       // Generate simple disposal PDF for thermal printing
       final pdfBytes = await _generateDisposalThermalPdf(disposal);
 
-      return await printPdfSilently(
-        pdfBytes,
-        docName: 'Disposal_${disposal.id}',
-      );
+      final shortRef = disposal.id.length >= 8
+          ? disposal.id.substring(0, 8).toUpperCase()
+          : disposal.id.toUpperCase();
+      final docRef = disposal.displayId?.toString() ?? shortRef;
+      return await printPdfSilently(pdfBytes, docName: 'Disposal_$docRef');
     } catch (e, st) {
       logger.error(
         _tag,
@@ -401,7 +417,7 @@ class ThermalPrintingService {
                   fontSize: paperWidthMm < 60 ? 8 : 14,
                 ),
               ),
-              
+
               pw.Text(
                 '0345 4297128',
                 style: pw.TextStyle(
@@ -429,6 +445,17 @@ class ThermalPrintingService {
                 alignment: pw.Alignment.centerLeft,
                 child: pw.Text(
                   'Date: $date',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: paperWidthMm < 60 ? 8 : 10,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 1),
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Order: #${invoice.displayId ?? invoice.id.substring(0, 5)}',
                   style: pw.TextStyle(
                     font: regularFont,
                     fontSize: paperWidthMm < 60 ? 8 : 10,
@@ -780,7 +807,7 @@ class ThermalPrintingService {
                   fontSize: paperWidthMm < 60 ? 8 : 14,
                 ),
               ),
-              
+
               pw.Text(
                 '0345 4297128',
                 style: pw.TextStyle(
@@ -818,7 +845,7 @@ class ThermalPrintingService {
               pw.Align(
                 alignment: pw.Alignment.centerLeft,
                 child: pw.Text(
-                  'Invoice: ${purchase.invoiceNo}',
+                  'Purchase: #${purchase.displayId ?? purchase.invoiceNo}',
                   style: pw.TextStyle(
                     font: regularFont,
                     fontSize: paperWidthMm < 60 ? 8 : 10,
@@ -1140,7 +1167,7 @@ class ThermalPrintingService {
                   fontSize: paperWidthMm < 60 ? 8 : 14,
                 ),
               ),
-              
+
               pw.Text(
                 '0345 4297128',
                 style: pw.TextStyle(
@@ -1152,12 +1179,25 @@ class ThermalPrintingService {
               pw.Container(height: 1, color: PdfColors.black),
               pw.SizedBox(height: 4),
 
-              // Header
+              // Header — different title for write-off vs return
               pw.Text(
-                'STOCK DISPOSAL',
+                disposal.disposalType == 'return'
+                    ? 'SUPPLIER RETURN RECEIPT'
+                    : 'WRITE-OFF RECEIPT',
                 style: pw.TextStyle(
                   font: boldFont,
                   fontSize: paperWidthMm < 60 ? 10 : 12,
+                ),
+              ),
+              pw.SizedBox(height: 2),
+              // Counting ID (displayed as Disposal #N, falls back to short UUID)
+              pw.Text(
+                disposal.displayId != null
+                    ? 'Disposal #${disposal.displayId}'
+                    : 'Ref: #${disposal.id.length >= 8 ? disposal.id.substring(0, 8).toUpperCase() : disposal.id.toUpperCase()}',
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: paperWidthMm < 60 ? 7 : 9,
                 ),
               ),
               pw.SizedBox(height: 4),
@@ -1215,11 +1255,60 @@ class ThermalPrintingService {
                         style: pw.TextStyle(font: boldFont, fontSize: 8),
                       ),
                       pw.Text(
-                        disposal.disposalType,
+                        disposal.disposalType == 'write_off'
+                            ? 'Write-Off'
+                            : disposal.disposalType == 'return'
+                            ? 'Return to Supplier'
+                            : disposal.disposalType,
                         style: pw.TextStyle(font: regularFont, fontSize: 8),
                       ),
                     ],
                   ),
+                  // Batch number
+                  if (disposal.batchNo != null && disposal.batchNo!.isNotEmpty)
+                    pw.TableRow(
+                      children: [
+                        pw.Text(
+                          'Batch #:',
+                          style: pw.TextStyle(font: boldFont, fontSize: 8),
+                        ),
+                        pw.Text(
+                          disposal.batchNo!,
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                        ),
+                      ],
+                    ),
+                  // Supplier (for returns)
+                  if (disposal.disposalType == 'return' &&
+                      disposal.supplierName != null &&
+                      disposal.supplierName!.isNotEmpty)
+                    pw.TableRow(
+                      children: [
+                        pw.Text(
+                          'Supplier:',
+                          style: pw.TextStyle(font: boldFont, fontSize: 8),
+                        ),
+                        pw.Text(
+                          disposal.supplierName!,
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                        ),
+                      ],
+                    ),
+                  // Refund status for returns
+                  if (disposal.disposalType == 'return' &&
+                      disposal.refundStatus != null)
+                    pw.TableRow(
+                      children: [
+                        pw.Text(
+                          'Refund:',
+                          style: pw.TextStyle(font: boldFont, fontSize: 8),
+                        ),
+                        pw.Text(
+                          '${disposal.refundStatus![0].toUpperCase()}${disposal.refundStatus!.substring(1)} — Rs ${disposal.refundAmount.toStringAsFixed(0)}',
+                          style: pw.TextStyle(font: regularFont, fontSize: 8),
+                        ),
+                      ],
+                    ),
                   if (disposal.notes != null && disposal.notes!.isNotEmpty)
                     pw.TableRow(
                       children: [
@@ -1388,8 +1477,7 @@ class ThermalPrintingService {
                   fontSize: paperWidthMm < 60 ? 8 : 14,
                 ),
               ),
-              
-              
+
               pw.Text(
                 '0345 4297128',
                 style: pw.TextStyle(
@@ -1425,7 +1513,9 @@ class ThermalPrintingService {
                       ),
                     ),
                     pw.Text(
-                      'ID: ${payment.id}',
+                      payment.displayId != null
+                          ? 'Receipt #: ${payment.displayId}'
+                          : 'ID: ${payment.id.length > 8 ? payment.id.substring(0, 8).toUpperCase() : payment.id.toUpperCase()}',
                       style: pw.TextStyle(
                         font: regularFont,
                         fontSize: paperWidthMm < 60 ? 8 : 10,

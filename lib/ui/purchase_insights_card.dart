@@ -29,8 +29,38 @@ class PurchaseInsightCard extends StatefulWidget {
 class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
   bool expanded = false;
   final GlobalKey chartKey = GlobalKey();
+  List<FlSpot> _cachedSpots = [];
 
   double _safeDouble(num? n) => (n == null) ? 0.0 : n.toDouble();
+
+  @override
+  void initState() {
+    super.initState();
+    _updateSpots();
+  }
+
+  @override
+  void didUpdateWidget(PurchaseInsightCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.purchases != oldWidget.purchases) {
+      _updateSpots();
+    }
+  }
+
+  void _updateSpots() {
+    if (widget.purchases.isEmpty) {
+      _cachedSpots = [const FlSpot(0, 0)];
+      return;
+    }
+
+    final sorted = List<Purchase>.from(widget.purchases)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    _cachedSpots = List.generate(
+      sorted.length,
+      (i) => FlSpot(i.toDouble(), _safeDouble(sorted[i].total)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +184,7 @@ class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
                                 LineChartBarData(
                                   isCurved: true,
                                   color: Colors.blueAccent,
-                                  spots: _buildPurchaseSpots(widget.purchases),
+                                  spots: _cachedSpots,
                                   dotData: const FlDotData(show: false),
                                   belowBarData: BarAreaData(
                                     show: true,
@@ -192,35 +222,6 @@ class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
     );
   }
 
-  Widget _insightItem(IconData icon, String label, String value, Color color) {
-    return Column(
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.1),
-          child: Icon(icon, color: color),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      ],
-    );
-  }
-
-  List<FlSpot> _buildPurchaseSpots(List<Purchase> purchases) {
-    if (purchases.isEmpty) return [const FlSpot(0, 0)];
-
-    final sorted = List<Purchase>.from(purchases)
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    return List.generate(
-      sorted.length,
-      (i) => FlSpot(i.toDouble(), _safeDouble(sorted[i].total)),
-    );
-  }
-
   Future<void> _exportChartToPdf(
     GlobalKey chartKey, {
     required int total,
@@ -255,5 +256,22 @@ class _PurchaseInsightCardState extends State<PurchaseInsightCard> {
         context,
       ).showSnackBar(const SnackBar(content: Text('❌ Failed to generate PDF')));
     }
+  }
+
+  Widget _insightItem(IconData icon, String label, String value, Color color) {
+    return Column(
+      children: [
+        CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.1),
+          child: Icon(icon, color: color),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      ],
+    );
   }
 }

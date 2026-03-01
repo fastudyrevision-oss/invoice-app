@@ -22,6 +22,7 @@ class PurchaseForm extends StatefulWidget {
   final ProductRepository productRepo;
   final SupplierRepository supplierRepo;
   final SupplierPaymentRepository paymentRepo;
+  final Product? prefilledProduct; // ✅ added for UX enhancement
 
   const PurchaseForm({
     super.key,
@@ -29,6 +30,7 @@ class PurchaseForm extends StatefulWidget {
     required this.productRepo,
     required this.supplierRepo,
     required this.paymentRepo,
+    this.prefilledProduct,
   });
 
   @override
@@ -73,6 +75,7 @@ class _PurchaseFormState extends State<PurchaseForm> {
         productRepo: widget.productRepo,
         supplierRepo: widget.supplierRepo,
         supplierId: _selectedSupplierId!, // ✅ pass from parent
+        initialProductId: widget.prefilledProduct?.id, // ✅ prefill product
       ),
     );
 
@@ -312,12 +315,14 @@ class _PurchaseItemDialog extends StatefulWidget {
   final ProductRepository productRepo;
   final SupplierRepository supplierRepo;
   final String supplierId; // ✅ add this
+  final String? initialProductId; // ✅ added for prefilling
 
   const _PurchaseItemDialog({
     required this.repo,
     required this.productRepo,
     required this.supplierRepo,
     required this.supplierId, // ✅ required param
+    this.initialProductId,
   });
 
   @override
@@ -332,6 +337,12 @@ class _PurchaseItemDialogState extends State<_PurchaseItemDialog> {
   final _sellPriceCtrl = TextEditingController();
   final _batchNoCtrl = TextEditingController();
   final _expiryCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedProductId = widget.initialProductId;
+  }
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;

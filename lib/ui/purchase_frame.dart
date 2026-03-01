@@ -163,9 +163,12 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
     // Search
     if (_searchQuery.isNotEmpty) {
-      filtered = filtered
-          .where((p) => p.invoiceNo.contains(_searchQuery))
-          .toList();
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where((p) {
+        final inv = p.invoiceNo.toLowerCase();
+        final did = p.displayId?.toString() ?? '';
+        return inv.contains(q) || did.contains(q);
+      }).toList();
     }
 
     // Filter by supplier
@@ -233,7 +236,12 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
   List<Purchase> _getFilteredList() {
     List<Purchase> list = [..._allPurchases];
     if (_searchQuery.isNotEmpty) {
-      list = list.where((p) => p.invoiceNo.contains(_searchQuery)).toList();
+      final q = _searchQuery.toLowerCase();
+      list = list.where((p) {
+        final inv = p.invoiceNo.toLowerCase();
+        final did = p.displayId?.toString() ?? '';
+        return inv.contains(q) || did.contains(q);
+      }).toList();
     }
     if (_selectedSupplierId != null) {
       list = list.where((p) => p.supplierId == _selectedSupplierId).toList();
@@ -393,7 +401,18 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
           backgroundColor: Colors.grey[100],
           appBar: AppBar(
             title: const Text("Purchases"),
-            elevation: 0,
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.indigo.shade800, Colors.indigo.shade500],
+                ),
+              ),
+            ),
+            elevation: 2,
+            foregroundColor: Colors.white,
+            iconTheme: const IconThemeData(color: Colors.white),
             actions: isMobile
                 ? [
                     IconButton(
@@ -458,43 +477,45 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                     Tooltip(
                       message: 'View: ${_viewModeLabel()}',
                       child: TextButton.icon(
-                        icon: Icon(_viewModeIcon(), size: 20),
-                        label: Text(_viewModeLabel()),
-                        onPressed: _cycleViewMode,
-                        style: TextButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(context).appBarTheme.foregroundColor ??
-                              Colors.white,
+                        icon: Icon(
+                          _viewModeIcon(),
+                          size: 20,
+                          color: Colors.white,
                         ),
+                        label: Text(
+                          _viewModeLabel(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        onPressed: _cycleViewMode,
                       ),
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.insights),
+                      icon: const Icon(Icons.insights, color: Colors.white),
                       tooltip: 'Insights',
                       onPressed: _showInsightsDialog,
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.print),
+                      icon: const Icon(Icons.print, color: Colors.white),
                       tooltip: 'Print List',
                       onPressed: () =>
                           _handleExport('print', _displayedPurchases),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.save),
+                      icon: const Icon(Icons.save, color: Colors.white),
                       tooltip: 'Save PDF',
                       onPressed: () =>
                           _handleExport('save', _displayedPurchases),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.share),
+                      icon: const Icon(Icons.share, color: Colors.white),
                       tooltip: 'Share PDF',
                       onPressed: () =>
                           _handleExport('share', _displayedPurchases),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh, color: Colors.white),
                       onPressed: _loadInitialData,
                       tooltip: 'Refresh',
                     ),
@@ -674,7 +695,9 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
           rows: _displayedPurchases.map((p) {
             return DataRow(
               cells: [
-                DataCell(Text(p.invoiceNo)),
+                DataCell(
+                  Text(p.displayId != null ? "#${p.displayId}" : p.invoiceNo),
+                ),
                 DataCell(
                   FutureBuilder<Supplier?>(
                     future: widget.repo.getSupplierById(p.supplierId),
@@ -732,7 +755,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
         child: const Icon(Icons.shopping_cart, color: Colors.blue, size: 20),
       ),
       title: Text(
-        p.invoiceNo,
+        p.displayId != null ? "Purchase #${p.displayId}" : p.invoiceNo,
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       subtitle: Text(p.date),
@@ -957,12 +980,16 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            "Invoice #${purchase.invoiceNo}",
+                                            purchase.displayId != null
+                                                ? "Purchase #${purchase.displayId}${purchase.invoiceNo.isNotEmpty ? " (Inv: ${purchase.invoiceNo})" : ""}"
+                                                : "Invoice #${purchase.invoiceNo}",
                                             style: const TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
                                               color: Colors.black87,
                                             ),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
                                           ),
                                           const SizedBox(height: 4),
                                           Container(

@@ -78,7 +78,10 @@ class _ExpiredStockScreenState extends State<ExpiredStockScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Expired Stock Management'),
+        title: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: const Text('Expired Stock Management'),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.date_range),
@@ -184,11 +187,18 @@ class _ExpiredStockScreenState extends State<ExpiredStockScreen>
     final filtered = _disposals.where((d) {
       if (onlyReturns && d.disposalType != 'return') return false;
       if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
+        final query = _searchQuery.toLowerCase().trim();
+        final displayId = d.displayId?.toString().toLowerCase() ?? "";
+
+        if (query.startsWith('#')) {
+          return displayId == query.substring(1);
+        }
+
         return (d.productName?.toLowerCase().contains(query) ?? false) ||
             (d.productCode?.toLowerCase().contains(query) ?? false) ||
             (d.batchNo?.toLowerCase().contains(query) ?? false) ||
-            d.productId.toLowerCase().contains(query);
+            d.productId.toLowerCase().contains(query) ||
+            displayId == query;
       }
       return true;
     }).toList();
@@ -223,9 +233,28 @@ class _ExpiredStockScreenState extends State<ExpiredStockScreen>
             color: isReturn ? Colors.orange : Colors.brown,
           ),
         ),
-        title: Text(
-          disposal.productName ?? 'Unknown Product',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                disposal.productName ?? 'Unknown Product',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Flexible(
+              child: Text(
+                '#${disposal.displayId ?? disposal.id.substring(0, 8).toUpperCase()}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.blue.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

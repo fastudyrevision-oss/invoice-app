@@ -161,73 +161,109 @@ class _SupplierReportFrameState extends State<SupplierReportFrame> {
               // --- Chart ---
               SizedBox(
                 height: 300,
-                child: BarChart(
-                  BarChartData(
-                    alignment: BarChartAlignment.spaceAround,
-                    gridData: FlGridData(show: true, drawVerticalLine: false),
-                    borderData: FlBorderData(show: false),
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 40,
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              _formatNumber(value),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 20, right: 16),
+                  child: RepaintBoundary(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width:
+                            reports.length * 80.0 >
+                                MediaQuery.of(context).size.width
+                            ? reports.length * 80.0
+                            : MediaQuery.of(context).size.width,
+                        child: BarChart(
+                          BarChartData(
+                            alignment: BarChartAlignment.spaceAround,
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: false,
+                              getDrawingHorizontalLine: (value) => FlLine(
+                                color: Colors.grey.withValues(alpha: 0.1),
+                                strokeWidth: 1,
                               ),
-                            );
-                          },
-                          interval: interval, // use safe interval
-                        ),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            final index = value.toInt();
-                            if (index < reports.length) {
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 6.0),
-                                child: Text(
-                                  reports[index].supplierName,
-                                  style: const TextStyle(fontSize: 10),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            titlesData: FlTitlesData(
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 40,
+                                  getTitlesWidget: (value, meta) {
+                                    return Text(
+                                      _formatNumber(value),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  },
+                                  interval: interval, // use safe interval
                                 ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  getTitlesWidget: (value, meta) {
+                                    final index = value.toInt();
+                                    if (index < reports.length) {
+                                      final name = reports[index].supplierName;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 10.0,
+                                        ),
+                                        child: Transform.rotate(
+                                          angle: -0.5,
+                                          child: Text(
+                                            name.length > 10
+                                                ? "${name.substring(0, 8)}..."
+                                                : name,
+                                            style: const TextStyle(fontSize: 9),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
+                              ),
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                            ),
+                            barGroups: reports.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final r = entry.value;
+                              return BarChartGroupData(
+                                x: index,
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: r.totalPurchases.toDouble(),
+                                    color: Colors.blue,
+                                    width: 14,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(4),
+                                    ),
+                                  ),
+                                  BarChartRodData(
+                                    toY: r.totalPaid.toDouble(),
+                                    color: Colors.green,
+                                    width: 14,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(4),
+                                    ),
+                                  ),
+                                ],
+                                barsSpace: 6,
                               );
-                            }
-                            return const Text("");
-                          },
+                            }).toList(),
+                          ),
                         ),
-                      ),
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
                       ),
                     ),
-                    barGroups: reports.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final r = entry.value;
-                      return BarChartGroupData(
-                        x: index,
-                        barRods: [
-                          BarChartRodData(
-                            toY: r.totalPurchases.toDouble(),
-                            color: Colors.blue,
-                            width: 14,
-                          ),
-                          BarChartRodData(
-                            toY: r.totalPaid.toDouble(),
-                            color: Colors.green,
-                            width: 14,
-                          ),
-                        ],
-                        barsSpace: 6,
-                      );
-                    }).toList(),
                   ),
                 ),
               ),

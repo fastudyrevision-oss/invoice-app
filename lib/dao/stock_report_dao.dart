@@ -57,6 +57,7 @@ WITH ProductTotals AS (
 ParetoCalculation AS (
     SELECT 
         pid,
+        p_val,
         SUM(p_val) OVER (ORDER BY p_val DESC, pid) as running_total,
         SUM(p_val) OVER () as grand_total
     FROM ProductTotals
@@ -66,8 +67,8 @@ CategorizedProducts AS (
         pid,
         CASE 
             WHEN grand_total = 0 THEN 'C'
-            WHEN (running_total * 100.0 / NULLIF(grand_total, 0)) <= 70 THEN 'A'
-            WHEN (running_total * 100.0 / NULLIF(grand_total, 0)) <= 90 THEN 'B'
+            WHEN (running_total - p_val) <= (grand_total * 0.7) THEN 'A'
+            WHEN (running_total - p_val) <= (grand_total * 0.9) THEN 'B'
             ELSE 'C'
         END as abc_category
     FROM ParetoCalculation
@@ -236,6 +237,7 @@ WITH ProductTotals AS (
 ParetoCalculation AS (
     SELECT 
         pid,
+        p_val,
         SUM(p_val) OVER (ORDER BY p_val DESC, pid) as running_total,
         SUM(p_val) OVER () as grand_total
     FROM ProductTotals
@@ -245,8 +247,8 @@ CategorizedProducts AS (
         pid,
         CASE 
             WHEN grand_total = 0 THEN 'C'
-            WHEN (running_total * 100.0 / NULLIF(grand_total, 0)) <= 70 THEN 'A'
-            WHEN (running_total * 100.0 / NULLIF(grand_total, 0)) <= 90 THEN 'B'
+            WHEN (running_total - p_val) <= (grand_total * 0.7) THEN 'A'
+            WHEN (running_total - p_val) <= (grand_total * 0.9) THEN 'B'
             ELSE 'C'
         END as abc_category
     FROM ParetoCalculation
@@ -261,7 +263,7 @@ JOIN CategorizedProducts cp ON p.id = cp.pid
 LEFT JOIN suppliers s ON pb.supplier_id = s.id
 WHERE cp.abc_category = ? AND $whereString;
       """;
-      whereArgs.add(abcFilter);
+      whereArgs.insert(0, abcFilter);
     } else {
       sql =
           "SELECT COUNT(*) as count FROM products p LEFT JOIN product_batches pb ON p.id = pb.product_id LEFT JOIN suppliers s ON pb.supplier_id = s.id WHERE $whereString";

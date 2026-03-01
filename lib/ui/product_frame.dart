@@ -711,6 +711,8 @@ class _ProductFrameState extends State<ProductFrame> {
               Colors.grey[100], // Light background for better contrast
           appBar: AppBar(
             title: const Text("Products"),
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
             elevation: 0,
             actions: isMobile
                 ? [

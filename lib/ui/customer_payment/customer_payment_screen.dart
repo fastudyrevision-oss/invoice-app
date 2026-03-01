@@ -211,7 +211,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                   ),
                   if (ref != null && ref.toString().isNotEmpty)
                     Text(
-                      "REF: $ref",
+                      "ID: #${payment['display_id'] ?? ref ?? payment['id'].toString().substring(0, 8).toUpperCase()}",
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -350,8 +350,10 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
             // Actions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                overflowSpacing: 4,
                 children: [
                   TextButton.icon(
                     onPressed: () => thermalPrinting.printPayment(
@@ -365,7 +367,6 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                       foregroundColor: Colors.teal.shade700,
                     ),
                   ),
-                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () => _showPaymentDialog(payment),
                     icon: const Icon(Icons.edit_outlined, size: 18),
@@ -374,7 +375,6 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
                       foregroundColor: Colors.blue.shade700,
                     ),
                   ),
-                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () => _deletePayment(payment),
                     icon: const Icon(Icons.delete_outline, size: 18),

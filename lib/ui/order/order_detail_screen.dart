@@ -65,7 +65,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return Scaffold(
           backgroundColor: Colors.grey[100],
           appBar: AppBar(
-            title: Text("Order #${invoice.id}"),
+            title: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Text(
+                    "Order #${invoice.displayId ?? invoice.id.substring(0, 5)}${invoice.invoiceNo != null && invoice.invoiceNo!.isNotEmpty ? " (Inv: ${invoice.invoiceNo})" : ""}",
+                    maxLines: 1,
+                  ),
+                );
+              },
+            ),
             elevation: 0,
             flexibleSpace: Container(
               decoration: BoxDecoration(
@@ -172,7 +182,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item['product_name'] ?? "Unknown Product",
+                              "${item['product_name'] ?? "Unknown Product"}",
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -324,54 +334,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 const SizedBox(height: 16),
 
                 // Action Buttons (Consolidated)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                OverflowBar(
+                  alignment: MainAxisAlignment.spaceEvenly,
+                  overflowAlignment: OverflowBarAlignment.center,
+                  overflowSpacing: 8,
                   children: [
-                    Flexible(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _handlePrint('thermal'),
-                        icon: const Icon(Icons.receipt_long, size: 18),
-                        label: const Text(
-                          "Thermal",
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
+                    ElevatedButton.icon(
+                      onPressed: () => _handlePrint('thermal'),
+                      icon: const Icon(Icons.receipt_long, size: 18),
+                      label: const Text(
+                        "Thermal",
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _handlePrint('pdf'),
-                        icon: const Icon(Icons.picture_as_pdf, size: 18),
-                        label: const Text(
-                          "PDF",
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
+                    ElevatedButton.icon(
+                      onPressed: () => _handlePrint('pdf'),
+                      icon: const Icon(Icons.picture_as_pdf, size: 18),
+                      label: const Text("PDF", style: TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _handlePrint('print'),
-                        icon: const Icon(Icons.print, size: 18),
-                        label: const Text(
-                          "Print",
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
+                    ElevatedButton.icon(
+                      onPressed: () => _handlePrint('print'),
+                      icon: const Icon(Icons.print, size: 18),
+                      label: const Text(
+                        "Print",
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                     ),
                   ],

@@ -16,14 +16,25 @@ class SupplierPaymentDao {
   /// Insert a new payment
   Future<int> insertPayment(SupplierPayment payment) async {
     final dbClient = await _db;
-    final id = await dbClient.insert("supplier_payments", payment.toMap());
+
+    // 🔢 Calculate next Counting ID (UX display, preserves UUID structure)
+    final lastIdRes = await dbClient.rawQuery(
+      "SELECT MAX(display_id) as last_id FROM supplier_payments",
+    );
+    final nextDisplayId = (lastIdRes.first['last_id'] as int? ?? 0) + 1;
+
+    // Inject display_id into map
+    final map = payment.toMap();
+    map['display_id'] = payment.displayId ?? nextDisplayId;
+
+    final id = await dbClient.insert("supplier_payments", map);
 
     await AuditLogger.log(
       'CREATE',
       'supplier_payments',
       recordId: payment.id,
       userId: AuthService.instance.currentUser?.id ?? 'system',
-      newData: payment.toMap(),
+      newData: map,
       txn: dbClient,
     );
 

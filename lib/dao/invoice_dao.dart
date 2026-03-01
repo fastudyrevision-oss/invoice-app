@@ -11,8 +11,16 @@ class InvoiceDao {
   // INSERT
   // =========================
   Future<int> insert(Invoice invoice, String customerName) async {
+    // 🔢 Calculate next short ID (UX column)
+    final lastIdRes = await db.rawQuery(
+      "SELECT MAX(display_id) as last_id FROM invoices",
+    );
+    final nextDisplayId = (lastIdRes.first['last_id'] as int? ?? 0) + 1;
+
     final id = await db.insert("invoices", {
       "id": invoice.id,
+      "display_id": invoice.displayId ?? nextDisplayId,
+      "invoice_no": invoice.invoiceNo,
       "customer_id": invoice.customerId,
       "customer_name": customerName, // <-- provide the name here
       "total": invoice.total,

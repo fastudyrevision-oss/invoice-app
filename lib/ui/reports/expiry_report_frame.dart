@@ -149,49 +149,99 @@ class _ExpiryReportFrameState extends State<ExpiryReportFrame> {
             ),
 
             // Chart
-            Expanded(
-              flex: 1,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) =>
-                            Text(value.toInt().toString()),
-                      ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index < 0 || index >= reports.length) {
-                            return const SizedBox.shrink();
-                          }
-                          return Text(
-                            reports[index].productName,
-                            style: const TextStyle(fontSize: 10),
-                          );
-                        },
+            SizedBox(
+              height: 250,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20, right: 16),
+                child: RepaintBoundary(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width:
+                          reports.length * 60.0 >
+                              MediaQuery.of(context).size.width
+                          ? reports.length * 60.0
+                          : MediaQuery.of(context).size.width,
+                      child: BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY:
+                              reports
+                                  .map((e) => e.qty.toDouble())
+                                  .reduce((a, b) => a > b ? a : b) *
+                              1.2,
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 40,
+                                getTitlesWidget: (value, meta) => Text(
+                                  value.toInt().toString(),
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  final index = value.toInt();
+                                  if (index < 0 || index >= reports.length) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final name = reports[index].productName;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Transform.rotate(
+                                      angle: -0.5,
+                                      child: Text(
+                                        name.length > 10
+                                            ? "${name.substring(0, 8)}..."
+                                            : name,
+                                        style: const TextStyle(fontSize: 9),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            getDrawingHorizontalLine: (value) => FlLine(
+                              color: Colors.grey.withValues(alpha: 0.1),
+                              strokeWidth: 1,
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          barGroups: reports.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final r = entry.value;
+                            return BarChartGroupData(
+                              x: i,
+                              barRods: [
+                                BarChartRodData(
+                                  toY: r.qty.toDouble(),
+                                  color: Colors.redAccent,
+                                  width: 16,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(4),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ),
                   ),
-                  barGroups: reports.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final r = entry.value;
-                    return BarChartGroupData(
-                      x: i,
-                      barRods: [
-                        BarChartRodData(
-                          toY: r.qty.toDouble(),
-                          color: Colors.redAccent,
-                        ),
-                      ],
-                    );
-                  }).toList(),
                 ),
               ),
             ),

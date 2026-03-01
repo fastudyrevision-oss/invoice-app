@@ -1451,7 +1451,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
 
             if (mounted) {
               messenger.showSnackBar(
-                const SnackBar(content: Text('PDF Exported Successfully')),
+                const SnackBar(content: Text('PDF Exported Successfully to Documents Folder (C:\Users\User\Documents\)')),
               );
             }
           } catch (e, st) {

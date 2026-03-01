@@ -19,12 +19,25 @@ class StockDisposalDao {
 
   /// Insert a new disposal record
   Future<void> insert(StockDisposal disposal) async {
+    // 🔢 Calculate next Counting ID (UX display, preserves UUID structure)
+    final lastIdRes = await db.rawQuery(
+      "SELECT MAX(display_id) as last_id FROM stock_disposal",
+    );
+    final nextDisplayId = (lastIdRes.first['last_id'] as int? ?? 0) + 1;
+
+    // Build the map and inject display_id
+    final map = disposal.toMap();
+    map['display_id'] = disposal.displayId ?? nextDisplayId;
+
     await db.insert(
       'stock_disposal',
-      disposal.toMap(),
+      map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    logger.info('StockDisposalDao', 'Inserted disposal: ${disposal.id}');
+    logger.info(
+      'StockDisposalDao',
+      'Inserted disposal #$nextDisplayId (${disposal.id})',
+    );
   }
 
   /// Get all disposal records with full details
@@ -58,8 +71,28 @@ class StockDisposalDao {
     List<dynamic> args = [];
 
     if (query != null && query.isNotEmpty) {
-      where.add('(p.name LIKE ? OR p.sku LIKE ? OR pb.batch_no LIKE ?)');
-      args.addAll(['%$query%', '%$query%', '%$query%']);
+      final cleanQ = query.trim();
+      if (cleanQ.startsWith('#')) {
+        final idPart = cleanQ.substring(1);
+        final idNum = int.tryParse(idPart);
+        if (idNum != null) {
+          where.add('sd.display_id = ?');
+          args.add(idNum);
+        } else {
+          where.add('(p.name LIKE ? OR p.sku LIKE ? OR pb.batch_no LIKE ?)');
+          args.addAll(['%$query%', '%$query%', '%$query%']);
+        }
+      } else {
+        final idNum = int.tryParse(cleanQ);
+        if (idNum != null) {
+          where.add('(sd.display_id = ? OR p.sku LIKE ?)');
+          args.add(idNum);
+          args.add('%$cleanQ%');
+        } else {
+          where.add('(p.name LIKE ? OR p.sku LIKE ? OR pb.batch_no LIKE ?)');
+          args.addAll(['%$query%', '%$query%', '%$query%']);
+        }
+      }
     }
 
     if (start != null && end != null) {

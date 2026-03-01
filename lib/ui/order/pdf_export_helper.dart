@@ -101,7 +101,8 @@ Future<File?> generateInvoicePdf(
   Invoice invoice, {
   List<Map<String, dynamic>>? items,
 }) async {
-  logger.info('PDFHelper', 'Generating Invoice PDF for #${invoice.id}');
+  final displayId = invoice.displayId?.toString() ?? invoice.invoiceNo;
+  logger.info('PDFHelper', 'Generating Invoice PDF for #$displayId');
   final pdf = pw.Document();
 
   // Load fonts from centralized helper (future-safe)
@@ -148,7 +149,6 @@ Future<File?> generateInvoicePdf(
                       'Phone: 0345 4297128  03009101050',
                       style: pw.TextStyle(font: regularFont, fontSize: 12),
                     ),
-                     
                   ],
                 ),
               ),
@@ -166,6 +166,10 @@ Future<File?> generateInvoicePdf(
           pw.SizedBox(height: 12),
 
           // 🧾 Invoice Info (Customer & Date only)
+          pw.Text(
+            'Order #$displayId',
+            style: pw.TextStyle(font: boldFont, fontSize: 14),
+          ),
           pw.Text(
             'Customer: ${invoice.customerName ?? "N/A"}',
             style: pw.TextStyle(font: regularFont, fontSize: 14),
@@ -426,7 +430,7 @@ Future<File?> generateInvoicePdf(
   );
 
   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  final suggestedName = 'Invoice_${invoice.id}_$timestamp.pdf';
+  final suggestedName = 'Invoice_${displayId}_$timestamp.pdf';
 
   // Use platform-aware file handling (Android: share, Desktop: file picker)
   final pdfBytes = await pdf.save();
@@ -814,7 +818,10 @@ Future<File?> generateThermalReceipt(
   Invoice invoice, {
   List<Map<String, dynamic>>? items,
 }) async {
-  logger.info('PDFHelper', 'Generating Thermal Receipt for #${invoice.id}');
+  logger.info(
+    'PDFHelper',
+    'Generating Thermal Receipt for #${invoice.displayId ?? invoice.invoiceNo}',
+  );
   // ⚠️ Warn if receipt has many items (thermal printer best for 10-20 items)
   if (items != null && items.length > 20) {
     logger.warning(
@@ -922,6 +929,18 @@ Future<File?> generateThermalReceipt(
               alignment: pw.Alignment.centerLeft,
               child: pw.Text(
                 'Date: ${date.length > 18 ? date.substring(0, 18) : date}',
+                textDirection: pw.TextDirection.ltr,
+                textAlign: pw.TextAlign.left,
+                style: pw.TextStyle(font: regularFont, fontSize: 7),
+                maxLines: 1,
+                overflow: pw.TextOverflow.clip,
+              ),
+            ),
+            pw.SizedBox(height: 1),
+            pw.Align(
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Text(
+                'Order: #${invoice.displayId ?? invoice.invoiceNo}',
                 textDirection: pw.TextDirection.ltr,
                 textAlign: pw.TextAlign.left,
                 style: pw.TextStyle(font: regularFont, fontSize: 7),
@@ -1200,7 +1219,8 @@ Future<File?> generateThermalReceipt(
   );
 
   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-  final suggestedName = 'Receipt_${invoice.id}_$timestamp.pdf';
+  final suggestedName =
+      'Receipt_${invoice.displayId ?? invoice.invoiceNo}_$timestamp.pdf';
 
   // Use platform-aware file handling
   final pdfBytes = await pdf.save();
@@ -1220,7 +1240,7 @@ Future<bool> printSilentThermalReceipt(
   try {
     logger.info(
       'PDFHelper',
-      'Silent printing thermal receipt for #${invoice.id}',
+      'Silent printing thermal receipt for #${invoice.displayId ?? invoice.invoiceNo}',
     );
 
     // Get paper width from settings
@@ -1348,6 +1368,17 @@ Future<bool> printSilentThermalReceipt(
                 ),
               ),
               pw.SizedBox(height: 4),
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  'Order: #${invoice.displayId ?? invoice.invoiceNo}',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: paperWidthMm < 60 ? 8 : 10,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 4),
               pw.Container(height: 1, color: PdfColors.black),
               pw.SizedBox(height: 4),
 
@@ -1373,7 +1404,7 @@ Future<bool> printSilentThermalReceipt(
                             'Item',
                             style: pw.TextStyle(
                               font: boldFont,
-                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                              fontSize: paperWidthMm < 60 ? 5 : 8,
                             ),
                             softWrap: true,
                           ),
@@ -1384,7 +1415,7 @@ Future<bool> printSilentThermalReceipt(
                             'Qty',
                             style: pw.TextStyle(
                               font: boldFont,
-                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                              fontSize: paperWidthMm < 60 ? 5 : 8,
                             ),
                             textAlign: pw.TextAlign.left,
                             softWrap: true,
@@ -1396,7 +1427,7 @@ Future<bool> printSilentThermalReceipt(
                             'Price',
                             style: pw.TextStyle(
                               font: boldFont,
-                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                              fontSize: paperWidthMm < 60 ? 5 : 8,
                             ),
                             textAlign: pw.TextAlign.left,
                             softWrap: true,
@@ -1408,7 +1439,7 @@ Future<bool> printSilentThermalReceipt(
                             'Total',
                             style: pw.TextStyle(
                               font: boldFont,
-                              fontSize: paperWidthMm < 60 ? 5 : 6,
+                              fontSize: paperWidthMm < 60 ? 5 : 8,
                             ),
                             textAlign: pw.TextAlign.left,
                             softWrap: true,
@@ -1428,7 +1459,7 @@ Future<bool> printSilentThermalReceipt(
                               item['product_name'] ?? '',
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: paperWidthMm < 60 ? 5 : 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 9,
                               ),
                               softWrap: true,
                               maxLines: 2,
@@ -1440,7 +1471,7 @@ Future<bool> printSilentThermalReceipt(
                               qty.toString(),
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: paperWidthMm < 60 ? 5 : 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 8,
                               ),
                               textAlign: pw.TextAlign.center,
                               softWrap: true,
@@ -1452,7 +1483,7 @@ Future<bool> printSilentThermalReceipt(
                               price.toStringAsFixed(0),
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: paperWidthMm < 60 ? 5 : 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 8,
                               ),
                               textAlign: pw.TextAlign.left,
                               softWrap: true,
@@ -1464,7 +1495,7 @@ Future<bool> printSilentThermalReceipt(
                               total.toStringAsFixed(0),
                               style: pw.TextStyle(
                                 font: regularFont,
-                                fontSize: paperWidthMm < 60 ? 5 : 6,
+                                fontSize: paperWidthMm < 60 ? 5 : 8,
                               ),
                               textAlign: pw.TextAlign.left,
                               softWrap: true,
@@ -1621,7 +1652,7 @@ Future<bool> printSilentThermalReceipt(
     // Use centralized thermal printing service for consistent behavior
     final success = await thermalPrinting.printPdfSilently(
       pdfBytes,
-      docName: 'Receipt_${invoice.id}',
+      docName: 'Receipt_${invoice.displayId ?? invoice.invoiceNo}',
     );
 
     if (success) {
@@ -1634,7 +1665,7 @@ Future<bool> printSilentThermalReceipt(
       // If silent print fails, fall back to layout (shows dialog) so the user can still print
       await Printing.layoutPdf(
         onLayout: (format) => pdfBytes,
-        name: 'Receipt_${invoice.id}',
+        name: 'Receipt_${invoice.displayId ?? invoice.invoiceNo}',
       );
     }
     return true;
@@ -2112,4 +2143,3 @@ Future<bool> printSilentStockDisposalThermalReceipt(dynamic disposal) async {
     return false;
   }
 }
-

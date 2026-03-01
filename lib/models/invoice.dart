@@ -1,5 +1,7 @@
 class Invoice {
   final String id;
+  final int? displayId; // UX-optimized short ID
+  final String? invoiceNo; // Original tracking number
   final String customerId;
   String? customerName; // optional, added for display
   final double total;
@@ -13,6 +15,8 @@ class Invoice {
 
   Invoice({
     required this.id,
+    this.displayId,
+    this.invoiceNo,
     required this.customerId,
     this.customerName,
     required this.total,
@@ -27,6 +31,8 @@ class Invoice {
 
   Map<String, dynamic> toMap() => {
     "id": id,
+    "display_id": displayId,
+    "invoice_no": invoiceNo,
     "customer_id": customerId,
 
     "customer_name": customerName, // not stored in DB
@@ -42,6 +48,8 @@ class Invoice {
 
   factory Invoice.fromMap(Map<String, dynamic> map) => Invoice(
     id: map["id"]?.toString() ?? '',
+    displayId: map["display_id"] as int?,
+    invoiceNo: map["invoice_no"]?.toString(),
     customerId: map["customer_id"]?.toString() ?? '',
     total: (map["total"] as num?)?.toDouble() ?? 0.0,
     discount: (map["discount"] as num?)?.toDouble() ?? 0.0,

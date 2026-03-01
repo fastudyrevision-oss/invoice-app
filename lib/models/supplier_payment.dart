@@ -1,5 +1,6 @@
 class SupplierPayment {
   final String id;
+  final int? displayId; // 🔢 Counting ID (UX display, not UUID)
   final String supplierId;
   final String? purchaseId;
   final double amount;
@@ -13,6 +14,7 @@ class SupplierPayment {
 
   const SupplierPayment({
     required this.id,
+    this.displayId,
     required this.supplierId,
     this.purchaseId,
     required this.amount,
@@ -28,6 +30,7 @@ class SupplierPayment {
   /// ✅ copyWith method
   SupplierPayment copyWith({
     String? id,
+    int? displayId,
     String? supplierId,
     String? purchaseId,
     double? amount,
@@ -41,6 +44,7 @@ class SupplierPayment {
   }) {
     return SupplierPayment(
       id: id ?? this.id,
+      displayId: displayId ?? this.displayId,
       supplierId: supplierId ?? this.supplierId,
       purchaseId: purchaseId ?? this.purchaseId,
       amount: amount ?? this.amount,
@@ -57,6 +61,7 @@ class SupplierPayment {
   Map<String, dynamic> toMap() {
     return {
       "id": id,
+      "display_id": displayId,
       "supplier_id": supplierId,
       "purchase_id": purchaseId,
       "amount": amount,
@@ -87,6 +92,7 @@ class SupplierPayment {
 
     return SupplierPayment(
       id: map["id"] as String,
+      displayId: map["display_id"] as int?,
       supplierId: map["supplier_id"] as String,
       purchaseId: map["purchase_id"] as String?,
       amount: parseAmount(map["amount"]),

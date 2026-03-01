@@ -17,6 +17,17 @@ import '../../db/database_helper.dart';
 import '../../services/logger_service.dart';
 import 'pdf_export_helper.dart';
 
+// ✅ Imports for quick purchase navigation
+import '../purchase_form.dart';
+import '../../repositories/purchase_repo.dart';
+import '../../repositories/product_repository.dart';
+import '../../repositories/supplier_repo.dart';
+import '../../repositories/supplier_payment_repo.dart';
+import '../../dao/supplier_dao.dart';
+import '../../dao/supplier_payment_dao.dart';
+import '../../dao/supplier_report_dao.dart';
+import '../../dao/supplier_company_dao.dart';
+
 class OrderFormScreen extends StatefulWidget {
   final bool isTab;
   const OrderFormScreen({super.key, this.isTab = false});
@@ -131,6 +142,40 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final totalStock = batches.fold<int>(0, (sum, b) => sum + b.qty);
 
     setState(() => _availableStock = totalStock);
+  }
+
+  Future<void> _navigateToPurchaseForm() async {
+    final db = await DatabaseHelper.instance.db;
+    final purchaseRepo = PurchaseRepository(db);
+    final productRepo = ProductRepository();
+    final supplierRepo = SupplierRepository(
+      SupplierDao(),
+      SupplierPaymentDao(),
+      SupplierReportDao(),
+      SupplierCompanyDao(),
+    );
+    final paymentRepo = SupplierPaymentRepository(
+      SupplierPaymentDao(),
+      SupplierDao(),
+      purchaseRepo,
+    );
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PurchaseForm(
+          repo: purchaseRepo,
+          productRepo: productRepo,
+          supplierRepo: supplierRepo,
+          paymentRepo: paymentRepo,
+          prefilledProduct: _selectedProduct,
+        ),
+      ),
+    );
+
+    // After returning, refresh stock and products
+    await _loadAvailableStock();
   }
 
   Future<void> _addItem() async {
@@ -386,21 +431,29 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         };
       }).toList();
 
-      final printInvoice = Invoice(
-        id: invoiceId,
-        customerId: _selectedCustomer!.id,
-        customerName: _selectedCustomer!.name,
-        total: total,
-        discount: discount,
-        paid: paid,
-        pending: invoicePending.toDouble(),
-        date: DateTime.now().toIso8601String(),
-        status: 'posted',
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),
-      );
+      // Fetch the full invoice from DB to get the auto-generated displayId
+      final invoiceDao = InvoiceDao(db);
+      final savedInvoice = await invoiceDao.getById(invoiceId);
 
-      await printSilentThermalReceipt(printInvoice, items: printItems);
+      if (savedInvoice != null) {
+        await printSilentThermalReceipt(savedInvoice, items: printItems);
+      } else {
+        // Fallback if not found (shouldn't happen)
+        final printInvoice = Invoice(
+          id: invoiceId,
+          customerId: _selectedCustomer!.id,
+          customerName: _selectedCustomer!.name,
+          total: total,
+          discount: discount,
+          paid: paid,
+          pending: invoicePending.toDouble(),
+          date: DateTime.now().toIso8601String(),
+          status: 'posted',
+          createdAt: DateTime.now().toIso8601String(),
+          updatedAt: DateTime.now().toIso8601String(),
+        );
+        await printSilentThermalReceipt(printInvoice, items: printItems);
+      }
     } catch (e) {
       logger.error('OrderFormScreen', 'Direct printing failed', error: e);
     }
@@ -796,6 +849,22 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       label: "Price: Rs ${_selectedProduct!.sellPrice}",
                       color: Colors.blue,
                     ),
+                    if (_availableStock <= 0) ...[
+                      const Spacer(),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.shopping_cart, size: 16),
+                        label: const Text("Purchase"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        onPressed: _navigateToPurchaseForm,
+                      ),
+                    ],
                   ],
                 ),
               ),

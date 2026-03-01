@@ -767,12 +767,125 @@ class _StockReportFrameState extends State<StockReportFrame> {
         const SizedBox(height: 16),
 
         // 🥧 Segmented Analytics (Category & ABC)
-        Row(
-          children: [
-            // Category Split (Pie Chart)
-            if (pieData.isNotEmpty)
-              Expanded(
-                flex: 3,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final double screenWidth = constraints.maxWidth;
+            final bool useRow = screenWidth > 600;
+
+            final children = [
+              // Category Split (Pie Chart)
+              if (pieData.isNotEmpty)
+                SizedBox(
+                  width: useRow ? (screenWidth * 0.55) : double.infinity,
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Text(
+                            "Category Mix",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 150,
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: _scrolledIndex,
+                              builder: (context, touchedIndex, _) {
+                                return RepaintBoundary(
+                                  child: PieChart(
+                                    PieChartData(
+                                      pieTouchData: PieTouchData(
+                                        touchCallback:
+                                            (FlTouchEvent event, response) {
+                                              if (!mounted) return;
+
+                                              if (response == null ||
+                                                  response.touchedSection ==
+                                                      null ||
+                                                  !event
+                                                      .isInterestedForInteractions) {
+                                                if (touchedIndex != -1) {
+                                                  WidgetsBinding.instance
+                                                      .addPostFrameCallback((
+                                                        _,
+                                                      ) {
+                                                        if (mounted) {
+                                                          _scrolledIndex.value =
+                                                              -1;
+                                                        }
+                                                      });
+                                                }
+                                                return;
+                                              }
+                                              final newIndex = response
+                                                  .touchedSection!
+                                                  .touchedSectionIndex;
+
+                                              if (touchedIndex != newIndex) {
+                                                WidgetsBinding.instance
+                                                    .addPostFrameCallback((_) {
+                                                      if (mounted) {
+                                                        _scrolledIndex.value =
+                                                            newIndex;
+                                                      }
+                                                    });
+                                              }
+                                            },
+                                      ),
+                                      sectionsSpace: 4,
+                                      centerSpaceRadius: 30,
+                                      sections: pieData.asMap().entries.map((
+                                        entry,
+                                      ) {
+                                        final isTouched =
+                                            entry.key == touchedIndex;
+                                        final fontSize = isTouched
+                                            ? 14.0
+                                            : 10.0;
+                                        final radius = isTouched ? 55.0 : 45.0;
+                                        final List<Color> colors = [
+                                          Colors.blue,
+                                          Colors.teal,
+                                          Colors.orange,
+                                          Colors.purple,
+                                          Colors.red,
+                                        ];
+
+                                        return PieChartSectionData(
+                                          color:
+                                              colors[entry.key % colors.length],
+                                          value: (entry.value['quantity'] ?? 0)
+                                              .toDouble(),
+                                          title: isTouched
+                                              ? entry.value['category']
+                                              : "${(entry.value['percentage'] ?? 0).toStringAsFixed(0)}%",
+                                          radius: radius,
+                                          titleStyle: TextStyle(
+                                            fontSize: fontSize,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (!useRow) const SizedBox(height: 8),
+              // ABC Analysis (Pareto Distribution)
+              SizedBox(
+                width: useRow ? (screenWidth * 0.4) : double.infinity,
                 child: Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -782,91 +895,37 @@ class _StockReportFrameState extends State<StockReportFrame> {
                     child: Column(
                       children: [
                         const Text(
-                          "Category Mix",
+                          "ABC Audit",
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 150,
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: _scrolledIndex,
-                            builder: (context, touchedIndex, _) {
-                              return RepaintBoundary(
-                                child: PieChart(
-                                  PieChartData(
-                                    pieTouchData: PieTouchData(
-                                      touchCallback:
-                                          (FlTouchEvent event, response) {
-                                            if (!mounted) return;
-
-                                            if (response == null ||
-                                                response.touchedSection ==
-                                                    null ||
-                                                !event
-                                                    .isInterestedForInteractions) {
-                                              if (touchedIndex != -1) {
-                                                WidgetsBinding.instance
-                                                    .addPostFrameCallback((_) {
-                                                      if (mounted) {
-                                                        _scrolledIndex.value =
-                                                            -1;
-                                                      }
-                                                    });
-                                              }
-                                              return;
-                                            }
-                                            final newIndex = response
-                                                .touchedSection!
-                                                .touchedSectionIndex;
-
-                                            if (touchedIndex != newIndex) {
-                                              WidgetsBinding.instance
-                                                  .addPostFrameCallback((_) {
-                                                    if (mounted) {
-                                                      _scrolledIndex.value =
-                                                          newIndex;
-                                                    }
-                                                  });
-                                            }
-                                          },
-                                    ),
-                                    sectionsSpace: 4,
-                                    centerSpaceRadius: 30,
-                                    sections: pieData.asMap().entries.map((
-                                      entry,
-                                    ) {
-                                      final isTouched =
-                                          entry.key == touchedIndex;
-                                      final fontSize = isTouched ? 14.0 : 10.0;
-                                      final radius = isTouched ? 55.0 : 45.0;
-                                      final List<Color> colors = [
-                                        Colors.blue,
-                                        Colors.teal,
-                                        Colors.orange,
-                                        Colors.purple,
-                                        Colors.red,
-                                      ];
-
-                                      return PieChartSectionData(
-                                        color:
-                                            colors[entry.key % colors.length],
-                                        value: (entry.value['quantity'] ?? 0)
-                                            .toDouble(),
-                                        title: isTouched
-                                            ? entry.value['category']
-                                            : "${(entry.value['percentage'] ?? 0).toStringAsFixed(0)}%",
-                                        radius: radius,
-                                        titleStyle: TextStyle(
-                                          fontSize: fontSize,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              );
-                            },
+                        const SizedBox(height: 12),
+                        _buildABCRow(
+                          "A",
+                          "${_abcData['A']?['count'] ?? 0} items",
+                          Colors.green,
+                          onTap: () => _toggleABCFilter('A'),
+                          isSelected: _abcFilter == 'A',
+                        ),
+                        _buildABCRow(
+                          "B",
+                          "${_abcData['B']?['count'] ?? 0} items",
+                          Colors.orange,
+                          onTap: () => _toggleABCFilter('B'),
+                          isSelected: _abcFilter == 'B',
+                        ),
+                        _buildABCRow(
+                          "C",
+                          "${_abcData['C']?['count'] ?? 0} items",
+                          Colors.red,
+                          onTap: () => _toggleABCFilter('C'),
+                          isSelected: _abcFilter == 'C',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Value dist.",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade500,
                           ),
                         ),
                       ],
@@ -874,58 +933,16 @@ class _StockReportFrameState extends State<StockReportFrame> {
                   ),
                 ),
               ),
-            const SizedBox(width: 8),
-            // ABC Analysis (Pareto Distribution)
-            Expanded(
-              flex: 2,
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "ABC Audit",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildABCRow(
-                        "A",
-                        "${_abcData['A']?['count'] ?? 0} items",
-                        Colors.green,
-                        onTap: () => _toggleABCFilter('A'),
-                        isSelected: _abcFilter == 'A',
-                      ),
-                      _buildABCRow(
-                        "B",
-                        "${_abcData['B']?['count'] ?? 0} items",
-                        Colors.orange,
-                        onTap: () => _toggleABCFilter('B'),
-                        isSelected: _abcFilter == 'B',
-                      ),
-                      _buildABCRow(
-                        "C",
-                        "${_abcData['C']?['count'] ?? 0} items",
-                        Colors.red,
-                        onTap: () => _toggleABCFilter('C'),
-                        isSelected: _abcFilter == 'C',
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Value dist.",
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ];
+
+            return useRow
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: children,
+                  )
+                : Column(children: children);
+          },
         ),
       ],
     );

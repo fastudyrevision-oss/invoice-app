@@ -149,7 +149,12 @@ class _OrderListScreenState extends State<OrderListScreen>
         results = results.where((o) {
           final customer = o.customerName?.toLowerCase() ?? '';
           final id = o.id.toLowerCase();
-          return customer.contains(query) || id.contains(query);
+          final displayId = o.displayId?.toString() ?? '';
+          final invNo = o.invoiceNo?.toLowerCase() ?? '';
+          return customer.contains(query) ||
+              id.contains(query) ||
+              displayId.contains(query) ||
+              invNo.contains(query);
         }).toList();
       }
 
@@ -474,7 +479,21 @@ class _OrderListScreenState extends State<OrderListScreen>
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text("Orders"),
-        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).primaryColor,
+                Theme.of(context).primaryColor.withValues(alpha: 0.8),
+              ],
+            ),
+          ),
+        ),
+        elevation: 2,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: isMobile
             ? [
                 IconButton(
@@ -538,48 +557,49 @@ class _OrderListScreenState extends State<OrderListScreen>
               ]
             : [
                 const SizedBox(width: 10),
-                // View toggle
                 Tooltip(
                   message: 'View: ${_viewModeLabel()}',
                   child: TextButton.icon(
-                    icon: Icon(_viewModeIcon(), size: 20),
-                    label: Text(_viewModeLabel()),
-                    onPressed: _cycleViewMode,
-                    style: TextButton.styleFrom(
-                      foregroundColor:
-                          Theme.of(context).appBarTheme.foregroundColor ??
-                          Colors.white,
+                    icon: Icon(_viewModeIcon(), size: 20, color: Colors.white),
+                    label: Text(
+                      _viewModeLabel(),
+                      style: const TextStyle(color: Colors.white),
                     ),
+                    onPressed: _cycleViewMode,
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.insights),
+                  icon: const Icon(Icons.insights, color: Colors.white),
                   tooltip: 'Insights',
                   onPressed: _showInsightsDialog,
                 ),
-                const SizedBox(width: 4),
                 IconButton(
-                  icon: const Icon(Icons.filter_list),
-                  onPressed: _openFilterSheet,
+                  icon: const Icon(Icons.filter_list, color: Colors.white),
                   tooltip: 'Filters',
+                  onPressed: _openFilterSheet,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _loadOrders,
-                  tooltip: 'Refresh',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.picture_as_pdf),
-                  onPressed: _exportAllOrders,
+                  icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
                   tooltip: 'Export PDF',
+                  onPressed: _exportAllOrders,
                 ),
                 IconButton(
-                  onPressed: _navigateToForm,
-                  icon: const Icon(Icons.add_circle, size: 28),
-                  tooltip: 'Add Order',
+                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  tooltip: 'Refresh',
+                  onPressed: _loadOrders,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _navigateToForm,
+                  icon: const Icon(Icons.add_circle, size: 18),
+                  label: const Text("New Order"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Theme.of(context).primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 16),
               ],
         bottom: PreferredSize(
           preferredSize: Size.fromHeight(
@@ -614,14 +634,18 @@ class _OrderListScreenState extends State<OrderListScreen>
                     },
                   ),
                 ),
-                Padding(
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildQuickFilterChip('Today', 'today'),
+                      const SizedBox(width: 8),
                       _buildQuickFilterChip('This Week', 'week'),
+                      const SizedBox(width: 8),
                       _buildQuickFilterChip('This Month', 'month'),
+                      const SizedBox(width: 8),
+                      _buildQuickFilterChip('All', 'all'),
                     ],
                   ),
                 ),
@@ -713,7 +737,10 @@ class _OrderListScreenState extends State<OrderListScreen>
 
   DateTime? _safeParseDate(String dateStr) {
     if (dateStr.isEmpty) return null;
-    return DateHelper.parseDate(dateStr) ?? DateTime.tryParse(dateStr);
+    // DateTime.tryParse handles ISO-8601 strings perfectly, but returns UTC time for ISO strings.
+    // Converting to local time ensures .year/.month/.day comparisons work correctly with DateTime.now()
+    return DateTime.tryParse(dateStr)?.toLocal() ??
+        DateHelper.parseDate(dateStr);
   }
 
   IconData _viewModeIcon() {
@@ -873,12 +900,14 @@ class _OrderListScreenState extends State<OrderListScreen>
               cells: [
                 DataCell(
                   Text(
-                    o.id
-                        .substring(o.id.length > 6 ? o.id.length - 6 : 0)
-                        .toUpperCase(),
+                    o.displayId != null
+                        ? "#${o.displayId}"
+                        : o.id
+                              .substring(o.id.length > 6 ? o.id.length - 6 : 0)
+                              .toUpperCase(),
                   ),
                 ),
-                DataCell(Text(o.date)),
+                DataCell(Text(DateHelper.formatIso(o.date))),
                 DataCell(Text(o.customerName ?? 'N/A')),
                 DataCell(Text("Rs ${o.total.toStringAsFixed(0)}")),
                 DataCell(
@@ -928,7 +957,7 @@ class _OrderListScreenState extends State<OrderListScreen>
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        "#${o.id.substring(o.id.length > 6 ? o.id.length - 6 : 0).toUpperCase()} • ${o.date}",
+        "${o.displayId != null ? "Order #${o.displayId}" : "#${o.id.substring(o.id.length > 6 ? o.id.length - 6 : 0).toUpperCase()}"}${o.invoiceNo != null ? " • Inv: ${o.invoiceNo}" : ""} • ${DateHelper.formatIso(o.date)}",
       ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -993,7 +1022,7 @@ class _OrderListScreenState extends State<OrderListScreen>
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          "Invoice #${o.id.substring(o.id.length > 6 ? o.id.length - 6 : 0).toUpperCase()}",
+                          "${o.displayId != null ? "Order #${o.displayId}" : "Invoice #${o.id.substring(o.id.length > 6 ? o.id.length - 6 : 0).toUpperCase()}"}${o.invoiceNo != null && o.invoiceNo!.isNotEmpty ? " (Inv: ${o.invoiceNo})" : ""}",
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -1031,7 +1060,7 @@ class _OrderListScreenState extends State<OrderListScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    DateFormat('MMM dd, yyyy').format(date),
+                    DateHelper.formatIso(o.date),
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                   Row(

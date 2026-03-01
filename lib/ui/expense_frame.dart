@@ -435,8 +435,22 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
         return Scaffold(
           backgroundColor: Colors.grey[100],
           appBar: AppBar(
-            title: const Text("Expenses"),
-            elevation: 0,
+            title: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: const Text("Expenses"),
+            ),
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.red.shade800, Colors.red.shade500],
+                ),
+              ),
+            ),
+            elevation: 2,
+            foregroundColor: Colors.white,
+            iconTheme: const IconThemeData(color: Colors.white),
             actions: isMobile
                 ? [
                     IconButton(
@@ -515,40 +529,42 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     Tooltip(
                       message: 'View: ${_viewModeLabel()}',
                       child: TextButton.icon(
-                        icon: Icon(_viewModeIcon(), size: 20),
-                        label: Text(_viewModeLabel()),
-                        onPressed: _cycleViewMode,
-                        style: TextButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(context).appBarTheme.foregroundColor ??
-                              Colors.white,
+                        icon: Icon(
+                          _viewModeIcon(),
+                          size: 20,
+                          color: Colors.white,
                         ),
+                        label: Text(
+                          _viewModeLabel(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        onPressed: _cycleViewMode,
                       ),
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.insights),
+                      icon: const Icon(Icons.insights, color: Colors.white),
                       tooltip: 'Insights',
                       onPressed: _showInsightsDialog,
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.print),
+                      icon: const Icon(Icons.print, color: Colors.white),
                       tooltip: 'Print List',
                       onPressed: () => _handleExport('print'),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.save),
+                      icon: const Icon(Icons.save, color: Colors.white),
                       tooltip: 'Save PDF',
                       onPressed: () => _handleExport('save'),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.share),
+                      icon: const Icon(Icons.share, color: Colors.white),
                       tooltip: 'Share PDF',
                       onPressed: () => _handleExport('share'),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh, color: Colors.white),
                       tooltip: 'Refresh',
                       onPressed: () {
                         setState(() {
@@ -559,7 +575,11 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                     ),
                     IconButton(
                       onPressed: () => _showAddEditExpenseDialog(),
-                      icon: const Icon(Icons.add_circle, size: 28),
+                      icon: const Icon(
+                        Icons.add_circle,
+                        size: 28,
+                        color: Colors.white,
+                      ),
                       tooltip: 'Add Expense',
                     ),
                     const SizedBox(width: 10),

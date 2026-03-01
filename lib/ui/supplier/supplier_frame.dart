@@ -913,6 +913,8 @@ class _SupplierFrameState extends State<SupplierFrame> {
       child: Scaffold(
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
           title: const Text("Suppliers & Companies"),
           elevation: 0,
           bottom: const TabBar(
