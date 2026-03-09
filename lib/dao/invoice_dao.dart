@@ -102,13 +102,13 @@ class InvoiceDao {
   // =========================
   // UPDATE
   // =========================
-  Future<int> update(Invoice invoice) async {
+  Future<int> update(Invoice invoice, {bool isExplicitEdit = false}) async {
     // Fetch old data
     final oldData = await getById(invoice.id);
 
-    // 🔒 Financial Immutability: Lock financial fields for posted invoices
+    // 🔒 Financial Immutability: Lock financial fields for posted invoices unless explicitly editing
     final map = invoice.toMap();
-    if (oldData?.status == 'posted') {
+    if (oldData?.status == 'posted' && !isExplicitEdit) {
       map.remove('total');
       map.remove('discount');
       map.remove('paid');

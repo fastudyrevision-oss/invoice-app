@@ -6,11 +6,20 @@ import '../../models/customer.dart';
 import '../../dao/customer_dao.dart';
 import '../../db/database_helper.dart';
 import '../../utils/date_helper.dart';
+import 'order_form_screen.dart'; // 👈 Added missing import
+import '../../dao/invoice_item_dao.dart'; // 👈 Added missing import
+
+import '../../repositories/order_repository.dart';
 
 class OrderDetailScreen extends StatefulWidget {
+  final OrderRepository repo;
   final Invoice invoice;
 
-  const OrderDetailScreen({super.key, required this.invoice});
+  const OrderDetailScreen({
+    super.key,
+    required this.repo,
+    required this.invoice,
+  });
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -118,6 +127,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.white),
+                tooltip: "Edit Order",
+                onPressed: () async {
+                  final db = await DatabaseHelper.instance.db;
+                  final itemDao = InvoiceItemDao(db);
+                  final items = await itemDao.getByInvoiceId(widget.invoice.id);
+
+                  if (mounted) {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => OrderFormScreen(
+                          repo: widget.repo,
+                          existingInvoice: widget.invoice,
+                          existingItems: items,
+                        ),
+                      ),
+                    );
+                    _loadDetails(); // Refresh details after edit
+                  }
+                },
               ),
             ],
           ),

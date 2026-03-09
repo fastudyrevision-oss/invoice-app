@@ -67,7 +67,7 @@ class InvoiceItemDao {
   // =========================
   // UPDATE
   // =========================
-  Future<int> update(InvoiceItem item) async {
+  Future<int> update(InvoiceItem item, {bool isExplicitEdit = false}) async {
     final db = txn ?? await dbHelper.db;
     final data = item.toMap();
     // Check if parent invoice is posted
@@ -80,12 +80,12 @@ class InvoiceItemDao {
         ? invoiceRes.first['status'] as String?
         : null;
 
-    // 🔒 IMMUTABILITY: Lock financial fields for posted invoices
-    if (invoiceStatus == 'posted') {
+    // 🔒 IMMUTABILITY: Lock financial fields for posted invoices unless explicitly editing
+    if (invoiceStatus == 'posted' && !isExplicitEdit) {
       data.remove('cost_price');
       data.remove('price');
       data.remove('discount');
-    } else {
+    } else if (invoiceStatus != 'posted') {
       // For draft, still protect cost_price if not explicitly intended to change (optional safety)
       data.remove('cost_price');
     }

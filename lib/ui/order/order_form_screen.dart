@@ -11,10 +11,11 @@ import '../../dao/customer_dao.dart';
 import '../../dao/product_dao.dart';
 import '../../dao/product_batch_dao.dart';
 import '../../dao/invoice_dao.dart';
-import '../../dao/invoice_item_dao.dart';
 import '../../models/invoice.dart';
 import '../../db/database_helper.dart';
 import '../../services/logger_service.dart';
+import '../../core/services/audit_logger.dart';
+import '../../services/auth_service.dart';
 import 'pdf_export_helper.dart';
 
 // ✅ Imports for quick purchase navigation
@@ -28,9 +29,21 @@ import '../../dao/supplier_payment_dao.dart';
 import '../../dao/supplier_report_dao.dart';
 import '../../dao/supplier_company_dao.dart';
 
+import '../../repositories/order_repository.dart';
+
 class OrderFormScreen extends StatefulWidget {
+  final OrderRepository repo; // 👈 Injected repository
   final bool isTab;
-  const OrderFormScreen({super.key, this.isTab = false});
+  final Invoice? existingInvoice;
+  final List<InvoiceItem>? existingItems;
+
+  const OrderFormScreen({
+    super.key,
+    required this.repo,
+    this.isTab = false,
+    this.existingInvoice,
+    this.existingItems,
+  });
 
   @override
   State<OrderFormScreen> createState() => _OrderFormScreenState();
@@ -52,9 +65,16 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   List<Customer> _customers = [];
   List<Product> _products = [];
   final List<InvoiceItem> _items = [];
+  final List<InvoiceItem> _originalItems =
+      []; // 👈 Track original items for stock reversal
 
   bool _loading = true;
+  bool _isEditing = false;
+  bool _isProcessing = false; // 👈 Prevent race conditions
+  bool _isHandlingBack = false; // 👈 Prevent PopScope recursion
   int _availableStock = 0;
+  InvoiceItem? _editingItem; // 👈 Track item currently in the edit field
+  int? _editingIndex; // 👈 Track index of the item being edited
 
   double get _total => _items.fold(0, (sum, i) => sum + (i.price * i.qty));
 
@@ -67,7 +87,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDropdownData();
+    _isEditing = widget.existingInvoice != null;
+    _loadDropdownData().then((_) {
+      if (_isEditing) {
+        _initializeForEditing();
+      }
+    });
     _discountController.addListener(() => setState(() {}));
     _paidController.addListener(() => setState(() {}));
 
@@ -77,6 +102,91 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     _priceController.addListener(() {
       setState(() {});
     });
+  }
+
+  void _initializeForEditing() {
+    final invoice = widget.existingInvoice!;
+    setState(() {
+      _selectedCustomer = _customers.firstWhere(
+        (c) => c.id == invoice.customerId,
+        orElse: () => Customer(
+          id: invoice.customerId,
+          name: invoice.customerName ?? "Unknown",
+          phone: "", // 👈 Fixed lint error
+          pendingAmount: 0,
+          createdAt: "",
+          updatedAt: "",
+        ),
+      );
+      _discountController.text = invoice.discount.toStringAsFixed(0);
+      _paidController.text = invoice.paid.toStringAsFixed(0);
+      if (widget.existingItems != null) {
+        _items.addAll(widget.existingItems!);
+        _originalItems.addAll(
+          widget.existingItems!.map((i) => i.copyWith()),
+        ); // Deep copy
+      }
+    });
+  }
+
+  Future<bool> _handleBackPress() async {
+    if (_isHandlingBack) return false;
+    // If no items were added/changed, and nothing in edit field, just pop
+    if (_items.isEmpty && !_isEditing && _editingItem == null) return true;
+
+    // Check if there are actual changes compared to original
+    bool changed = false;
+    if (!_isEditing) {
+      changed = _items.isNotEmpty;
+    } else {
+      // Check for item changes or header changes
+      if (_items.length != _originalItems.length) {
+        changed = true;
+      } else {
+        for (var i = 0; i < _items.length; i++) {
+          if (_items[i].productId != _originalItems[i].productId ||
+              _items[i].qty != _originalItems[i].qty ||
+              _items[i].price != _originalItems[i].price) {
+            changed = true;
+            break;
+          }
+        }
+      }
+      final invoice = widget.existingInvoice!;
+      if (double.tryParse(_discountController.text) != invoice.discount ||
+          double.tryParse(_paidController.text) != invoice.paid ||
+          _selectedCustomer?.id != invoice.customerId ||
+          _editingItem != null) {
+        changed = true;
+      }
+    }
+
+    if (!changed) return true;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Discard Changes?"),
+        content: const Text(
+          "Are you sure you want to go back? All unsaved changes will be lost.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("No"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              "Yes, Discard",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return confirm ?? false;
   }
 
   @override
@@ -121,27 +231,57 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     });
   }
 
-  Future<void> _loadAvailableStock() async {
+  Future<int> _loadAvailableStock() async {
     if (_selectedProduct == null) {
-      setState(() => _availableStock = 0);
-      return;
+      if (mounted) setState(() => _availableStock = 0);
+      return 0;
     }
 
     final prefs = PreferencesService.instance;
-    final includeExpired = await prefs.getIncludeExpiredInOrders();
+    final includeExpiredSetting = await prefs.getIncludeExpiredInOrders();
+
+    // 💡 If we are editing and this product was already in the invoice,
+    // we MUST allow re-selecting its batches even if they are now expired.
+    final isOriginalProduct = _originalItems.any(
+      (oi) => oi.productId == _selectedProduct!.id,
+    );
+    final includeExpired = includeExpiredSetting || isOriginalProduct;
 
     final db = await DatabaseHelper.instance.db;
     final batchDao = ProductBatchDao(db);
 
-    // ✅ Use new method to get filtered batches
+    // 💡 Chronological Integrity: only show stock that existed on the invoice date
+    final dateStr = _isEditing
+        ? widget.existingInvoice!.date
+        : DateTime.now().toIso8601String();
+
+    // ✅ Get fresh stock from DB
     final batches = await batchDao.getAvailableBatches(
       _selectedProduct!.id,
       includeExpired: includeExpired,
+      beforeDate: dateStr,
     );
 
-    final totalStock = batches.fold<int>(0, (sum, b) => sum + b.qty);
+    int totalStock = batches.fold<int>(0, (sum, b) => sum + b.qty);
 
-    setState(() => _availableStock = totalStock);
+    // 💡 Subtract quantities already added to the order in this session
+    // BUT, if it's an original item, it's already deducted in DB, so we add it back to "available" pool
+    final localQty = _items
+        .where((i) => i.productId == _selectedProduct!.id)
+        .fold<int>(0, (sum, i) => sum + i.qty);
+
+    // If we're editing, we need to know how much was originally in the DB for this product in THIS invoice
+    final originalQty = _originalItems
+        .where((oi) => oi.productId == _selectedProduct!.id)
+        .fold<int>(0, (sum, oi) => sum + oi.qty);
+
+    // Effective Stock = DB Stock + (Original Qty in Invoice) - (Current Qty in Form Items)
+    final effectiveStock = totalStock + originalQty - localQty;
+
+    if (mounted) {
+      setState(() => _availableStock = effectiveStock);
+    }
+    return effectiveStock;
   }
 
   Future<void> _navigateToPurchaseForm() async {
@@ -179,127 +319,132 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   }
 
   Future<void> _addItem() async {
+    if (_isProcessing) return;
     if (_selectedProduct == null || _qtyController.text.isEmpty) return;
 
-    if (!_products.any((p) => p.id == _selectedProduct?.id)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Invalid product selected")));
-      return;
-    }
+    setState(() => _isProcessing = true);
+    try {
+      // Refresh stock check before adding
+      final currentStock = await _loadAvailableStock();
 
-    // Refresh stock check before adding
-    await _loadAvailableStock();
+      final qty = (num.tryParse(_qtyController.text) ?? 1).toInt();
+      final customPrice =
+          double.tryParse(_priceController.text) ??
+          (_selectedProduct?.sellPrice ?? 0.0);
 
-    if (_availableStock <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("This product is out of stock!")),
+      if (qty <= 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Quantity must be greater than zero")),
+        );
+        return;
+      }
+
+      if (qty > currentStock) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Only $currentStock items available!")),
+        );
+        return;
+      }
+
+      // ✅ Purely local addition. No DB hits here.
+      // Cost price is captured now but reservedBatches will be populated by Repo on save.
+      final item = InvoiceItem(
+        id: _uuid.v4(),
+        invoiceId: widget.existingInvoice?.id ?? "",
+        productId: _selectedProduct!.id,
+        qty: qty,
+        price: customPrice,
+        costPrice: _selectedProduct!.costPrice,
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
       );
-      return;
+
+      setState(() {
+        if (_editingIndex != null && _editingIndex! <= _items.length) {
+          _items.insert(_editingIndex!, item);
+        } else {
+          _items.add(item);
+        }
+        _selectedProduct = null;
+        _editingItem = null;
+        _editingIndex = null;
+        _qtyController.clear();
+        _priceController.clear();
+      });
+
+      await _loadAvailableStock();
+    } finally {
+      setState(() => _isProcessing = false);
     }
+  }
 
-    final qty = (num.tryParse(_qtyController.text) ?? 1).toInt();
-    final customPrice =
-        double.tryParse(_priceController.text) ??
-        (_selectedProduct?.sellPrice ?? 0.0);
-
-    if (qty <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Quantity must be greater than zero")),
+  Future<void> _removeItem(InvoiceItem item, {bool showConfirm = true}) async {
+    if (_isProcessing) return;
+    if (showConfirm) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Remove Item?"),
+          content: const Text(
+            "Do you want to remove this item from the order?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Remove"),
+            ),
+          ],
+        ),
       );
-      return;
+
+      if (confirm != true) return;
     }
-
-    if (qty > _availableStock) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Only $_availableStock items available!")),
-      );
-      return;
-    }
-
-    final db = await DatabaseHelper.instance.db;
-    final batchDao = ProductBatchDao(db);
-    final prefs = PreferencesService.instance;
-    final includeExpired = await prefs.getIncludeExpiredInOrders();
-
-    // ✅ Use stored weighted average cost from products table
-    // The products.cost_price is automatically updated via recalculateProductFromBatches()
-    // when new stock arrives or batches are modified, ensuring consistent costing
-    final costPrice = _selectedProduct!.costPrice;
-
-    // Deduct stock (FIFO)
-    final reservedBatches = await batchDao.deductFromBatches(
-      _selectedProduct!.id,
-      qty,
-      trackUsage: true,
-      includeExpired: includeExpired,
-    );
-    assert(costPrice >= 0, "Cost price cannot be negative");
-
-    final item = InvoiceItem(
-      id: _uuid.v4(),
-      invoiceId: "",
-      productId: _selectedProduct!.id,
-      qty: qty,
-      price: customPrice, // 👈 Use custom price instead of default
-      costPrice: costPrice, // 👈 Capture historical cost for COGS
-      reservedBatches: reservedBatches,
-      createdAt: DateTime.now().toIso8601String(),
-      updatedAt: DateTime.now().toIso8601String(),
-    );
 
     setState(() {
-      _items.add(item);
-      _selectedProduct = null;
-      _qtyController.clear();
-      _priceController.clear();
+      _items.remove(item);
+      if (_editingItem?.id == item.id) _editingItem = null;
     });
-
     await _loadAvailableStock();
   }
 
-  Future<void> _removeItem(InvoiceItem item) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Remove Item?"),
-        content: const Text("Do you want to remove this item from the order?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Remove"),
-          ),
-        ],
-      ),
-    );
+  Future<void> _editItem(InvoiceItem item) async {
+    if (_isProcessing) return;
 
-    if (confirm != true) return;
+    final product = _products.any((p) => p.id == item.productId)
+        ? _products.firstWhere((p) => p.id == item.productId)
+        : null;
 
-    final db = await DatabaseHelper.instance.db;
-    final batchDao = ProductBatchDao(db);
+    if (product != null) {
+      // 1. Remove from list and return stock to DB first
+      await _removeItem(item, showConfirm: false);
 
-    if (item.reservedBatches != null) {
-      await Future.wait(
-        item.reservedBatches!.map((batchInfo) async {
-          final batchId = batchInfo['batchId'] as String;
-          final qty = (batchInfo['qty'] as num).toInt();
-          await batchDao.addBackToBatch(batchId, qty);
-        }),
+      // 2. Then prefill the form and load the fresh stock
+      if (mounted) {
+        final index = _items.indexOf(item);
+        setState(() {
+          _selectedProduct = product;
+          _editingItem = item;
+          _editingIndex = index >= 0 ? index : null;
+          _qtyController.text = item.qty.toString();
+          _priceController.text = item.price.toString();
+        });
+        await _loadAvailableStock();
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unable to edit: Product not found")),
       );
     }
-
-    setState(() => _items.remove(item));
-    await _loadAvailableStock();
   }
 
   Future<void> _saveOrder() async {
+    if (_isProcessing) return;
     if (_selectedCustomer == null || _items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -307,6 +452,29 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         ),
       );
       return;
+    }
+
+    if (_selectedProduct != null || _editingItem != null) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Unsaved Item Details"),
+          content: const Text(
+            "There is an item currently being edited in the form that is not added to the order yet. Do you want to DISCARD those form details and save the order as is?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("No, let me add it"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Yes, Discard & Save"),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
     }
 
     // 1️⃣ Calculate totals and pending
@@ -352,132 +520,108 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
-    final db = await DatabaseHelper.instance.db;
-    final invoiceId = _uuid.v4();
-
-    await db.transaction((txn) async {
-      final invoiceDao = InvoiceDao(txn);
-      final itemDao = InvoiceItemDao(txn);
-      final productDao = ProductDao(txn);
-      final customerDao = CustomerDao(txn);
+    setState(() => _isProcessing = true);
+    try {
+      final invoiceId = _isEditing ? widget.existingInvoice!.id : _uuid.v4();
+      final now = DateTime.now().toIso8601String();
 
       final invoice = Invoice(
         id: invoiceId,
+        displayId: _isEditing ? widget.existingInvoice!.displayId : null,
         customerId: _selectedCustomer!.id,
+        customerName: _selectedCustomer!.name,
         total: total,
         discount: discount,
         paid: paid,
-        pending: invoicePending
-            .toDouble(), // Invoice record gets 0 if fully paid
-        status: 'posted',
-        date: DateTime.now().toIso8601String(),
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),
+        pending: invoicePending.toDouble(),
+        status: _isEditing ? widget.existingInvoice!.status : 'posted',
+        date: _isEditing ? widget.existingInvoice!.date : now,
+        createdAt: _isEditing ? widget.existingInvoice!.createdAt : now,
+        updatedAt: now,
       );
 
-      await invoiceDao.insert(invoice, _selectedCustomer!.name);
-
-      // 👇 Allocate discount proportionally to items
-      double remainingDiscount = discount;
-      for (int i = 0; i < _items.length; i++) {
-        final item = _items[i];
-        double itemDiscount = 0.0;
-
-        if (i == _items.length - 1) {
-          // Last item gets remainder to avoid rounding drift
-          itemDiscount = remainingDiscount;
-        } else {
-          // Proportional allocation
-          final itemTotal = item.qty * item.price;
-          itemDiscount = double.parse(
-            ((itemTotal / total) * discount).toStringAsFixed(2),
-          );
-          remainingDiscount -= itemDiscount;
-        }
-
-        // Create item with allocated discount
-        final itemWithDiscount = InvoiceItem(
-          id: item.id,
-          invoiceId: invoiceId,
-          productId: item.productId,
-          qty: item.qty,
-          price: item.price,
-          costPrice: item.costPrice,
-          discount: itemDiscount,
-          reservedBatches: item.reservedBatches,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
+      if (_isEditing) {
+        await widget.repo.updateOrder(
+          invoice,
+          _selectedCustomer!.name,
+          _items,
+          _originalItems,
         );
-
-        await itemDao.insert(itemWithDiscount);
-        await productDao.refreshProductQuantityFromBatches(item.productId);
-      }
-
-      // 3️⃣ Update Customer Ledger with REAL Pending (allows negative/credit)
-      await customerDao.updatePendingAmount(
-        _selectedCustomer!.id,
-        realPending.toDouble(),
-      );
-    });
-
-    // 4️⃣ Direct Printing
-    try {
-      final printItems = _items.map((item) {
-        final product = _products.firstWhere((p) => p.id == item.productId);
-        return {
-          'product_name': product.name,
-          'qty': item.qty,
-          'price': item.price,
-        };
-      }).toList();
-
-      // Fetch the full invoice from DB to get the auto-generated displayId
-      final invoiceDao = InvoiceDao(db);
-      final savedInvoice = await invoiceDao.getById(invoiceId);
-
-      if (savedInvoice != null) {
-        await printSilentThermalReceipt(savedInvoice, items: printItems);
       } else {
-        // Fallback if not found (shouldn't happen)
-        final printInvoice = Invoice(
-          id: invoiceId,
-          customerId: _selectedCustomer!.id,
-          customerName: _selectedCustomer!.name,
-          total: total,
-          discount: discount,
-          paid: paid,
-          pending: invoicePending.toDouble(),
-          date: DateTime.now().toIso8601String(),
-          status: 'posted',
-          createdAt: DateTime.now().toIso8601String(),
-          updatedAt: DateTime.now().toIso8601String(),
-        );
-        await printSilentThermalReceipt(printInvoice, items: printItems);
+        await widget.repo.saveOrder(invoice, _selectedCustomer!.name, _items);
       }
-    } catch (e) {
-      logger.error('OrderFormScreen', 'Direct printing failed', error: e);
-    }
 
-    if (!mounted) return;
-    Navigator.pop(context); // Close loading dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Order created successfully!")),
-    );
+      // 🔍 AUDIT ENHANCEMENT: Log items summary
+      try {
+        await AuditLogger.log(
+          _isEditing ? 'ORDER_EDIT' : 'ORDER_CREATE',
+          'invoices',
+          recordId: invoiceId,
+          userId: AuthService.instance.currentUser?.id ?? 'system',
+          oldData: _isEditing
+              ? {
+                  'items': _originalItems.map((i) => i.toMap()).toList(),
+                  'total': widget.existingInvoice!.total,
+                }
+              : null,
+          newData: {
+            'items': _items.map((i) => i.toMap()).toList(),
+            'total': total,
+          },
+          txn: await DatabaseHelper.instance.db,
+        );
+      } catch (e) {
+        logger.error('OrderForm', 'Audit log failed', error: e);
+      }
 
-    if (widget.isTab) {
-      // Reset form instead of popping
-      setState(() {
-        _items.clear();
-        _selectedProduct = null;
-        _qtyController.clear();
-        _priceController.clear();
-        _discountController.text = "0";
-        _paidController.text = "0";
-        // Keep customer if it's a walk-in, or clear? Better clear or reset to default.
-        _loadDropdownData();
-      });
-    } else {
-      Navigator.pop(context); // Close screen
+      // 4️⃣ Direct Printing
+      try {
+        final db = await DatabaseHelper.instance.db;
+        final printItems = _items.map((item) {
+          final product = _products.firstWhere((p) => p.id == item.productId);
+          return {
+            'product_name': product.name,
+            'qty': item.qty,
+            'price': item.price,
+          };
+        }).toList();
+
+        final invoiceDao = InvoiceDao(db);
+        final savedInvoice = await invoiceDao.getById(invoiceId);
+
+        if (savedInvoice != null) {
+          await printSilentThermalReceipt(savedInvoice, items: printItems);
+        }
+      } catch (e) {
+        logger.error('OrderFormScreen', 'Direct printing failed', error: e);
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Order created successfully!")),
+      );
+
+      if (widget.isTab) {
+        setState(() {
+          _items.clear();
+          _selectedProduct = null;
+          _qtyController.clear();
+          _priceController.clear();
+          _discountController.text = "0";
+          _paidController.text = "0";
+          _loadDropdownData();
+        });
+      } else {
+        Navigator.pop(context); // Close screen
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _editingItem = null;
+        });
+      }
     }
   }
 
@@ -567,35 +711,45 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           : const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final content = SafeArea(
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    // 🧍 Customer Section
-                    _buildCustomerCard(),
+    final content = PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _handleBackPress();
+        if (shouldPop && mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      // 🧍 Customer Section
+                      _buildCustomerCard(),
 
-                    // 📦 Product Selection Section
-                    _buildProductSelectionCard(),
+                      // 📦 Product Selection Section
+                      _buildProductSelectionCard(),
 
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // 🧾 Order Items Table
-                    _buildItemsTable(),
+                      // 🧾 Order Items Table
+                      _buildItemsTable(),
 
-                    const SizedBox(height: 100), // Space for sticky footer
-                  ],
+                      const SizedBox(height: 100), // Space for sticky footer
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          _buildStickyFooter(),
-        ],
+            _buildStickyFooter(),
+          ],
+        ),
       ),
     );
 
@@ -604,7 +758,19 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Create Order"), elevation: 0),
+      appBar: AppBar(
+        title: Text(_isEditing ? "Edit Order" : "Create Order"),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () async {
+            final shouldPop = await _handleBackPress();
+            if (shouldPop && mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+      ),
       body: content,
     );
   }
@@ -825,7 +991,8 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     onPressed:
                         (_selectedProduct != null &&
                             _qtyController.text.isNotEmpty &&
-                            _priceController.text.isNotEmpty)
+                            _priceController.text.isNotEmpty &&
+                            !_isProcessing)
                         ? _addItem
                         : null,
                     tooltip: "Add to Order",
@@ -990,58 +1157,62 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                 updatedAt: "",
               ),
             );
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          "@ ${item.price}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+            return InkWell(
+              onTap: _isProcessing ? null : () => _editItem(item),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Text("${item.qty}", textAlign: TextAlign.center),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      "Rs ${(item.qty * item.price).toStringAsFixed(2)}",
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 32,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                        color: Colors.red,
-                        size: 20,
+                          Text(
+                            "@ ${item.price}",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
-                      onPressed: () => _removeItem(item),
-                      padding: EdgeInsets.zero,
                     ),
-                  ),
-                ],
+                    Expanded(
+                      flex: 1,
+                      child: Text("${item.qty}", textAlign: TextAlign.center),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        "Rs ${(item.qty * item.price).toStringAsFixed(2)}",
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 32,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.remove_circle_outline,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        onPressed: () => _removeItem(item),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           }),
@@ -1157,7 +1328,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _saveOrder,
+              onPressed: _isProcessing ? null : _saveOrder,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[700],
                 foregroundColor: Colors.white,

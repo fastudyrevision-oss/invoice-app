@@ -4,6 +4,7 @@ import '../repositories/customer_repository.dart';
 import '../db/database_helper.dart';
 import 'customer/customer_insights_card.dart';
 import 'customer/customer_detail_frame.dart';
+import '../repositories/order_repository.dart';
 import 'common/unified_search_bar.dart';
 import '../services/customer_export_service.dart';
 import '../utils/responsive_utils.dart';
@@ -26,6 +27,7 @@ class CustomerFrame extends StatefulWidget {
 class _CustomerFrameState extends State<CustomerFrame> {
   final CustomerExportService _exportService = CustomerExportService();
   CustomerRepository? _repo;
+  OrderRepository? _orderRepo;
 
   final List<Customer> _customers = [];
   bool _isLoading = true;
@@ -64,6 +66,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
   Future<void> _initRepo() async {
     final db = await DatabaseHelper.instance.db;
     _repo = CustomerRepository(db);
+    _orderRepo = OrderRepository();
     await _loadNextPage();
     setState(() => _isLoading = false);
   }
@@ -425,8 +428,11 @@ class _CustomerFrameState extends State<CustomerFrame> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            CustomerDetailFrame(customer: customer, repository: _repo!),
+        builder: (context) => CustomerDetailFrame(
+          customer: customer,
+          repository: _repo!,
+          orderRepo: _orderRepo!,
+        ),
       ),
     ).then((_) => _resetPagination());
   }

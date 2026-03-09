@@ -12,14 +12,26 @@ import '../core/services/audit_logger.dart';
 import '../services/auth_service.dart';
 import 'order/pdf_export_helper.dart';
 import 'purchase_pdf_export_helper.dart';
+import 'purchase_form.dart';
+import '../repositories/product_repository.dart';
+import '../repositories/supplier_repo.dart';
+import '../repositories/supplier_payment_repo.dart';
+import '../dao/purchase_item_dao.dart';
+import '../dao/product_batch_dao.dart';
 
 class PurchaseDetailFrame extends StatefulWidget {
   final PurchaseRepository repo;
+  final ProductRepository productRepo; // 👈 Added
+  final SupplierRepository supplierRepo; // 👈 Added
+  final SupplierPaymentRepository paymentRepo; // 👈 Added
   final Purchase purchase;
 
   const PurchaseDetailFrame({
     super.key,
     required this.repo,
+    required this.productRepo,
+    required this.supplierRepo,
+    required this.paymentRepo,
     required this.purchase,
   });
 
@@ -31,6 +43,7 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
   late Future<List<PurchaseItem>> _itemsFuture;
   late Purchase _purchase;
   Supplier? _supplier;
+  final thermalPrinting = ThermalPrintingService(); // 👈 Added
 
   @override
   void initState() {
@@ -45,6 +58,43 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
     setState(() => _supplier = s);
   }
 
+  void _editPurchase() async {
+    // Fetch items and batches for this purchase
+    final db = await DatabaseHelper.instance.db;
+    final items = await PurchaseItemDao(db).getItemsByPurchaseId(_purchase.id);
+    final batches = await ProductBatchDao(
+      db,
+    ).getBatchesByPurchaseId(_purchase.id);
+
+    if (!mounted) return;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PurchaseForm(
+          repo: widget.repo,
+          productRepo: widget.productRepo,
+          supplierRepo: widget.supplierRepo,
+          paymentRepo: widget.paymentRepo,
+          existingPurchase: _purchase,
+          existingItems: items,
+          existingBatches: batches,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // Refresh local data
+      final updated = await widget.repo.getPurchaseById(_purchase.id);
+      if (updated != null) {
+        setState(() {
+          _purchase = updated;
+          _itemsFuture = widget.repo.getItemsByPurchaseId(_purchase.id);
+        });
+        _loadSupplier();
+      }
+    }
+  }
+
   Future<void> _addPayment() async {
     // Enhanced dialog with amount and payment method
     final result = await showDialog<Map<String, dynamic>>(
@@ -53,64 +103,36 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
     );
 
     if (result != null) {
-      final amount = result['amount'] as double;
-      final method = result['method'] as String;
-      final reference = result['reference'] as String?;
-      final note = result['note'] as String?;
+      final amount = (result['amount'] as num? ?? 0.0).toDouble();
+      final method = result['method']?.toString() ?? "Cash";
+      final reference = result['reference']?.toString();
+      final note = result['note']?.toString();
 
       try {
-        // Update purchase
-        final newPaid = _purchase.paid + amount;
-        final newPending = _purchase.total - newPaid;
-
-        final updated = _purchase.copyWith(
-          paid: newPaid,
-          pending: newPending,
-          updatedAt: DateTime.now().toIso8601String(),
+        // ✅ Use repository for adding payment
+        await widget.paymentRepo.addPayment(
+          _purchase.supplierId,
+          amount,
+          purchaseId: _purchase.id,
+          method: method,
+          transactionRef: reference,
+          note:
+              note ??
+              'Payment for Purchase #${_purchase.displayId ?? _purchase.invoiceNo}',
         );
 
-        await widget.repo.updatePurchase(updated);
+        // Refresh local data from repository
+        final updated = await widget.repo.getPurchaseById(_purchase.id);
+        final updatedSupplier = await widget.supplierRepo.getSupplierById(
+          _purchase.supplierId,
+        );
 
-        // Update supplier balance
-        if (_supplier != null) {
-          final updatedSupplier = _supplier!.copyWith(
-            pendingAmount: _supplier!.pendingAmount - amount,
-          );
-          await widget.repo.updateSupplier(updatedSupplier);
-          _supplier = updatedSupplier;
+        if (updated != null) {
+          setState(() {
+            _purchase = updated;
+            _supplier = updatedSupplier;
+          });
         }
-
-        // ✅ Create payment record in supplier_payments table
-        final db = await DatabaseHelper.instance.db;
-        final paymentId = DateTime.now().millisecondsSinceEpoch.toString();
-        final paymentData = {
-          'id': paymentId,
-          'supplier_id': _purchase.supplierId,
-          'purchase_id': _purchase.id,
-          'amount': amount,
-          'method': method,
-          'transaction_ref': reference,
-          'note': note ?? 'Payment for Purchase #${_purchase.invoiceNo}',
-          'date': DateTime.now().toIso8601String(),
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-          'deleted': 0,
-          'is_synced': 0,
-        };
-
-        await db.insert('supplier_payments', paymentData);
-
-        // ✅ Add audit log for payment creation
-        await AuditLogger.log(
-          'CREATE',
-          'supplier_payments',
-          recordId: paymentId,
-          userId: AuthService.instance.currentUser?.id ?? 'system',
-          newData: paymentData,
-          txn: db,
-        );
-
-        setState(() => _purchase = updated);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -164,6 +186,11 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
               ),
             ),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.white),
+                tooltip: "Edit Purchase",
+                onPressed: _editPurchase,
+              ),
               Container(
                 margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                 padding: const EdgeInsets.symmetric(
@@ -657,10 +684,9 @@ class _PurchaseDetailFrameState extends State<PurchaseDetailFrame> {
                                 },
                               )
                               .toList();
-                          await generatePurchasePdf(
+                          await generatePurchaseInvoicePdf(
                             _purchase,
-                            mappedItems,
-                            _supplier?.name ?? 'Unknown',
+                            items: mappedItems,
                           );
                         },
                         icon: const Icon(Icons.print, size: 18),

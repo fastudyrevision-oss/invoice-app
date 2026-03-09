@@ -7,12 +7,14 @@ import '../../models/purchase.dart';
 import '../../models/supplier_payment.dart';
 import 'supplier_payment_frame.dart';
 import '../../repositories/purchase_repo.dart';
+import '../../repositories/product_repository.dart'; // 👈 Added
 import '../purchase_detail_frame.dart';
 
 class SupplierDetailFrame extends StatefulWidget {
   final SupplierRepository repo;
   final SupplierPaymentRepository repo2;
   final PurchaseRepository purchaseRepo;
+  final ProductRepository productRepo; // 👈 Added
   final Supplier supplier;
 
   const SupplierDetailFrame({
@@ -20,6 +22,7 @@ class SupplierDetailFrame extends StatefulWidget {
     required this.repo,
     required this.repo2,
     required this.purchaseRepo,
+    required this.productRepo, // 👈 Added
     required this.supplier,
   });
 
@@ -249,6 +252,9 @@ class _SupplierDetailFrameState extends State<SupplierDetailFrame>
                 MaterialPageRoute(
                   builder: (_) => PurchaseDetailFrame(
                     repo: widget.purchaseRepo,
+                    productRepo: widget.productRepo,
+                    supplierRepo: widget.repo,
+                    paymentRepo: widget.repo2,
                     purchase: purchase,
                   ),
                 ),
@@ -312,6 +318,9 @@ class _SupplierDetailFrameState extends State<SupplierDetailFrame>
                   MaterialPageRoute(
                     builder: (_) => PurchaseDetailFrame(
                       repo: widget.purchaseRepo,
+                      productRepo: widget.productRepo,
+                      supplierRepo: widget.repo,
+                      paymentRepo: widget.repo2,
                       purchase: purchase,
                     ),
                   ),

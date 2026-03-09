@@ -29,6 +29,7 @@ import '../dao/supplier_report_dao.dart';
 import '../dao/supplier_payment_dao.dart';
 import '../dao/supplier_company_dao.dart';
 import '../agent/flutter_sql_agent_ai.dart';
+import '../repositories/order_repository.dart';
 import 'package:sqflite/sqflite.dart';
 import '../utils/responsive_utils.dart';
 
@@ -53,9 +54,10 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
   List<Widget> _tabViews = [];
 
   PurchaseRepository? _purchaseRepo;
-  ProductRepository? _productRepo;
+  ProductRepository? _productRepo = ProductRepository();
   SupplierRepository? _supplierRepo;
   SupplierPaymentRepository? _supplierPaymentRepo;
+  OrderRepository? _orderRepo = OrderRepository();
 
   Database? _db;
   int _expiringCount = 0;
@@ -77,7 +79,9 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     final allTabs = [
       _TabDef(
         tab: const Tab(text: "Create Order"),
-        view: const OrderFormScreen(isTab: true),
+        view: _orderRepo == null
+            ? const Center(child: CircularProgressIndicator())
+            : OrderFormScreen(repo: _orderRepo!, isTab: true),
         perm: 'orders',
       ),
       _TabDef(
@@ -108,6 +112,7 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                 repo: _supplierRepo!,
                 repo2: _supplierPaymentRepo!,
                 purchaseRepo: _purchaseRepo!,
+                productRepo: _productRepo!, // 👈 Added
               ),
         perm: 'suppliers_view',
       ),
@@ -128,7 +133,9 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
       ),
       _TabDef(
         tab: const Tab(text: "Orders"),
-        view: const OrderListScreen(),
+        view: _orderRepo == null
+            ? const Center(child: CircularProgressIndicator())
+            : OrderListScreen(repo: _orderRepo!),
         perm: 'orders',
       ),
       _TabDef(
@@ -261,6 +268,7 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         SupplierDao(),
         _purchaseRepo!,
       );
+      _orderRepo ??= OrderRepository();
 
       _updateTabs();
       _ensureController();

@@ -102,16 +102,7 @@ class DatabaseHelper {
         }
 
         // Mobile/Desktop: SQLite
-        String path;
-        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-          final appSupportDir = await getApplicationSupportDirectory();
-          path = join(appSupportDir.path, "invoice_app.db");
-          // Ensure directory exists
-          await Directory(appSupportDir.path).create(recursive: true);
-        } else {
-          final dbPath = await sqflite.getDatabasesPath();
-          path = join(dbPath, "invoice_app.db");
-        }
+        String path = await _getDatabasePath();
 
         logger.info('Database', "📂 Opening database at: $path");
 
@@ -369,11 +360,24 @@ class DatabaseHelper {
     }
   }
 
+  /// Helper to get the database path (mobile/desktop)
+  Future<String> _getDatabasePath() async {
+    if (kIsWeb) return 'invoice_app.db';
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      final appSupportDir = await getApplicationSupportDirectory();
+      final dirPath = appSupportDir.path;
+      await Directory(dirPath).create(recursive: true);
+      return join(dirPath, "invoice_app.db");
+    } else {
+      final dbPath = await sqflite.getDatabasesPath();
+      return join(dbPath, "invoice_app.db");
+    }
+  }
+
   /// Returns the file path for SQLite databases (mobile/desktop)
   Future<String?> get dbPath async {
     if (kIsWeb) return null; // Web does not have a physical file
-    if (_db == null) throw Exception("Database not initialized");
-    return _db!.path; // sqflite database path
+    return await _getDatabasePath();
   }
 
   /// Close the database safely (does nothing for web)
@@ -883,25 +887,6 @@ class DatabaseHelper {
       'CREATE INDEX IF NOT EXISTS idx_invoices_status_date ON invoices(status, date DESC)',
     );
 
-    // Products extra column
-    await addColumnIfNotExists(
-      db,
-      "products",
-      "is_deleted",
-      "INTEGER DEFAULT 0",
-    );
-
-    // Purchase items extra columns
-    await addColumnIfNotExists(db, "purchase_items", "product_name", "TEXT");
-    await addColumnIfNotExists(
-      db,
-      "purchase_items",
-      "cost_price",
-      "REAL DEFAULT 0",
-    );
-    // Users permissions
-    await addColumnIfNotExists(db, "users", "permissions", "TEXT");
-
     await batch.commit(noResult: true);
     logger.info('Database', "✅ Schema created successfully");
   }
@@ -1108,6 +1093,34 @@ class DatabaseHelper {
     } catch (e) {
       logger.error('Database', "⚠️ Error creating table $tableName", error: e);
       rethrow;
+    }
+  }
+
+  /// ✅ Reset the database (destructive)
+  Future<void> resetDatabase() async {
+    if (kIsWeb) {
+      if (_webDb == null) return;
+      // For Sembast web, we clear all records in all stores
+      for (var table in _tables) {
+        await _stores[table]!.delete(_webDb!);
+      }
+      logger.info('Database', "✅ Web database reset (all stores cleared)");
+    } else {
+      final path = await _getDatabasePath();
+      // Safely close if initialized
+      if (_db != null) {
+        await close();
+      }
+      if (path.isNotEmpty) {
+        final file = File(path);
+        if (await file.exists()) {
+          await file.delete();
+          logger.info('Database', "🗑️ Database file deleted: $path");
+        }
+      }
+      _initCompleter = null; // Reset completer to allow re-init
+      _db = null; // Ensure null before re-init
+      await init(); // Re-create schema
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:dropdown_search/dropdown_search.dart';
 import '../../repositories/supplier_repo.dart';
 import '../../repositories/supplier_payment_repo.dart';
 import '../../repositories/purchase_repo.dart';
+import '../../repositories/product_repository.dart'; // 👈 Added
 import '../../models/supplier.dart';
 import '../../models/supplier_company.dart';
 import '../../services/supplier_export_service.dart';
@@ -20,11 +21,14 @@ class SupplierFrame extends StatefulWidget {
   final SupplierRepository repo;
   final SupplierPaymentRepository repo2;
   final PurchaseRepository purchaseRepo;
+  final ProductRepository productRepo; // 👈 Added
+
   const SupplierFrame({
     super.key,
     required this.repo,
     required this.repo2,
     required this.purchaseRepo,
+    required this.productRepo, // 👈 Added
   });
 
   @override
@@ -619,6 +623,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
                               repo: widget.repo,
                               repo2: widget.repo2,
                               purchaseRepo: widget.purchaseRepo,
+                              productRepo: widget.productRepo, // 👈 Added
                             ),
                           ),
                         ).then((_) => _resetAndLoad()),
@@ -693,6 +698,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
             repo: widget.repo,
             repo2: widget.repo2,
             purchaseRepo: widget.purchaseRepo,
+            productRepo: widget.productRepo, // 👈 Added
           ),
         ),
       ).then((_) => _resetAndLoad()),
@@ -790,6 +796,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
               repo: widget.repo,
               repo2: widget.repo2,
               purchaseRepo: widget.purchaseRepo,
+              productRepo: widget.productRepo, // 👈 Added
             ),
           ),
         ).then((_) => _resetAndLoad()),
@@ -868,6 +875,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
                       repo: widget.repo,
                       repo2: widget.repo2,
                       purchaseRepo: widget.purchaseRepo,
+                      productRepo: widget.productRepo, // 👈 Added
                     ),
                   ),
                 ).then((_) => _resetAndLoad());

@@ -21,14 +21,20 @@ class PurchaseItem {
 
   factory PurchaseItem.fromMap(Map<String, dynamic> map) {
     return PurchaseItem(
-      id: map['id'],
-      purchaseId: map['purchase_id'],
-      productId: map['product_id'],
-      qty: map['qty'],
-      purchasePrice: map['purchase_price'] * 1.0,
-      sellPrice: map['sell_price'] * 1.0,
-      batchNo: map['batch_no'],
-      expiryDate: map['expiry_date'],
+      id: map['id']?.toString() ?? "",
+      purchaseId: map['purchase_id']?.toString() ?? "",
+      productId: map['product_id']?.toString() ?? "",
+      qty: (map['qty'] is int)
+          ? map['qty'] as int
+          : int.tryParse(map['qty']?.toString() ?? '0') ?? 0,
+      purchasePrice: (map['purchase_price'] is num)
+          ? (map['purchase_price'] as num).toDouble()
+          : double.tryParse(map['purchase_price']?.toString() ?? '0') ?? 0.0,
+      sellPrice: (map['sell_price'] is num)
+          ? (map['sell_price'] as num).toDouble()
+          : double.tryParse(map['sell_price']?.toString() ?? '0') ?? 0.0,
+      batchNo: map['batch_no']?.toString() ?? "",
+      expiryDate: map['expiry_date']?.toString(),
     );
   }
 

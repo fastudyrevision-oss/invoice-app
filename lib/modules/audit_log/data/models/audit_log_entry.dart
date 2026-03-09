@@ -36,14 +36,16 @@ class AuditLogEntry {
 
   factory AuditLogEntry.fromMap(Map<String, dynamic> map) {
     return AuditLogEntry(
-      id: map['id'],
-      action: map['action'],
-      tableName: map['table_name'],
-      recordId: map['record_id'],
+      id: map['id']?.toString() ?? "",
+      action: map['action']?.toString() ?? "UNKNOWN",
+      tableName: map['table_name']?.toString() ?? "unknown",
+      recordId: map['record_id']?.toString() ?? "",
       oldData: map['old_data'] != null ? jsonDecode(map['old_data']) : null,
       newData: map['new_data'] != null ? jsonDecode(map['new_data']) : null,
-      userId: map['user_id'],
-      timestamp: DateTime.parse(map['timestamp']),
+      userId: map['user_id']?.toString() ?? "system",
+      timestamp: map['timestamp'] != null
+          ? DateTime.parse(map['timestamp'].toString())
+          : DateTime.now(),
     );
   }
 }

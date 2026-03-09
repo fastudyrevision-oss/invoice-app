@@ -30,13 +30,13 @@ class AppUser {
 
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
-      id: map['id'] ?? '',
-      username: map['username'] ?? '',
-      passwordHash: map['password_hash'] ?? '',
-      role: map['role'] ?? 'staff',
+      id: (map['id']?.toString() ?? ""),
+      username: map['username']?.toString() ?? '',
+      passwordHash: map['password_hash']?.toString() ?? '',
+      role: map['role']?.toString() ?? 'staff',
       permissions: (map['permissions'] as String?)?.split(',') ?? [],
       createdAt: map['created_at'] != null
-          ? DateTime.parse(map['created_at'])
+          ? DateTime.tryParse(map['created_at'].toString())
           : null,
     );
   }

@@ -13,10 +13,14 @@ import 'purchase_form.dart';
 import '../repositories/supplier_payment_repo.dart';
 import 'purchase_insights_card.dart';
 import 'common/unified_search_bar.dart';
+import '../dao/purchase_item_dao.dart';
+import '../dao/product_batch_dao.dart';
 import '../services/purchase_export_service.dart';
-import '../utils/responsive_utils.dart';
-import '../services/thermal_printer/index.dart';
 import '../services/logger_service.dart';
+import '../services/thermal_printer/thermal_printing_service.dart';
+import '../db/database_helper.dart';
+import '../utils/responsive_utils.dart';
+import '../exceptions/stock_exception.dart';
 
 enum PurchaseViewMode { table, compact, card }
 
@@ -39,7 +43,10 @@ class PurchaseFrame extends StatefulWidget {
 }
 
 class _PurchaseFrameState extends State<PurchaseFrame> {
-  final PurchaseExportService _exportService = PurchaseExportService();
+  final _exportService = PurchaseExportService();
+  final thermalPrinting = ThermalPrintingService();
+  LoggerService get logger => LoggerService.instance;
+
   List<Purchase> _allPurchases = [];
   List<Purchase> _displayedPurchases = [];
   List<Supplier> _suppliers = [];
@@ -381,12 +388,142 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.cancel, color: Colors.redAccent),
+              leading: const Icon(Icons.edit, color: Colors.blue),
+              title: const Text("Edit Purchase"),
+              onTap: () async {
+                Navigator.pop(context);
+
+                // Fetch items and batches for this purchase
+                final db = await DatabaseHelper.instance.db;
+                final items = await PurchaseItemDao(
+                  db,
+                ).getItemsByPurchaseId(purchase.id);
+                final batches = await ProductBatchDao(
+                  db,
+                ).getBatchesByPurchaseId(purchase.id);
+
+                if (!context.mounted) return;
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PurchaseForm(
+                      repo: widget.repo,
+                      productRepo: widget.productRepo,
+                      supplierRepo: widget.supplierRepo,
+                      paymentRepo: widget.paymentRepo,
+                      existingPurchase: purchase,
+                      existingItems: items,
+                      existingBatches: batches,
+                    ),
+                  ),
+                );
+
+                if (result == true) {
+                  _loadInitialData(); // Refresh list
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("Delete Purchase"),
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeletePurchase(purchase);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cancel, color: Colors.grey),
               title: const Text("Cancel"),
               onTap: () => Navigator.pop(context),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeletePurchase(Purchase purchase) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Purchase?"),
+        content: Text(
+          "Are you sure you want to delete Purchase #${purchase.displayId ?? purchase.invoiceNo}? "
+          "This will remove the items from stock.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await widget.repo.deletePurchase(purchase.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Purchase deleted successfully")),
+          );
+          _loadInitialData(); // Refresh list
+        }
+      } catch (e) {
+        if (mounted) {
+          if (e is StockConstraintException) {
+            _showStockConflictDialog(e);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Error deleting purchase: $e")),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  void _showStockConflictDialog(StockConstraintException e) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text("Cannot Delete Purchase"),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(e.message),
+            const SizedBox(height: 16),
+            const Text(
+              "Related Invoices:",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            if (e.relatedInvoices != null)
+              ...e.relatedInvoices!.map(
+                (inv) => Padding(
+                  padding: const EdgeInsets.only(left: 8.0, bottom: 4.0),
+                  child: Text("• Invoice #$inv"),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("OK"),
+          ),
+        ],
       ),
     );
   }
@@ -728,6 +865,9 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                           MaterialPageRoute(
                             builder: (_) => PurchaseDetailFrame(
                               repo: widget.repo,
+                              productRepo: widget.productRepo,
+                              supplierRepo: widget.supplierRepo,
+                              paymentRepo: widget.paymentRepo,
                               purchase: p,
                             ),
                           ),
@@ -777,7 +917,13 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PurchaseDetailFrame(repo: widget.repo, purchase: p),
+          builder: (_) => PurchaseDetailFrame(
+            repo: widget.repo,
+            productRepo: widget.productRepo,
+            supplierRepo: widget.supplierRepo,
+            paymentRepo: widget.paymentRepo,
+            purchase: p,
+          ),
         ),
       ),
     );
@@ -852,13 +998,13 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                         Colors.white,
                         isPaid
                             ? Colors.green.withValues(alpha: 0.05)
-                            : Colors.orange.withValues(alpha: 0.05),
+                            : const Color.fromARGB(255, 0, 68, 255).withValues(alpha: 0.05),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: (isPaid ? Colors.green : Colors.orange)
+                        color: (isPaid ? Colors.green : const Color.fromARGB(255, 0, 68, 255))
                             .withValues(alpha: 0.2),
                         spreadRadius: 1,
                         blurRadius: 8,
@@ -866,7 +1012,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                       ),
                     ],
                     border: Border.all(
-                      color: (isPaid ? Colors.green : Colors.orange).withValues(
+                      color: (isPaid ? Colors.green : const Color.fromARGB(255, 0, 68, 255)).withValues(
                         alpha: 0.3,
                       ),
                       width: 1.5,
@@ -892,8 +1038,8 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                                       Colors.green.shade400,
                                     ]
                                   : [
-                                      Colors.orange.shade600,
-                                      Colors.orange.shade400,
+                                      const Color.fromARGB(255, 75, 85, 218),
+                                      const Color.fromARGB(255, 60, 38, 255),
                                     ],
                             ),
                           ),
@@ -926,6 +1072,9 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                               MaterialPageRoute(
                                 builder: (_) => PurchaseDetailFrame(
                                   repo: widget.repo,
+                                  productRepo: widget.productRepo,
+                                  supplierRepo: widget.supplierRepo,
+                                  paymentRepo: widget.paymentRepo,
                                   purchase: purchase,
                                 ),
                               ),

@@ -73,17 +73,27 @@ class ProductBatch {
   };
 
   factory ProductBatch.fromMap(Map<String, dynamic> map) => ProductBatch(
-    id: map["id"],
-    productId: map["product_id"],
-    supplierId: map["supplier_id"],
-    batchNo: map["batch_no"],
-    expiryDate: map["expiry_date"],
-    qty: map["qty"] ?? 0,
-    purchasePrice: (map["purchase_price"] ?? 0).toDouble(),
-    sellPrice: (map["sell_price"] ?? 0).toDouble(),
-    purchaseId: map["purchase_id"],
-    createdAt: map["created_at"],
-    updatedAt: map["updated_at"],
-    isSynced: map["is_synced"] ?? 0,
+    id: map["id"]?.toString() ?? "",
+    productId: map["product_id"]?.toString() ?? "",
+    supplierId: map["supplier_id"]?.toString(),
+    batchNo: map["batch_no"]?.toString() ?? "",
+    expiryDate: map["expiry_date"]?.toString(),
+    qty: (map["qty"] is int)
+        ? map["qty"] as int
+        : int.tryParse(map["qty"]?.toString() ?? '0') ?? 0,
+    purchasePrice: (map["purchase_price"] is num)
+        ? (map["purchase_price"] as num).toDouble()
+        : double.tryParse(map["purchase_price"]?.toString() ?? '0') ?? 0.0,
+    sellPrice: (map["sell_price"] is num)
+        ? (map["sell_price"] as num).toDouble()
+        : double.tryParse(map["sell_price"]?.toString() ?? '0') ?? 0.0,
+    purchaseId: map["purchase_id"]?.toString(),
+    createdAt:
+        map["created_at"]?.toString() ?? DateTime.now().toIso8601String(),
+    updatedAt:
+        map["updated_at"]?.toString() ?? DateTime.now().toIso8601String(),
+    isSynced: (map["is_synced"] is int)
+        ? map["is_synced"] as int
+        : int.tryParse(map["is_synced"]?.toString() ?? '0') ?? 0,
   );
 }

@@ -526,10 +526,104 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text("Cancel"),
           ),
-          ElevatedButton(onPressed: () {}, child: const Text("Unlock")),
+          ElevatedButton(
+            onPressed: () {
+              if (passCtrl.text == "admin123") {
+                Navigator.pop(context);
+                onAuthorized();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Incorrect Password")),
+                );
+              }
+            },
+            child: const Text("Unlock"),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _handleResetDatabase() async {
+    await _checkDeveloperPassword(() async {
+      final confirmCtrl = TextEditingController();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Reset Database?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '⚠️ CRITICAL WARNING: This will PERMANENTLY DELETE all data, including invoices, products, and customers.',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Please type "RESET" to confirm:'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: confirmCtrl,
+                    onChanged: (v) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      hintText: 'RESET',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: confirmCtrl.text.trim().toUpperCase() == "RESET"
+                      ? () => Navigator.pop(context, true)
+                      : null,
+                  child: const Text('Confirm Reset'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      if (confirmed == true) {
+        setState(() => _loading = true);
+        try {
+          await DatabaseHelper.instance.resetDatabase();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Database has been reset successfully.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            // Refresh app state
+            widget.onRestoreSuccess?.call();
+          }
+        } catch (e) {
+          logger.error('BackupScreen', 'Reset failed', error: e);
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Reset failed: $e')));
+          }
+        } finally {
+          setState(() => _loading = false);
+        }
+      }
+    });
   }
 
   Future<void> _seedData() async {
@@ -670,6 +764,16 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                                   onPressed: _confirmRestore,
                                   isDangerous: true,
                                 ),
+                                _ActionCard(
+                                  title: "Reset Database",
+                                  description:
+                                      "Wipe all data and reset the system to zero. (Developer Only)",
+                                  icon: Icons.delete_forever_outlined,
+                                  color: Colors.red,
+                                  buttonText: "Reset Now",
+                                  onPressed: _handleResetDatabase,
+                                  isDangerous: true,
+                                ),
                               ],
                             );
                           }
@@ -694,6 +798,17 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                                 color: Colors.orange,
                                 buttonText: "Restore Database",
                                 onPressed: _confirmRestore,
+                                isDangerous: true,
+                              ),
+                              const SizedBox(height: 16),
+                              _ActionCard(
+                                title: "Reset Database",
+                                description:
+                                    "Wipe all data and reset the system to zero. (Developer Only)",
+                                icon: Icons.delete_forever_outlined,
+                                color: Colors.red,
+                                buttonText: "Reset Now",
+                                onPressed: _handleResetDatabase,
                                 isDangerous: true,
                               ),
                             ],

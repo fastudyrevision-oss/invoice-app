@@ -58,23 +58,25 @@ class InvoiceItem {
   // ✅ Create from DB map
   // =====================================
   factory InvoiceItem.fromMap(Map<String, dynamic> map) => InvoiceItem(
-    id: map["id"],
-    invoiceId: map["invoice_id"],
-    productId: map["product_id"],
+    id: map["id"]?.toString() ?? "",
+    invoiceId: map["invoice_id"]?.toString() ?? "",
+    productId: map["product_id"]?.toString() ?? "",
     qty: map["qty"] is int
         ? map["qty"]
-        : int.tryParse(map["qty"].toString()) ?? 0,
-    price: (map["price"] ?? 0).toDouble(),
-    costPrice: (map["cost_price"] ?? 0).toDouble(),
-    discount: (map["discount"] ?? 0).toDouble(),
-    tax: (map["tax"] ?? 0).toDouble(),
-    batchNo: map["batch_no"],
-    createdAt: map["created_at"],
-    updatedAt: map["updated_at"],
+        : int.tryParse(map["qty"]?.toString() ?? "0") ?? 0,
+    price: (map["price"] ?? 0.0).toDouble(),
+    costPrice: (map["cost_price"] ?? 0.0).toDouble(),
+    discount: (map["discount"] ?? 0.0).toDouble(),
+    tax: (map["tax"] ?? 0.0).toDouble(),
+    batchNo: map["batch_no"]?.toString(),
+    createdAt: map["created_at"]?.toString(),
+    updatedAt: map["updated_at"]?.toString(),
 
     // 👇 Decode JSON to List<Map<String, dynamic>>
     reservedBatches: map["reserved_batches"] != null
-        ? List<Map<String, dynamic>>.from(jsonDecode(map["reserved_batches"]))
+        ? List<Map<String, dynamic>>.from(
+            jsonDecode(map["reserved_batches"].toString()),
+          )
         : null,
   );
 

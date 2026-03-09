@@ -31,13 +31,13 @@ class LedgerEntry {
   };
 
   factory LedgerEntry.fromMap(Map<String, dynamic> map) => LedgerEntry(
-    id: map["id"],
-    entityId: map["entity_id"],
-    entityType: map["entity_type"],
-    date: map["date"],
-    description: map["description"],
-    debit: map["debit"],
-    credit: map["credit"],
-    balance: map["balance"],
+    id: map["id"]?.toString() ?? "",
+    entityId: map["entity_id"]?.toString() ?? "",
+    entityType: map["entity_type"]?.toString() ?? "unknown",
+    date: map["date"]?.toString() ?? DateTime.now().toIso8601String(),
+    description: map["description"]?.toString() ?? "",
+    debit: (map["debit"] ?? 0.0).toDouble(),
+    credit: (map["credit"] ?? 0.0).toDouble(),
+    balance: (map["balance"] ?? 0.0).toDouble(),
   );
 }

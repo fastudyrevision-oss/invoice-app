@@ -5,7 +5,7 @@ import '../dao/customer_dao.dart';
 import '../db/database_helper.dart';
 import '../models/invoice.dart';
 import '../models/invoice_item.dart';
-import '../utils/id_generator.dart'; // optional helper for UUIDs or timestamp IDs
+import '../dao/product_batch_dao.dart';
 
 class OrderRepository {
   final dbHelper = DatabaseHelper.instance;
@@ -17,53 +17,7 @@ class OrderRepository {
     return await invoiceDao.getAll();
   }
 
-  /// ✅ Create new order (Invoice + Items + Stock + Pending)
-  Future<void> createOrder({
-    required String customerId,
-    required String customerName,
-    required List<InvoiceItem> items,
-    required double total,
-    required double discount,
-    required double paid,
-    required double pending,
-  }) async {
-    final db = await dbHelper.db;
-    final now = DateTime.now().toIso8601String();
-
-    await db.transaction((txn) async {
-      // 🧾 Create Invoice
-      final invoice = Invoice(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        customerId: customerId,
-        total: total,
-        discount: discount,
-        paid: paid,
-        pending: pending,
-        date: now,
-        createdAt: now,
-        updatedAt: now,
-      );
-
-      final invoiceDao = InvoiceDao(txn);
-      await invoiceDao.insert(invoice, customerName); // pass customerName
-
-      // 💰 Add items
-      final itemDao = InvoiceItemDao(txn);
-      final productDao = ProductDao(txn);
-      for (final item in items) {
-        await itemDao.insert(item);
-
-        // 📉 Decrease stock safely
-        await productDao.decreaseStock(item.productId, item.qty);
-      }
-
-      // 🧍‍♂️ Update customer's pending balance
-      final customerDao = CustomerDao(txn);
-      await customerDao.updatePendingAmount(customerId, pending);
-    });
-  }
-
-  /// Save an order (invoice + items + stock adjustments)
+  /// Save a new order (invoice + items + stock adjustments)
   Future<void> saveOrder(
     Invoice invoice,
     String customerName,
@@ -72,85 +26,179 @@ class OrderRepository {
     await dbHelper.runInTransaction((txn) async {
       final invoiceDao = InvoiceDao(txn);
       final itemDao = InvoiceItemDao(txn);
+      final batchDao = ProductBatchDao(txn);
       final productDao = ProductDao(txn);
       final customerDao = CustomerDao(txn);
 
-      // ------------------------------
-      // 1️⃣ Insert invoice
-      // ------------------------------
+      // --- 1. INSERT INVOICE ---
       await invoiceDao.insert(invoice, customerName);
 
-      // ------------------------------
-      // 2️⃣ For each item: handle batches + stock deduction
-      // ------------------------------
+      // --- 2. DEDUCT STOCK (FIFO) ---
       for (final item in items) {
-        double remainingQty = item.qty.toDouble();
-
-        // --- Fetch available batches (FIFO / earliest expiry first)
-        final availableBatches = await txn.rawQuery(
-          '''
-          SELECT id, qty, batch_no, expiry_date
-          FROM product_batches
-          WHERE product_id = ? AND qty > 0
-          ORDER BY expiry_date ASC, created_at ASC
-        ''',
-          [item.productId],
+        int remainingQty = item.qty;
+        final batches = await batchDao.getAvailableBatches(
+          item.productId,
+          beforeDate: invoice.date,
         );
 
-        if (availableBatches.isEmpty) {
+        if (batches.isEmpty) {
           throw Exception(
             'No available stock batches for product ${item.productId}',
           );
         }
 
-        for (final batch in availableBatches) {
+        final reserved = <Map<String, dynamic>>[];
+        for (final batch in batches) {
           if (remainingQty <= 0) break;
 
-          final batchQty = (batch['qty'] ?? 0) as num;
-          final usedQty = batchQty >= remainingQty ? remainingQty : batchQty;
+          final int deductQty = remainingQty > batch.qty
+              ? batch.qty
+              : remainingQty;
+          final int newBatchQty = batch.qty - deductQty;
 
-          // --- Insert invoice item (per batch)
-          final batchItem = item.copyWith(
-            id: generateId(),
-            qty: usedQty.toInt(),
-            batchNo: batch['batch_no']?.toString(),
-          );
-
-          await itemDao.insert(batchItem);
-
-          // --- Deduct from batch stock
           await txn.rawUpdate(
-            'UPDATE product_batches SET qty = qty - ? WHERE id = ?',
-            [usedQty, batch['id']],
+            'UPDATE product_batches SET qty = ?, updated_at = ? WHERE id = ?',
+            [newBatchQty, DateTime.now().toIso8601String(), batch.id],
           );
 
-          remainingQty -= usedQty;
+          reserved.add({
+            "batchId": batch.id,
+            "supplierId": batch.supplierId,
+            "qty": deductQty,
+            "purchasePrice": batch.purchasePrice,
+          });
+
+          remainingQty -= deductQty;
         }
 
-        // --- Ensure full allocation happened
         if (remainingQty > 0) {
           throw Exception(
             'Insufficient stock for product ${item.productId}, short by $remainingQty units',
           );
         }
 
-        // --- Update total product quantity
+        // Insert item with reserved batches
+        final newItem = item.copyWith(
+          invoiceId: invoice.id,
+          reservedBatches: reserved,
+        );
+        await itemDao.insert(newItem);
+
+        // Update total product quantity
         await productDao.decreaseStock(item.productId, item.qty);
       }
 
-      // ------------------------------
-      // 3️⃣ Update customer pending balance
-      // ------------------------------
+      // --- 3. UPDATE CUSTOMER BALANCE ---
       await customerDao.updatePendingAmount(
         invoice.customerId,
         invoice.pending,
       );
+    });
+  }
 
-      // ------------------------------
-      // 4️⃣ Ledger & Audit logging hooks (optional)
-      // ------------------------------
-      // await insertLedgerEntry(invoice);
-      // await insertAuditLog('CREATE_ORDER', 'invoices', invoice.id);
+  /// Update an existing order (invoice + items + stock adjustments with reversion)
+  Future<void> updateOrder(
+    Invoice invoice,
+    String customerName,
+    List<InvoiceItem> newItems,
+    List<InvoiceItem> oldItems,
+  ) async {
+    await dbHelper.runInTransaction((txn) async {
+      final invoiceDao = InvoiceDao(txn);
+      final itemDao = InvoiceItemDao(txn);
+      final batchDao = ProductBatchDao(txn);
+      final productDao = ProductDao(txn);
+      final customerDao = CustomerDao(txn);
+
+      // --- 1. REVERT OLD STOCK EFFECTS ---
+      for (final oldItem in oldItems) {
+        if (oldItem.reservedBatches != null) {
+          for (final reservation in oldItem.reservedBatches!) {
+            final String batchId = reservation['batchId'];
+            final int reservedQty = (reservation['qty'] as num).toInt();
+
+            // Return quantity to the specific batch
+            await txn.rawUpdate(
+              'UPDATE product_batches SET qty = qty + ?, updated_at = ? WHERE id = ?',
+              [reservedQty, DateTime.now().toIso8601String(), batchId],
+            );
+          }
+        }
+
+        // Return total product quantity
+        await productDao.updateQuantity(
+          oldItem.productId,
+          (await productDao.getById(oldItem.productId))!.quantity + oldItem.qty,
+        );
+      }
+
+      // Delete old items
+      await itemDao.deleteByInvoiceId(invoice.id);
+
+      // --- 2. UPDATE INVOICE ---
+      final oldInvoice = await invoiceDao.getById(invoice.id);
+      await invoiceDao.update(invoice, isExplicitEdit: true);
+
+      // --- 3. DEDUCT NEW STOCK (FIFO) ---
+      for (final item in newItems) {
+        int remainingQty = item.qty;
+        final batches = await batchDao.getAvailableBatches(
+          item.productId,
+          beforeDate: invoice.date,
+        );
+
+        if (batches.isEmpty) {
+          throw Exception(
+            'No available stock batches for product ${item.productId}',
+          );
+        }
+
+        final reserved = <Map<String, dynamic>>[];
+        for (final batch in batches) {
+          if (remainingQty <= 0) break;
+
+          final int deductQty = remainingQty > batch.qty
+              ? batch.qty
+              : remainingQty;
+          final int newBatchQty = batch.qty - deductQty;
+
+          await txn.rawUpdate(
+            'UPDATE product_batches SET qty = ?, updated_at = ? WHERE id = ?',
+            [newBatchQty, DateTime.now().toIso8601String(), batch.id],
+          );
+
+          reserved.add({
+            "batchId": batch.id,
+            "supplierId": batch.supplierId,
+            "qty": deductQty,
+            "purchasePrice": batch.purchasePrice,
+          });
+
+          remainingQty -= deductQty;
+        }
+
+        if (remainingQty > 0) {
+          throw Exception(
+            'Insufficient stock for product ${item.productId}, short by $remainingQty units',
+          );
+        }
+
+        // Insert new item with reserved batches
+        final newItem = item.copyWith(
+          invoiceId: invoice.id,
+          reservedBatches: reserved,
+        );
+        await itemDao.insert(newItem);
+
+        // Update total product quantity
+        await productDao.decreaseStock(item.productId, item.qty);
+      }
+
+      // --- 4. UPDATE CUSTOMER BALANCE ---
+      if (oldInvoice != null) {
+        final pendingDelta = invoice.pending - oldInvoice.pending;
+        await customerDao.updatePendingAmount(invoice.customerId, pendingDelta);
+      }
     });
   }
 
@@ -168,5 +216,38 @@ class OrderRepository {
     ''',
       [productId],
     );
+  }
+
+  /// Delete an order and return stock
+  Future<void> deleteOrder(Invoice invoice) async {
+    await dbHelper.runInTransaction((txn) async {
+      final invoiceDao = InvoiceDao(txn);
+      final itemDao = InvoiceItemDao(txn);
+      final batchDao = ProductBatchDao(txn);
+      final customerDao = CustomerDao(txn);
+      final productDao = ProductDao(txn);
+
+      // 1. Get items to return stock
+      final items = await itemDao.getByInvoiceId(invoice.id);
+      for (final item in items) {
+        if (item.reservedBatches != null) {
+          for (final b in item.reservedBatches!) {
+            await batchDao.addBackToBatch(
+              (b['batchId']?.toString() ?? ""),
+              (b['qty'] as num? ?? 0).toInt(),
+            );
+          }
+        }
+        await productDao.refreshProductQuantityFromBatches(item.productId);
+      }
+
+      // 2. Delete invoice and items
+      await itemDao.deleteByInvoiceId(invoice.id);
+      await invoiceDao.delete(invoice.id);
+
+      // 3. Update customer balance
+      final realPending = invoice.total - invoice.discount - invoice.paid;
+      await customerDao.updatePendingAmount(invoice.customerId, -realPending);
+    });
   }
 }

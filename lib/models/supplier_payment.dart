@@ -91,17 +91,17 @@ class SupplierPayment {
     }
 
     return SupplierPayment(
-      id: map["id"] as String,
+      id: map["id"]?.toString() ?? "",
       displayId: map["display_id"] as int?,
-      supplierId: map["supplier_id"] as String,
-      purchaseId: map["purchase_id"] as String?,
+      supplierId: map["supplier_id"]?.toString() ?? "",
+      purchaseId: map["purchase_id"]?.toString(),
       amount: parseAmount(map["amount"]),
-      method: map["method"] as String?,
-      transactionRef: map["transaction_ref"] as String?,
-      note: map["note"] as String?,
-      date: (map["date"] as String?) ?? DateTime.now().toIso8601String(),
-      createdAt: map["created_at"] as String?,
-      updatedAt: map["updated_at"] as String?,
+      method: map["method"]?.toString(),
+      transactionRef: map["transaction_ref"]?.toString(),
+      note: map["note"]?.toString(),
+      date: map["date"]?.toString() ?? DateTime.now().toIso8601String(),
+      createdAt: map["created_at"]?.toString(),
+      updatedAt: map["updated_at"]?.toString(),
       deleted: parseInt(map["deleted"]),
     );
   }

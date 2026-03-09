@@ -4,6 +4,7 @@ import '../../models/customer.dart';
 import '../../models/invoice.dart';
 import '../../models/customer_payment.dart';
 import '../../repositories/customer_repository.dart';
+import '../../repositories/order_repository.dart';
 import '../../dao/invoice_dao.dart';
 import '../../db/database_helper.dart';
 import '../customer_payment/customer_payment_dialog.dart';
@@ -14,11 +15,13 @@ import '../../services/logger_service.dart';
 class CustomerDetailFrame extends StatefulWidget {
   final Customer customer;
   final CustomerRepository repository;
+  final OrderRepository orderRepo;
 
   const CustomerDetailFrame({
     super.key,
     required this.customer,
     required this.repository,
+    required this.orderRepo,
   });
 
   @override
@@ -443,7 +446,8 @@ class _CustomerDetailFrameState extends State<CustomerDetailFrame>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => OrderDetailScreen(invoice: order),
+                  builder: (_) =>
+                      OrderDetailScreen(invoice: order, repo: widget.orderRepo),
                 ),
               );
             },

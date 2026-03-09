@@ -372,7 +372,10 @@ class ProductDao {
   Future<void> resyncAllProducts() async {
     final allProducts = await db.query("products", columns: ["id"]);
     for (final row in allProducts) {
-      await recalculateProductFromBatches(row["id"] as String);
+      final pid = row["id"]?.toString();
+      if (pid != null) {
+        await recalculateProductFromBatches(pid);
+      }
     }
   }
 }

@@ -28,18 +28,20 @@ class Category {
   });
 
   factory Category.fromMap(Map<String, dynamic> map) => Category(
-    id: map['id'],
-    name: map['name'],
-    slug: map['slug'],
-    description: map['description'],
-    parentId: map['parent_id'],
+    id: map['id']?.toString() ?? "",
+    name: map['name']?.toString() ?? "General",
+    slug: map['slug']?.toString(),
+    description: map['description']?.toString(),
+    parentId: map['parent_id']?.toString(),
     isActive: (map['is_active'] ?? 1) == 1,
     isDeleted: (map['is_deleted'] ?? 0) == 1,
-    icon: map['icon'],
-    color: map['color'],
-    sortOrder: map['sort_order'] ?? 0,
-    createdAt: map['created_at'],
-    updatedAt: map['updated_at'],
+    icon: map['icon']?.toString(),
+    color: map['color']?.toString(),
+    sortOrder: (map['sort_order'] ?? 0) as int,
+    createdAt:
+        map['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+    updatedAt:
+        map['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
   );
 
   Map<String, dynamic> toMap() => {

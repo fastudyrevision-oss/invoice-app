@@ -20,6 +20,16 @@ class ProductBatchDao {
     await productDao.recalculateProductFromBatches(batch.productId);
   }
 
+  /// Insert a batch without triggering an immediate product recalculation.
+  /// Useful for bulk operations where recalculation is done at the end.
+  Future<void> insertBatchSimple(ProductBatch batch) async {
+    await db.insert(
+      "product_batches",
+      batch.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   /// Get all batches by product ID
   Future<List<ProductBatch>> getBatchesByProduct(String productId) async {
     final result = await db.query(
@@ -37,7 +47,7 @@ class ProductBatchDao {
       "product_batches",
       where: "purchase_id = ?",
       whereArgs: [purchaseId],
-      orderBy: "created_at DESC",
+      orderBy: "created_at ASC", // ✅ ASC matches purchase_items insertion order
     );
     return result.map((row) => ProductBatch.fromMap(row)).toList();
   }
@@ -98,16 +108,25 @@ class ProductBatchDao {
     return result.map((e) => ProductBatch.fromMap(e)).toList();
   }
 
-  /// ✅ Get available batches (respecting expiry setting)
+  /// ✅ Get available batches (respecting expiry setting and optionally a cutoff date)
   Future<List<ProductBatch>> getAvailableBatches(
     String productId, {
     bool includeExpired = true,
+    String? beforeDate, // 👈 New cutoff date for chronological integrity
   }) async {
     final now = DateTime.now();
+    String whereClause = "product_id = ? AND qty > 0";
+    List<dynamic> whereArgs = [productId];
+
+    if (beforeDate != null) {
+      whereClause += " AND created_at <= ?";
+      whereArgs.add(beforeDate);
+    }
+
     final result = await db.query(
       "product_batches",
-      where: "product_id = ? AND qty > 0",
-      whereArgs: [productId],
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: "expiry_date ASC, created_at ASC",
     );
 

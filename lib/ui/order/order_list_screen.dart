@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../repositories/order_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
@@ -12,6 +13,7 @@ import '../customer_payment/customer_payment_dialog.dart';
 import '../../db/database_helper.dart';
 import 'order_insights_card.dart';
 import 'pdf_export_helper.dart';
+import '../../dao/invoice_item_dao.dart';
 import '../../utils/responsive_utils.dart';
 import '../../services/logger_service.dart';
 import '../../utils/date_helper.dart';
@@ -20,7 +22,8 @@ import '../common/unified_search_bar.dart';
 enum OrderViewMode { table, compact, card }
 
 class OrderListScreen extends StatefulWidget {
-  const OrderListScreen({super.key});
+  final OrderRepository repo;
+  const OrderListScreen({super.key, required this.repo});
 
   @override
   State<OrderListScreen> createState() => _OrderListScreenState();
@@ -309,7 +312,7 @@ class _OrderListScreenState extends State<OrderListScreen>
   Future<void> _navigateToForm() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const OrderFormScreen()),
+      MaterialPageRoute(builder: (_) => OrderFormScreen(repo: widget.repo)),
     );
     await _loadOrders();
   }
@@ -426,6 +429,38 @@ class _OrderListScreenState extends State<OrderListScreen>
                 if (file != null) await shareOrPrintPdf(file);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Colors.blue),
+              title: const Text("Edit Order"),
+              onTap: () async {
+                Navigator.pop(context);
+                final db = await dbHelper.db;
+                final itemDao = InvoiceItemDao(db);
+                final items = await itemDao.getByInvoiceId(invoice.id);
+
+                if (!mounted) return;
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OrderFormScreen(
+                      repo: widget.repo,
+                      existingInvoice: invoice,
+                      existingItems: items,
+                    ),
+                  ),
+                );
+                if (!mounted) return;
+                _loadOrders(); // Refresh list after edit
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("Delete Order"),
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeleteOrder(invoice);
+              },
+            ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.cancel, color: Colors.redAccent),
@@ -436,6 +471,47 @@ class _OrderListScreenState extends State<OrderListScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteOrder(Invoice invoice) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Order?"),
+        content: Text(
+          "Are you sure you want to delete Invoice #${invoice.displayId ?? invoice.invoiceNo}? "
+          "This will return all items to stock.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await widget.repo.deleteOrder(invoice);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Order deleted successfully")),
+          );
+          _loadOrders();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("Error deleting order: $e")));
+        }
+      }
+    }
   }
 
   Future<void> _payInvoice(Invoice invoice) async {
@@ -980,7 +1056,6 @@ class _OrderListScreenState extends State<OrderListScreen>
 
   Widget _buildCardItem(Invoice o) {
     final isPending = o.pending > 0;
-    final date = _safeParseDate(o.date) ?? DateTime.now();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1137,7 +1212,9 @@ class _OrderListScreenState extends State<OrderListScreen>
   void _viewDetails(Invoice o) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => OrderDetailScreen(invoice: o)),
+      MaterialPageRoute(
+        builder: (_) => OrderDetailScreen(invoice: o, repo: widget.repo),
+      ),
     );
   }
 }

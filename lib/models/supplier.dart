@@ -76,18 +76,20 @@ class Supplier {
 
   factory Supplier.fromMap(Map<String, dynamic> map) {
     return Supplier(
-      id: map["id"],
-      name: map["name"],
-      phone: map["phone"],
-      address: map["address"],
-      contactPerson: map["contact_person"],
-      companyId: map["company_id"],
+      id: map["id"]?.toString() ?? "",
+      name: map["name"]?.toString() ?? "Supplier",
+      phone: map["phone"]?.toString(),
+      address: map["address"]?.toString(),
+      contactPerson: map["contact_person"]?.toString(),
+      companyId: map["company_id"]?.toString(),
       pendingAmount: _toDouble(map["pending_amount"]),
       creditLimit: _toDouble(map["credit_limit"]),
-      createdAt: map["created_at"],
-      updatedAt: map["updated_at"],
+      createdAt:
+          map["created_at"]?.toString() ?? DateTime.now().toIso8601String(),
+      updatedAt:
+          map["updated_at"]?.toString() ?? DateTime.now().toIso8601String(),
       isSynced: map["is_synced"] == 1,
-      deleted: map["deleted"] ?? 0, // parse deleted
+      deleted: (map["deleted"] ?? 0) as int,
     );
   }
 

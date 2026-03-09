@@ -92,21 +92,23 @@ class Product {
 
   factory Product.fromMap(Map<String, dynamic> map) {
     return Product(
-      id: map["id"] ?? "",
-      name: map["name"] ?? "",
-      description: map["description"] ?? "",
-      sku: map["sku"] ?? "N/A",
-      defaultUnit: map["default_unit"] ?? "pcs",
-      costPrice: (map["cost_price"] ?? 0).toDouble(),
-      sellPrice: (map["sell_price"] ?? 0).toDouble(),
+      id: map["id"]?.toString() ?? "",
+      name: map["name"]?.toString() ?? "",
+      description: map["description"]?.toString() ?? "",
+      sku: map["sku"]?.toString() ?? "N/A",
+      defaultUnit: map["default_unit"]?.toString() ?? "pcs",
+      costPrice: (map["cost_price"] ?? 0.0).toDouble(),
+      sellPrice: (map["sell_price"] ?? 0.0).toDouble(),
       quantity: (map["quantity"] ?? 0).toInt(),
       minStock: (map["min_stock"] ?? 0).toInt(),
       trackExpiry: (map["track_expiry"] ?? 0) == 1,
-      supplierId: map["supplier_id"],
-      createdAt: map["created_at"] ?? DateTime.now().toIso8601String(),
-      updatedAt: map["updated_at"] ?? DateTime.now().toIso8601String(),
-      isDeleted: (map["is_deleted"] ?? 0) == 1, // ✅ default false
-      categoryId: map['category_id'], // NEW
+      supplierId: map["supplier_id"]?.toString(),
+      createdAt:
+          map["created_at"]?.toString() ?? DateTime.now().toIso8601String(),
+      updatedAt:
+          map["updated_at"]?.toString() ?? DateTime.now().toIso8601String(),
+      isDeleted: (map["is_deleted"] ?? 0) == 1,
+      categoryId: map['category_id']?.toString(),
     );
   }
 }
