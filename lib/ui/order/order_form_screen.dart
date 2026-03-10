@@ -30,6 +30,7 @@ import '../../dao/supplier_report_dao.dart';
 import '../../dao/supplier_company_dao.dart';
 
 import '../../repositories/order_repository.dart';
+import '../product_dialogue_frame.dart';
 
 class OrderFormScreen extends StatefulWidget {
   final OrderRepository repo; // 👈 Injected repository
@@ -301,20 +302,50 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     );
 
     if (!mounted) return;
+
+    // 🚀 Added Slide Animation for UX "Shifting"
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => PurchaseForm(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 400),
+        pageBuilder: (context, animation, secondaryAnimation) => PurchaseForm(
           repo: purchaseRepo,
           productRepo: productRepo,
           supplierRepo: supplierRepo,
           paymentRepo: paymentRepo,
           prefilledProduct: _selectedProduct,
         ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOutQuart;
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
       ),
     );
 
-    // After returning, refresh stock and products
+    // After returning, refresh stock and all dropdown data (products/customers)
+    await _loadDropdownData();
+
+    // 🐛 BUG FIX: Update price controller with latest sellPrice after purchase refresh
+    if (_selectedProduct != null) {
+      final updatedProduct = _products.firstWhere(
+        (p) => p.id == _selectedProduct!.id,
+        orElse: () => _selectedProduct!,
+      );
+      setState(() {
+        _selectedProduct = updatedProduct;
+        _priceController.text = updatedProduct.sellPrice.toString();
+      });
+    }
+
     await _loadAvailableStock();
   }
 
@@ -460,7 +491,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text("Unsaved Item Details"),
           content: const Text(
-            "There is an item currently being edited in the form that is not added to the order yet. Do you want to DISCARD those form details and save the order as is?",
+            "An item is currently being edited in the form but hasn't been added to the list. Do you want to DISCARD the current form inputs and save the order with the existing list items?",
           ),
           actions: [
             TextButton(
@@ -494,7 +525,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text("Overpayment Detected"),
           content: Text(
-            "The paid amount exceeds the total due by ${_selectedCustomer != null ? "" : "Rs "}${overpaidAmount.toStringAsFixed(2)}.\n\n"
+            "The paid amount exceeds the total due by Rs ${overpaidAmount.toStringAsFixed(2)}.\n\n"
             "Do you want to credit this excess amount to the customer's wallet?",
           ),
           actions: [
@@ -700,6 +731,31 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         _customers.add(result);
         _selectedCustomer = result;
       });
+    }
+  }
+
+  Future<void> _showAddProductDialog() async {
+    final productRepo = ProductRepository();
+    final supplierRepo = SupplierRepository(
+      SupplierDao(),
+      SupplierPaymentDao(),
+      SupplierReportDao(),
+      SupplierCompanyDao(),
+    );
+
+    final result = await showDialog<Product>(
+      context: context,
+      builder: (context) =>
+          ProductDialog(productRepo: productRepo, supplierRepo: supplierRepo),
+    );
+
+    if (result != null) {
+      setState(() {
+        _products.add(result);
+        _selectedProduct = result;
+      });
+      // 🚀 Immediately navigate to purchase form for the new product
+      await _navigateToPurchaseForm();
     }
   }
 
@@ -942,6 +998,18 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     },
                   ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.add_box, color: Colors.green),
+                    onPressed: _showAddProductDialog,
+                    tooltip: "Add New Product",
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   flex: 1,
@@ -951,12 +1019,21 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     decoration: InputDecoration(
                       labelText: "Qty",
+                      errorStyle: const TextStyle(fontSize: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return "Req";
+                      final val = int.tryParse(v);
+                      if (val == null || val <= 0) return ">0";
+                      if (val > _availableStock) return "Low Stock";
+                      return null;
+                    },
                     onFieldSubmitted: (_) => _priceFocusNode.requestFocus(),
                   ),
                 ),
@@ -970,12 +1047,20 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       decimal: true,
                     ),
                     textAlign: TextAlign.center,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     decoration: InputDecoration(
                       labelText: "Price",
+                      errorStyle: const TextStyle(fontSize: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return "Req";
+                      final val = double.tryParse(v);
+                      if (val == null || val < 0) return ">=0";
+                      return null;
+                    },
                     onFieldSubmitted: (_) => _addItem(),
                   ),
                 ),
@@ -1337,14 +1422,17 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                 ),
                 elevation: 0,
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.check_circle_outline),
-                  SizedBox(width: 8),
+                  const Icon(Icons.check_circle_outline),
+                  const SizedBox(width: 8),
                   Text(
-                    "COMPLETE ORDER",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    _isEditing ? "UPDATE ORDER" : "COMPLETE ORDER",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ],
               ),

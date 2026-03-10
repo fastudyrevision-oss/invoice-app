@@ -196,8 +196,25 @@ class OrderRepository {
 
       // --- 4. UPDATE CUSTOMER BALANCE ---
       if (oldInvoice != null) {
-        final pendingDelta = invoice.pending - oldInvoice.pending;
-        await customerDao.updatePendingAmount(invoice.customerId, pendingDelta);
+        if (invoice.customerId == oldInvoice.customerId) {
+          final pendingDelta = invoice.pending - oldInvoice.pending;
+          await customerDao.updatePendingAmount(
+            invoice.customerId,
+            pendingDelta,
+          );
+        } else {
+          // 💡 Customer changed!
+          // 1. Revert full pending amount from the OLD customer
+          await customerDao.updatePendingAmount(
+            oldInvoice.customerId,
+            -oldInvoice.pending,
+          );
+          // 2. Apply full pending amount to the NEW customer
+          await customerDao.updatePendingAmount(
+            invoice.customerId,
+            invoice.pending,
+          );
+        }
       }
     });
   }
