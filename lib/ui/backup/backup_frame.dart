@@ -710,14 +710,22 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
           appBar: AppBar(
             title: const Text(
               'Backup & Restore',
-              style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.bold,
+            ),
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Theme.of(context).primaryColor,
+                    Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                  ],
+                ),
               ),
             ),
-            backgroundColor: Colors.white,
-            elevation: 0,
-            iconTheme: const IconThemeData(color: Colors.black87),
+            foregroundColor: Colors.white,
+            elevation: 2,
+            iconTheme: const IconThemeData(color: Colors.white),
           ),
           body: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -1133,20 +1141,14 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      margin: EdgeInsets.zero,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            offset: const Offset(0, 4),
-            blurRadius: 16,
-          ),
-        ],
-      ),
-      child: Column(
+        onTap: onPressed,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
@@ -1200,7 +1202,7 @@ class _ActionCard extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isDangerous ? Colors.white : color,
                   foregroundColor: isDangerous ? color : Colors.white,
-                  elevation: 0,
+                  elevation: isDangerous ? 0 : 2,
                   side: isDangerous ? BorderSide(color: color) : null,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
@@ -1209,13 +1211,14 @@ class _ActionCard extends StatelessWidget {
                 ),
                 child: Text(
                   buttonText,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ),
           ),
         ],
       ),
+    ),
     );
   }
 }

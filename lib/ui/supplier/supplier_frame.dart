@@ -35,7 +35,11 @@ class SupplierFrame extends StatefulWidget {
   State<SupplierFrame> createState() => _SupplierFrameState();
 }
 
-class _SupplierFrameState extends State<SupplierFrame> {
+class _SupplierFrameState extends State<SupplierFrame>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   bool _showDeleted = false;
   String _searchKeyword = "";
   List<SupplierCompany> _companies = [];
@@ -915,6 +919,7 @@ class _SupplierFrameState extends State<SupplierFrame> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isMobile = ResponsiveUtils.isMobile(context);
     return DefaultTabController(
       length: 2,

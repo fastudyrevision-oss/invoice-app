@@ -78,34 +78,88 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     final auth = AuthService.instance;
     final allTabs = [
       _TabDef(
-        tab: const Tab(text: "Create Order"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Create Order"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Create Order"),
+            ],
+          ),
+        ),
         view: _orderRepo == null
             ? const Center(child: CircularProgressIndicator())
             : OrderFormScreen(repo: _orderRepo!, isTab: true),
         perm: 'orders',
       ),
       _TabDef(
-        tab: const Tab(text: "Reports"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Reports"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Reports"),
+            ],
+          ),
+        ),
         view: ReportsDashboard(sqlAgent: _sqlAgent),
         perm: 'reports_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Customers"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Customers"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Customers"),
+            ],
+          ),
+        ),
         view: const CustomerFrame(),
         perm: 'customers_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Products"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Products"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Products"),
+            ],
+          ),
+        ),
         view: const ProductFrame(),
         perm: 'products_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Expenses"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Expenses"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Expenses"),
+            ],
+          ),
+        ),
         view: const ExpenseFrame(),
         perm: 'expenses_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Suppliers"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Suppliers"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Suppliers"),
+            ],
+          ),
+        ),
         view: _supplierRepo == null || _supplierPaymentRepo == null
             ? const Center(child: CircularProgressIndicator())
             : SupplierFrame(
@@ -117,7 +171,16 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         perm: 'suppliers_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Purchases"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Purchases"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Purchases"),
+            ],
+          ),
+        ),
         view:
             _purchaseRepo == null ||
                 _productRepo == null ||
@@ -132,24 +195,60 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         perm: 'purchases_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Orders"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Orders"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Orders"),
+            ],
+          ),
+        ),
         view: _orderRepo == null
             ? const Center(child: CircularProgressIndicator())
             : OrderListScreen(repo: _orderRepo!),
         perm: 'orders',
       ),
       _TabDef(
-        tab: const Tab(text: "Categories"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Categories"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Categories"),
+            ],
+          ),
+        ),
         view: const CategoryListFrame(),
         perm: 'categories_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Customer Payments"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Customer Payments"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Customer Payments"),
+            ],
+          ),
+        ),
         view: const CustomerPaymentScreen(),
         perm: 'payments_view',
       ),
       _TabDef(
-        tab: const Tab(text: "BackUp/Restore"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("BackUp/Restore"), size: 18),
+              const SizedBox(width: 8),
+              const Text("BackUp/Restore"),
+            ],
+          ),
+        ),
         view: BackupRestoreScreen(
           onRestoreSuccess: () async {
             await _initRepos();
@@ -158,12 +257,30 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         perm: 'backup',
       ),
       _TabDef(
-        tab: const Tab(text: "Users"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Users"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Users"),
+            ],
+          ),
+        ),
         view: const UserManagementScreen(),
         perm: 'all', // Only admins/devs
       ),
       _TabDef(
-        tab: const Tab(text: "Audit Logs"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Audit Logs"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Audit Logs"),
+            ],
+          ),
+        ),
         view: const AuditLogScreen(),
         perm: 'audit_logs',
       ),
@@ -172,6 +289,8 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(_getIconForTab("Expiring Products"), size: 18),
+              const SizedBox(width: 8),
               const Text("Expiring"),
               if (_expiringCount > 0) ...[
                 const SizedBox(width: 6),
@@ -199,7 +318,16 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
         perm: 'expiring_view',
       ),
       _TabDef(
-        tab: const Tab(text: "Stock Disposal"),
+        tab: Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_getIconForTab("Stock Disposal"), size: 18),
+              const SizedBox(width: 8),
+              const Text("Stock Disposal"),
+            ],
+          ),
+        ),
         view: const ExpiredStockScreen(),
         perm: 'expiring_view', // Reuse expiring view permission for now
       ),
@@ -422,6 +550,41 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
     }
   }
 
+  IconData _getIconForTab(String label) {
+    switch (label.toLowerCase()) {
+      case 'create order':
+        return Icons.add_shopping_cart;
+      case 'reports':
+        return Icons.bar_chart;
+      case 'customers':
+        return Icons.people_outline;
+      case 'products':
+        return Icons.inventory_2_outlined;
+      case 'suppliers':
+        return Icons.local_shipping_outlined;
+      case 'purchases':
+        return Icons.shopping_bag_outlined;
+      case 'orders':
+        return Icons.assignment_outlined;
+      case 'categories':
+        return Icons.category_outlined;
+      case 'customer payments':
+        return Icons.payments_outlined;
+      case 'backup/restore':
+        return Icons.backup_outlined;
+      case 'users':
+        return Icons.manage_accounts_outlined;
+      case 'audit logs':
+        return Icons.history_outlined;
+      case 'expiring products':
+        return Icons.notification_important_outlined;
+      case 'stock disposal':
+        return Icons.delete_sweep_outlined;
+      default:
+        return Icons.tab;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Safety check for empty tabs
@@ -510,6 +673,39 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                     controller: _tabController,
                     isScrollable: true,
                     tabs: _tabs,
+                    mouseCursor: SystemMouseCursors.click,
+                    overlayColor: WidgetStateProperty.resolveWith<Color?>((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return const Color.fromARGB(
+                          255,
+                          12,
+                          109,
+                          109,
+                        ).withValues(alpha: 0.4);
+                      }
+                      if (states.contains(WidgetState.pressed)) {
+                        return const Color.fromARGB(
+                          255,
+                          10,
+                          57,
+                          156,
+                        ).withValues(alpha: 0.5);
+                      }
+                      return null;
+                    }),
+                    indicatorSize: TabBarIndicatorSize.label,
+                    indicatorWeight: 3,
+                    indicatorColor: const Color.fromARGB(255, 135, 209, 133),
+                    splashBorderRadius: BorderRadius.circular(50),
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
           ),
           drawer: isMobile
@@ -526,11 +722,11 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                               "",
                         ),
                         currentAccountPicture: const CircleAvatar(
-                          backgroundColor: Colors.white,
+                          backgroundColor: Color.fromARGB(255, 45, 202, 71),
                           child: Icon(
                             Icons.person,
                             size: 32,
-                            color: Colors.blue,
+                            color: Color.fromARGB(255, 84, 153, 209),
                           ),
                         ),
                       ),
@@ -544,14 +740,46 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                               label = "Expiring Products";
                             }
 
-                            return ListTile(
-                              title: Text(label),
-                              selected: _tabController.index == index,
-                              selectedColor: Theme.of(context).primaryColor,
-                              onTap: () {
-                                _tabController.animateTo(index);
-                                Navigator.pop(context);
-                              },
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              child: ListTile(
+                                leading: Icon(
+                                  _getIconForTab(label),
+                                  color: _tabController.index == index
+                                      ? Colors.blue.shade700
+                                      : Colors.grey.shade600,
+                                ),
+                                title: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontWeight: _tabController.index == index
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: _tabController.index == index
+                                        ? Colors.blue.shade800
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                selected: _tabController.index == index,
+                                selectedTileColor: Colors.blue.withValues(
+                                  alpha: 0.1,
+                                ),
+                                hoverColor: Colors.blue.withValues(alpha: 0.05),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                onTap: () {
+                                  _tabController.animateTo(index);
+                                  Navigator.pop(context);
+                                },
+                              ),
                             );
                           },
                         ),
@@ -569,10 +797,34 @@ class _MainFrameState extends State<MainFrame> with TickerProviderStateMixin {
                   ),
                 )
               : null,
-          body: TabBarView(
-            controller: _tabController,
-            physics: isMobile ? const NeverScrollableScrollPhysics() : null,
-            children: _tabViews,
+          body: PageStorage(
+            bucket: PageStorageBucket(),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 600),
+              reverseDuration: const Duration(milliseconds: 500),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                final slideTransition = Tween<Offset>(
+                  begin: const Offset(0.05, 0.0),
+                  end: Offset.zero,
+                ).animate(animation);
+
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: slideTransition,
+                    child: child,
+                  ),
+                );
+              },
+              child: _tabViews.isNotEmpty
+                  ? KeyedSubtree(
+                      key: ValueKey<int>(_tabController.index),
+                      child: _tabViews[_tabController.index],
+                    )
+                  : const Center(child: Text("No content allowed")),
+            ),
           ),
         );
       },

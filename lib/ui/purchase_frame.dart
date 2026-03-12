@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:shimmer/shimmer.dart';
 import '../repositories/purchase_repo.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/supplier_repo.dart';
@@ -42,7 +43,11 @@ class PurchaseFrame extends StatefulWidget {
   State<PurchaseFrame> createState() => _PurchaseFrameState();
 }
 
-class _PurchaseFrameState extends State<PurchaseFrame> {
+class _PurchaseFrameState extends State<PurchaseFrame>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _exportService = PurchaseExportService();
   final thermalPrinting = ThermalPrintingService();
   LoggerService get logger => LoggerService.instance;
@@ -54,6 +59,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
   int _currentPage = 1;
   final int _pageSize = 50; // Optimized for 2000+ purchases
+  bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasMore = true;
 
@@ -149,12 +155,19 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
   }
 
   Future<void> _loadInitialData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     final suppliers = await widget.supplierRepo.getAllSuppliers();
     final purchases = await widget.repo.getAllPurchases();
+
+    await Future.delayed(const Duration(milliseconds: 200)); // Smooth UX
 
     setState(() {
       _suppliers = suppliers;
       _allPurchases = purchases;
+      _isLoading = false;
     });
 
     _applyFilters();
@@ -530,6 +543,7 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = ResponsiveUtils.isMobile(context);
@@ -543,7 +557,10 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Colors.indigo.shade800, Colors.indigo.shade500],
+                  colors: [
+                    Theme.of(context).primaryColor,
+                    Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                  ],
                 ),
               ),
             ),
@@ -749,7 +766,29 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
               ),
             ),
           ),
-          body: _buildBody(),
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            reverseDuration: const Duration(milliseconds: 500),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final slideTransition = Tween<Offset>(
+                begin: const Offset(0.05, 0.0),
+                end: Offset.zero,
+              ).animate(animation);
+
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slideTransition, child: child),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<bool>(
+                _isLoading,
+              ), // Re-animate if loading state changes
+              child: _buildBody(),
+            ),
+          ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () async {
               final added = await Navigator.push(
@@ -773,7 +812,30 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
     );
   }
 
+  Widget _buildShimmerList() {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, __) => Shimmer.fromColors(
+        baseColor: Colors.grey.shade300,
+        highlightColor: Colors.grey.shade100,
+        child: Container(
+          height: 84,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
+    if (_isLoading) {
+      return _buildShimmerList();
+    }
+
     if (_allPurchases.isEmpty) {
       return Center(
         child: Column(
@@ -985,300 +1047,117 @@ class _PurchaseFrameState extends State<PurchaseFrame> {
                 final isPaid = purchase.pending <= 0;
                 final date = DateTime.tryParse(purchase.date) ?? DateTime.now();
 
-                return Container(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                return Card(
+                  margin: const EdgeInsets.only(
+                    bottom: 12,
+                    left: 16,
+                    right: 16,
                   ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white,
-                        isPaid
-                            ? Colors.green.withValues(alpha: 0.05)
-                            : const Color.fromARGB(255, 0, 68, 255).withValues(alpha: 0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isPaid ? Colors.green : const Color.fromARGB(255, 0, 68, 255))
-                            .withValues(alpha: 0.2),
-                        spreadRadius: 1,
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                    border: Border.all(
-                      color: (isPaid ? Colors.green : const Color.fromARGB(255, 0, 68, 255)).withValues(
-                        alpha: 0.3,
-                      ),
-                      width: 1.5,
-                    ),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Status Strip
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 4,
-                            horizontal: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: isPaid
-                                  ? [
-                                      Colors.green.shade600,
-                                      Colors.green.shade400,
-                                    ]
-                                  : [
-                                      const Color.fromARGB(255, 75, 85, 218),
-                                      const Color.fromARGB(255, 60, 38, 255),
-                                    ],
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                isPaid
-                                    ? Icons.check_circle
-                                    : Icons.pending_actions,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                isPaid ? "Fully Paid" : "Pending Payment",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PurchaseDetailFrame(
+                            repo: widget.repo,
+                            productRepo: widget.productRepo,
+                            supplierRepo: widget.supplierRepo,
+                            paymentRepo: widget.paymentRepo,
+                            purchase: purchase,
                           ),
                         ),
-
-                        InkWell(
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PurchaseDetailFrame(
-                                  repo: widget.repo,
-                                  productRepo: widget.productRepo,
-                                  supplierRepo: widget.supplierRepo,
-                                  paymentRepo: widget.paymentRepo,
-                                  purchase: purchase,
+                      );
+                      _loadInitialData();
+                    },
+                    onLongPress: () => _showPurchaseOptions(purchase),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.shopping_cart,
+                                  color: Colors.blue.shade700,
                                 ),
                               ),
-                            );
-                            _loadInitialData();
-                          },
-                          onLongPress: () => _showPurchaseOptions(purchase),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Header Row
-                                Row(
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Invoice Badge
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            Colors.indigo.shade600,
-                                            Colors.indigo.shade400,
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.indigo.withValues(
-                                              alpha: 0.3,
-                                            ),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
+                                    Text(
+                                      supplier.name.isNotEmpty
+                                          ? supplier.name
+                                          : "Unknown Supplier",
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      child: const Icon(
-                                        Icons.receipt_long,
-                                        color: Colors.white,
-                                        size: 28,
-                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(width: 16),
-
-                                    // Invoice Info
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            purchase.displayId != null
-                                                ? "Purchase #${purchase.displayId}${purchase.invoiceNo.isNotEmpty ? " (Inv: ${purchase.invoiceNo})" : ""}"
-                                                : "Invoice #${purchase.invoiceNo}",
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black87,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: 1,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue.shade50,
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                              border: Border.all(
-                                                color: Colors.blue.shade200,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.business,
-                                                  size: 14,
-                                                  color: Colors.blue.shade700,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  supplier.name,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.blue.shade900,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    // Date Badge
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: Colors.grey.shade300,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Text(
-                                            date.day.toString(),
-                                            style: TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.grey.shade800,
-                                            ),
-                                          ),
-                                          Text(
-                                            _getMonthName(date.month),
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.grey.shade600,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
+                                    Text(
+                                      "${purchase.displayId != null ? "Purchase #${purchase.displayId}" : "Invoice #${purchase.invoiceNo}"}",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
                                       ),
                                     ),
                                   ],
                                 ),
-
-                                const SizedBox(height: 16),
-                                const Divider(),
-                                const SizedBox(height: 12),
-
-                                // Metrics Row
-                                isMobile
-                                    ? Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              _buildMetric(
-                                                "TOTAL",
-                                                "Rs ${purchase.total.toStringAsFixed(0)}",
-                                                Colors.blue,
-                                              ),
-                                              _buildMetric(
-                                                "PAID",
-                                                "Rs ${purchase.paid.toStringAsFixed(0)}",
-                                                Colors.green,
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
-                                            children: [
-                                              _buildMetric(
-                                                "PENDING",
-                                                "Rs ${purchase.pending.toStringAsFixed(0)}",
-                                                hasPending
-                                                    ? Colors.red
-                                                    : Colors.green,
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      )
-                                    : Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          _buildMetric(
-                                            "TOTAL",
-                                            "Rs ${purchase.total.toStringAsFixed(0)}",
-                                            Colors.blue,
-                                          ),
-                                          _buildMetric(
-                                            "PAID",
-                                            "Rs ${purchase.paid.toStringAsFixed(0)}",
-                                            Colors.green,
-                                          ),
-                                          _buildMetric(
-                                            "PENDING",
-                                            "Rs ${purchase.pending.toStringAsFixed(0)}",
-                                            hasPending
-                                                ? Colors.red
-                                                : Colors.green,
-                                          ),
-                                        ],
-                                      ),
-                              ],
-                            ),
+                              ),
+                              _buildStatusChip(purchase),
+                            ],
                           ),
-                        ),
-                      ],
+                          const Divider(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildMetric(
+                                "TOTAL",
+                                "Rs ${purchase.total.toStringAsFixed(0)}",
+                                Colors.blue,
+                              ),
+                              _buildMetric(
+                                "PAID",
+                                "Rs ${purchase.paid.toStringAsFixed(0)}",
+                                Colors.green,
+                              ),
+                              _buildMetric(
+                                "PENDING",
+                                "Rs ${purchase.pending.toStringAsFixed(0)}",
+                                hasPending ? Colors.red : Colors.green,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                purchase.date.split('T')[0],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              // Fast action could go here if needed
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );

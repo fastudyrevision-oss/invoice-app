@@ -14,7 +14,11 @@ class CategoryListFrame extends StatefulWidget {
   State<CategoryListFrame> createState() => _CategoryListFrameState();
 }
 
-class _CategoryListFrameState extends State<CategoryListFrame> {
+class _CategoryListFrameState extends State<CategoryListFrame>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final TextEditingController _searchController = TextEditingController();
   final List<Category> _categories = [];
   List<Category> _filteredCategories = [];
@@ -467,6 +471,7 @@ class _CategoryListFrameState extends State<CategoryListFrame> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = ResponsiveUtils.isMobile(context);

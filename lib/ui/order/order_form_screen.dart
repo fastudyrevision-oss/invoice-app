@@ -50,7 +50,11 @@ class OrderFormScreen extends StatefulWidget {
   State<OrderFormScreen> createState() => _OrderFormScreenState();
 }
 
-class _OrderFormScreenState extends State<OrderFormScreen> {
+class _OrderFormScreenState extends State<OrderFormScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _formKey = GlobalKey<FormState>();
   final _uuid = const Uuid();
 
@@ -761,6 +765,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_loading) {
       return widget.isTab
           ? const Center(child: CircularProgressIndicator())

@@ -72,17 +72,101 @@ class _ReportsDashboardState extends State<ReportsDashboard>
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          tabs: const [
-            Tab(text: "Payments"),
-            Tab(text: "Stock Report"),
-            Tab(text: "AI Reports"),
-            Tab(text: "Profit and Loss"),
+          mouseCursor: SystemMouseCursors.click,
+          overlayColor: WidgetStateProperty.resolveWith<Color?>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.hovered)) {
+              return const Color.fromARGB(
+                255,
+                12,
+                109,
+                109,
+              ).withValues(alpha: 0.4);
+            }
+            if (states.contains(WidgetState.pressed)) {
+              return const Color.fromARGB(
+                255,
+                10,
+                57,
+                156,
+              ).withValues(alpha: 0.5);
+            }
+            return null;
+          }),
+          indicatorSize: TabBarIndicatorSize.label,
+          indicatorWeight: 3,
+          indicatorColor: const Color.fromARGB(255, 135, 209, 133),
+          splashBorderRadius: BorderRadius.circular(50),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.payments_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text("Payments"),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.inventory_2_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text("Stock Report"),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.auto_awesome, size: 18),
+                  SizedBox(width: 8),
+                  Text("AI Reports"),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.account_balance_wallet_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text("Profit and Loss"),
+                ],
+              ),
+            ),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: List.generate(4, (index) => _buildTabContent(index)),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        reverseDuration: const Duration(milliseconds: 500),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          final slideTransition = Tween<Offset>(
+            begin: const Offset(0.05, 0.0),
+            end: Offset.zero,
+          ).animate(animation);
+
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: slideTransition, child: child),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(_currentIndex),
+          child: _buildTabContent(_currentIndex),
+        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../models/expense.dart';
 import '../repositories/expense_repository.dart';
 import 'expense/expense_insights_card.dart';
@@ -22,7 +23,11 @@ class ExpenseFrame extends StatefulWidget {
   State<ExpenseFrame> createState() => _ExpenseFrameState();
 }
 
-class _ExpenseFrameState extends State<ExpenseFrame> {
+class _ExpenseFrameState extends State<ExpenseFrame>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _formKey = GlobalKey<FormState>(); // Add FormKey
   final ExpenseExportService _exportService = ExpenseExportService();
   final ExpenseRepository _repo = ExpenseRepository();
@@ -428,6 +433,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = ResponsiveUtils.isMobile(context);
@@ -444,7 +450,10 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Colors.red.shade800, Colors.red.shade500],
+                  colors: [
+                    Theme.of(context).primaryColor,
+                    Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                  ],
                 ),
               ),
             ),
@@ -645,7 +654,7 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                                 _sortMode = ExpenseSortMode.amount;
                                 _applyFilterAndSort();
                               }),
-                              selectedColor: Colors.red.shade100,
+                              selectedColor: Colors.blue.shade100,
                               visualDensity: VisualDensity.compact,
                             ),
                             const Spacer(),
@@ -709,7 +718,12 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
                       ),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Colors.red.shade700, Colors.red.shade500],
+                          colors: [
+                            Theme.of(context).primaryColor,
+                            Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.8),
+                          ],
                         ),
                       ),
                       child: Row(
@@ -737,7 +751,29 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
               ),
             ),
           ),
-          body: _buildBody(),
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            reverseDuration: const Duration(milliseconds: 500),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final slideTransition = Tween<Offset>(
+                begin: const Offset(0.05, 0.0),
+                end: Offset.zero,
+              ).animate(animation);
+
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slideTransition, child: child),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<bool>(
+                _isLoading,
+              ), // Re-animate if loading state changes
+              child: _buildBody(),
+            ),
+          ),
         );
       },
     );
@@ -847,9 +883,28 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
     );
   }
 
+  Widget _buildShimmerList() {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, __) => Shimmer.fromColors(
+        baseColor: Colors.grey.shade300,
+        highlightColor: Colors.grey.shade100,
+        child: Container(
+          height: 84,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildShimmerList();
     }
 
     if (_filteredExpenses.isEmpty) {
@@ -1039,213 +1094,111 @@ class _ExpenseFrameState extends State<ExpenseFrame> {
     final categoryIcon = _getCategoryIcon(expense.category);
     final date = DateTime.tryParse(expense.date) ?? DateTime.now();
 
-    return Container(
+    return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, categoryColor.withValues(alpha: 0.05)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: categoryColor.withValues(alpha: 0.2),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: categoryColor.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Colored strip
-            Container(
-              width: double.infinity,
-              height: 4,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [categoryColor, categoryColor.withValues(alpha: 0.6)],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showAddEditExpenseDialog(expense),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              categoryColor,
-                              categoryColor.withValues(alpha: 0.7),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          categoryIcon,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              expense.description,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: categoryColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: categoryColor.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: Text(
-                                expense.category,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: categoryColor.withValues(alpha: 0.9),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.edit_outlined,
-                          color: Colors.blue,
-                        ),
-                        onPressed: () => _showAddEditExpenseDialog(expense),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
-                        onPressed: () => _deleteExpense(expense),
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: categoryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(categoryIcon, color: categoryColor),
                   ),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "AMOUNT",
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade500,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          expense.description.isNotEmpty
+                              ? expense.description
+                              : "No Description",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
-                          const SizedBox(height: 2),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.red.shade600,
-                                  Colors.red.shade400,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              "Rs ${expense.amount.toStringAsFixed(0)}",
-                              style: const TextStyle(
-                                fontSize: 20,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: categoryColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: categoryColor.withValues(alpha: 0.3),
-                            width: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          expense.category,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
                           ),
                         ),
-                        child: Column(
-                          children: [
-                            Text(
-                              date.day.toString(),
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: categoryColor,
-                              ),
-                            ),
-                            Text(
-                              _getMonthName(date.month),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: categoryColor.withValues(alpha: 0.8),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              date.year.toString(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    onPressed: () => _deleteExpense(expense),
                   ),
                 ],
               ),
-            ),
-          ],
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "AMOUNT",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Rs ${expense.amount.toStringAsFixed(0)}",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Text(
+                      DateHelper.formatDate(date),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

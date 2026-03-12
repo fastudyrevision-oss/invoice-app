@@ -24,7 +24,11 @@ class CustomerFrame extends StatefulWidget {
   State<CustomerFrame> createState() => _CustomerFrameState();
 }
 
-class _CustomerFrameState extends State<CustomerFrame> {
+class _CustomerFrameState extends State<CustomerFrame>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final CustomerExportService _exportService = CustomerExportService();
   CustomerRepository? _repo;
   OrderRepository? _orderRepo;
@@ -479,6 +483,7 @@ class _CustomerFrameState extends State<CustomerFrame> {
   // ─── Build UI ───
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isMobile = ResponsiveUtils.isMobile(context);
 
     // Auto-select default: table on desktop, compact on mobile

@@ -14,7 +14,11 @@ class CustomerPaymentScreen extends StatefulWidget {
   State<CustomerPaymentScreen> createState() => _CustomerPaymentScreenState();
 }
 
-class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
+class _CustomerPaymentScreenState extends State<CustomerPaymentScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _paymentDao = CustomerPaymentDao();
   final _customerDao = CustomerDao.create();
 
@@ -409,6 +413,7 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(

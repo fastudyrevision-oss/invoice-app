@@ -30,7 +30,11 @@ class ProductFrame extends StatefulWidget {
   State<ProductFrame> createState() => _ProductFrameState();
 }
 
-class _ProductFrameState extends State<ProductFrame> {
+class _ProductFrameState extends State<ProductFrame>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final ProductExportService _exportService = ProductExportService();
   final ProductRepository _repo = ProductRepository();
   final SupplierRepository _supplierRepo = SupplierRepository(
@@ -698,6 +702,7 @@ class _ProductFrameState extends State<ProductFrame> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = ResponsiveUtils.isMobile(context);

@@ -1458,8 +1458,8 @@ Future<bool> printSilentThermalReceipt(
                             child: pw.Text(
                               item['product_name'] ?? '',
                               style: pw.TextStyle(
-                                font: regularFont,
-                                fontSize: paperWidthMm < 60 ? 5 : 9,
+                                font: boldFont,
+                                fontSize: paperWidthMm < 60 ? 5 : 10,
                               ),
                               softWrap: true,
                               maxLines: 2,

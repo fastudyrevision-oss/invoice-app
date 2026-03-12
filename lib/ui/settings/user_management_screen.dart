@@ -84,36 +84,143 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("User Management")),
+      appBar: AppBar(
+        title: const Text("User Management"),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).primaryColor,
+                Theme.of(context).primaryColor.withValues(alpha: 0.8),
+              ],
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+        elevation: 2,
+      ),
+      backgroundColor: Colors.grey[100],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
+              padding: const EdgeInsets.only(top: 8, bottom: 80),
               itemCount: _users.length,
               itemBuilder: (context, index) {
                 final user = _users[index];
                 final isMe =
                     user.username == AuthService.instance.currentUser?.username;
-                return ListTile(
-                  leading: CircleAvatar(
-                    child: Text(user.username[0].toUpperCase()),
-                  ),
-                  title: Text(user.username),
-                  subtitle: Text(
-                    "${user.role} • ${user.permissions.length} perms",
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _showUserDialog(user),
+                final primaryColor = Theme.of(context).primaryColor;
+                
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _showUserDialog(user),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: primaryColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                user.username[0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.username,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: user.role == 'developer' 
+                                            ? Colors.purple.withValues(alpha: 0.1) 
+                                            : Colors.blue.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: user.role == 'developer' 
+                                              ? Colors.purple.withValues(alpha: 0.3) 
+                                              : Colors.blue.withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        user.role.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: user.role == 'developer' ? Colors.purple : Colors.blue,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "${user.permissions.length} permissions",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!isMe) ...[
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                              onPressed: () => _showUserDialog(user),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              onPressed: () => _deleteUser(user.id),
+                            ),
+                          ] else ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                "YOU",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (!isMe) // Prevent deleting self
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteUser(user.id),
-                        ),
-                    ],
+                    ),
                   ),
                 );
               },
